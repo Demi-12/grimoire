@@ -3,12 +3,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Grimoire | D&D Toolkit",
-  description: "Herramientas para preparar personajes y encuentros de Dungeons & Dragons.",
+  description: "Tools for building Dungeons & Dragons characters and encounters.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
