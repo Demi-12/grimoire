@@ -42,4 +42,3 @@ El workflow actualiza el checkout a un commit concreto tras CI. No habilites el 
 ## Atribución de reglas
 
 La tabla de presupuestos de encuentros se basa en System Reference Document 5.2.1 (SRD 5.2.1) de Wizards of the Coast LLC, disponible en https://www.dndbeyond.com/srd y licenciada bajo Creative Commons Attribution 4.0 International (CC BY 4.0). Grimoire no está afiliado a Wizards of the Coast.
-
