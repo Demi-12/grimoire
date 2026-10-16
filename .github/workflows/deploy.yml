@@ -87,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f .env ]; then
-            echo "::error::Falta $PWD/.env en el servidor. Cópialo de .env.example y rellena POSTGRES_* y DATABASE_URL."
+            echo "::error::Falta $PWD/.env en el servidor. Cópialo de .env.example y rellena PostgreSQL, Better Auth, SMTP y Liquibase."
             exit 1
           fi
           # Si el .env tiene token del túnel, levanta también cloudflared.
@@ -98,6 +98,12 @@ jobs:
             export CLOUDFLARE_TUNNEL_TOKEN=local-only
             services="app db"
           fi
+          for var in BETTER_AUTH_SECRET BETTER_AUTH_URL SMTP_HOST SMTP_FROM LIQUIBASE_DB_USERNAME LIQUIBASE_DB_PASSWORD; do
+            grep -Eq "^${var}=.+" .env || { echo "::error::Falta ${var} en $PWD/.env (ver .env.example)"; exit 1; }
+          done
+          # Aplica las migraciones de Liquibase antes de arrancar la nueva versión.
+          docker compose up -d db
+          docker compose -f compose.yaml -f compose.liquibase.yaml run --rm liquibase update
           docker compose up -d --build --remove-orphans $services
           docker image prune -f >/dev/null
 

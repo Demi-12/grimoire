@@ -1,0 +1,78 @@
+.manager {
+  --campaign-ink: #36281f;
+  --campaign-muted: #735f4b;
+  --campaign-paper: #f5ecd8;
+  --campaign-edge: #c5a568;
+  --campaign-rust: #83382d;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 36px);
+  color: var(--campaign-ink);
+  background:
+    radial-gradient(ellipse at 50% -18%, rgba(255,255,255,.8), transparent 56%),
+    repeating-linear-gradient(0deg, rgba(78,53,31,.018), rgba(78,53,31,.018) 1px, transparent 1px, transparent 5px),
+    var(--campaign-paper);
+  border: 1px solid var(--campaign-edge);
+  box-shadow: inset 0 0 0 5px var(--campaign-paper), inset 0 0 0 6px rgba(177,139,73,.43), 0 16px 36px rgba(35,25,15,.14);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.header { padding: 0 0 18px; text-align: center; border-bottom: 3px double var(--campaign-rust); }
+.eyebrow { margin: 0 0 7px; color: var(--campaign-rust); font: 700 10px/1.4 ui-monospace, monospace; letter-spacing: .16em; }
+.header h2 { margin: 0; color: #45271f; font-size: clamp(28px, 5vw, 42px); line-height: 1.1; }
+.header > p:last-child { margin: 9px 0 0; color: var(--campaign-muted); font-size: 14px; }
+.createForm { margin: 20px 0; padding: 14px; border: 1px solid #d0bd97; background: rgba(255,255,255,.22); }
+.createForm label, .assign > span { display: block; margin-bottom: 7px; color: var(--campaign-rust); font: 700 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.createRow { display: flex; gap: 8px; }
+.createRow input, .renameForm input, .assign select {
+  min-width: 0; padding: 10px 11px; color: var(--campaign-ink); background: rgba(255,255,255,.56);
+  border: 1px solid #c9b58d; border-radius: 2px; font: inherit;
+}
+.createRow input { flex: 1; }
+.createRow button, .renameForm button {
+  padding: 9px 13px; color: #fff5df; background: #743329; border: 1px solid #57271f;
+  border-radius: 2px; font: 700 12px ui-monospace, monospace; cursor: pointer;
+}
+.campaignList { display: grid; gap: 14px; }
+.campaign { padding: 16px; border: 1px solid var(--campaign-edge); background: rgba(255,255,255,.19); box-shadow: inset 0 0 0 3px rgba(255,255,255,.17); }
+.campaignHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 11px; border-bottom: 1px solid #d0bd97; }
+.campaignHead h3 { margin: 0; color: #4b2a20; font-size: 23px; overflow-wrap: anywhere; }
+.memberCount { display: inline-block; margin-top: 5px; color: var(--campaign-muted); font: 700 10px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+.quietButton, .deleteButton, .removeHero { padding: 6px 8px; color: var(--campaign-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 10px ui-monospace, monospace; cursor: pointer; }
+.deleteButton { color: #762b23; border-color: #c99b83; }
+.renameForm { width: 100%; display: flex; gap: 7px; flex-wrap: wrap; }
+.renameForm input { flex: 1; }
+.renameForm .quietButton { color: var(--campaign-muted); background: transparent; border-color: #c9b58d; }
+.memberList { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; margin: 13px 0; padding: 0; list-style: none; }
+.memberList li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 9px; border: 1px solid #d5c5a4; background: rgba(255,255,255,.28); }
+.sigle { color: #a27a39; font-size: 17px; }
+.heroName { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.heroName small { display: block; margin-top: 3px; color: var(--campaign-muted); font: 10px ui-monospace, monospace; }
+.removeHero { padding: 2px 7px; font-size: 16px; }
+.assign { display: block; max-width: 440px; margin-top: 14px; }
+.assign select { width: 100%; }
+.noMembers, .empty { margin: 12px 0; color: var(--campaign-muted); font-size: 13px; font-style: italic; }
+.empty { padding: 22px; text-align: center; border: 1px dashed var(--campaign-edge); }
+.error { padding: 9px 11px; color: #762b23; background: rgba(131,56,45,.08); border: 1px solid #c99b83; font-size: 13px; }
+.storageNote { margin: 19px 0 0; color: var(--campaign-muted); font: 10px/1.5 ui-monospace, monospace; text-align: center; }
+
+:global(:root[data-theme="dark"]) .manager {
+  --campaign-ink: #eee3cf; --campaign-muted: #c3b092; --campaign-paper: #29251f; --campaign-edge: #8e7548; --campaign-rust: #d18b6b;
+  background: radial-gradient(ellipse at 50% -18%, rgba(113,83,42,.2), transparent 56%), #29251f;
+  box-shadow: inset 0 0 0 5px #29251f, inset 0 0 0 6px rgba(167,139,87,.4), 0 16px 36px rgba(0,0,0,.3);
+}
+:global(:root[data-theme="dark"]) .header h2, :global(:root[data-theme="dark"]) .campaignHead h3 { color: #f0dfc2; }
+:global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .campaign, :global(:root[data-theme="dark"]) .memberList li { background: rgba(0,0,0,.12); }
+:global(:root[data-theme="dark"]) .createRow input, :global(:root[data-theme="dark"]) .renameForm input, :global(:root[data-theme="dark"]) .assign select { color: #eee3cf; background: #332e26; border-color: #66573d; }
+:global(:root[data-theme="dark"]) .campaignHead, :global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .memberList li { border-color: #5d503b; }
+:global(:root[data-theme="dark"]) .quietButton, :global(:root[data-theme="dark"]) .deleteButton, :global(:root[data-theme="dark"]) .removeHero { color: #e1bd84; border-color: #66573d; }
+:global(:root[data-theme="dark"]) .error { color: #ffc1a7; background: rgba(131,56,45,.18); border-color: #8d5141; }
+
+@media (max-width: 520px) {
+  .manager { padding: 22px 15px; }
+  .createRow { flex-direction: column; }
+  .createRow button { min-height: 42px; }
+  .campaignHead { flex-direction: column; }
+  .actions { justify-content: flex-start; }
+}

@@ -1,0 +1,66 @@
+name: Liquibase validation
+
+on:
+  pull_request:
+    paths:
+      - "database/changelog/**"
+      - "compose.liquibase.yaml"
+      - ".github/workflows/liquibase-pr.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: liquibase-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PostgreSQL changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: grimoire_ci
+          POSTGRES_USER: grimoire_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grimoire_ci -d grimoire_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Liquibase
+        uses: liquibase/setup-liquibase@v3
+        with:
+          version: "4.33.0"
+          edition: community
+
+      - name: Validate changelog
+        env:
+          LIQUIBASE_COMMAND_URL: jdbc:postgresql://localhost:5432/grimoire_ci
+          LIQUIBASE_COMMAND_USERNAME: grimoire_ci
+          LIQUIBASE_COMMAND_PASSWORD: ci-only-password
+        run: liquibase --changelog-file=database/changelog/db.changelog-master.yaml validate
+
+      - name: Review generated SQL against disposable PostgreSQL
+        env:
+          LIQUIBASE_COMMAND_URL: jdbc:postgresql://localhost:5432/grimoire_ci
+          LIQUIBASE_COMMAND_USERNAME: grimoire_ci
+          LIQUIBASE_COMMAND_PASSWORD: ci-only-password
+        run: liquibase --changelog-file=database/changelog/db.changelog-master.yaml update-sql
+
+      - name: Apply changesets to disposable PostgreSQL
+        env:
+          LIQUIBASE_COMMAND_URL: jdbc:postgresql://localhost:5432/grimoire_ci
+          LIQUIBASE_COMMAND_USERNAME: grimoire_ci
+          LIQUIBASE_COMMAND_PASSWORD: ci-only-password
+        run: liquibase --changelog-file=database/changelog/db.changelog-master.yaml update

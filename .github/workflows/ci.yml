@@ -53,6 +53,10 @@ jobs:
           POSTGRES_PASSWORD: ci
           DATABASE_URL: postgresql://ci:ci@db:5432/ci
           CLOUDFLARE_TUNNEL_TOKEN: ci
+          BETTER_AUTH_SECRET: ci-placeholder-not-a-secret
+          BETTER_AUTH_URL: http://localhost:3000
+          SMTP_HOST: localhost
+          SMTP_FROM: ci@example.invalid
         run: docker compose config --quiet
 
       - name: Build application container
@@ -62,4 +66,8 @@ jobs:
           POSTGRES_PASSWORD: ci
           DATABASE_URL: postgresql://ci:ci@db:5432/ci
           CLOUDFLARE_TUNNEL_TOKEN: ci
+          BETTER_AUTH_SECRET: ci-placeholder-not-a-secret
+          BETTER_AUTH_URL: http://localhost:3000
+          SMTP_HOST: localhost
+          SMTP_FROM: ci@example.invalid
         run: docker compose build app

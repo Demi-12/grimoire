@@ -22,11 +22,11 @@ Si Windows indica que `npm` no se reconoce, instala o repara Node.js 22 desde el
 - No copiar archivos de entorno ni claves a imágenes Docker; `.dockerignore` aplica la misma exclusión que `.gitignore`.
 - El CI ejecuta Gitleaks sobre el historial del repositorio y detiene PRs con credenciales detectadas. Si se filtra alguna, hay que revocarla y rotarla; borrarla del último commit no invalida el secreto anterior.
 - PostgreSQL no publica puertos al host ni a Internet. La aplicación se conecta por la red privada de Docker.
-- El deploy se ejecuta en un runner self-hosted dentro del servidor de casa, así que no necesita secretos en GitHub ni abrir puertos: los secretos viven solo en el `.env` del servidor.
+- El deploy se ejecuta en un runner self-hosted dentro del servidor de casa, así que no necesita secretos en GitHub ni abrir puertos: los secretos viven solo en el `.env` del servidor. Antes de levantar la nueva versión aplica las migraciones de Liquibase (ver `docs/database-migrations.md`).
 
 ## Servidor y acceso público
 
-El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DATABASE_URL` y `CLOUDFLARE_TUNNEL_TOKEN`. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
+El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con las variables de `.env.example`: PostgreSQL, el secreto y URL de Better Auth, el SMTP para verificación y recuperación de contraseñas, `CLOUDFLARE_TUNNEL_TOKEN` y credenciales de un usuario PostgreSQL dedicado a Liquibase. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
 
 El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
@@ -39,13 +39,16 @@ El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano
 3. Da acceso a Docker al usuario del runner: `sudo usermod -aG docker <usuario>` y reinicia el servicio (`sudo ./svc.sh stop && sudo ./svc.sh start`).
 4. Comprueba que en Settings → Actions → Runners aparece en verde como *Idle*.
 
-El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env`. Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`.
+El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env`. Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`. Antes de reconstruir la app levanta `db` y aplica las migraciones de Liquibase; el `.env` necesita además las variables de Better Auth, SMTP y Liquibase de `.env.example`.
 
 ## Primera versión
 
 - El creador guarda nombre, clase, especie, trasfondo, nivel, puntuaciones y notas. Calcula modificadores de característica y bonificador por competencia.
 - El generador usa presupuestos por personaje de dificultad baja, moderada y alta; suma el presupuesto según el nivel de cada aventurero y propone combinaciones que no exceden el total.
 - El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP. Los datos quedan en el almacenamiento local del navegador; todavía no se guardan en PostgreSQL ni se sincronizan entre dispositivos.
+- Las cuentas incluyen registro e inicio de sesión, verificación y recuperación por correo, 2FA TOTP con códigos de respaldo y passkeys. Configura SMTP para que lleguen los correos. El TOTP protege el acceso con contraseña; el acceso con passkey es passwordless y no pide un segundo código por defecto.
+- El gestor permite agrupar personajes en campañas. Las campañas, los personajes y el catálogo se guardan localmente en el navegador bajo el perfil activo; cada cuenta usa su propio espacio local, pero los datos aún no se sincronizan entre dispositivos. Los personajes del perfil local previo al inicio de sesión no se copian automáticamente a una cuenta.
+- El bestiario consulta la API pública del SRD de D&D 5e (dnd5eapi.co) desde rutas del servidor, usando el SRD 2024 y, si no tiene monstruos, el SRD 2014, muestra fichas de monstruos y permite añadirlos al generador. Las etiquetas tácticas se infieren de sus estadísticas y no sustituyen el juicio del DM.
 - Las propuestas son orientativas. Revisa capacidades especiales, composición y contexto antes de usar un encuentro.
 
 ## Atribución de reglas
