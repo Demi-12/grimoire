@@ -1,0 +1,94 @@
+databaseChangeLog:
+  - changeSet:
+      id: auth-001-better-auth-core-and-security-plugins
+      author: grimoire
+      comment: Better Auth email-password, sessions, verification, TOTP and WebAuthn passkeys.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "user" (
+                "id" TEXT PRIMARY KEY,
+                "name" TEXT NOT NULL,
+                "email" TEXT NOT NULL UNIQUE,
+                "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
+                "image" TEXT,
+                "createdAt" TIMESTAMP NOT NULL,
+                "updatedAt" TIMESTAMP NOT NULL,
+                "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT FALSE
+              );
+
+              CREATE TABLE "session" (
+                "id" TEXT PRIMARY KEY,
+                "expiresAt" TIMESTAMP NOT NULL,
+                "token" TEXT NOT NULL UNIQUE,
+                "createdAt" TIMESTAMP NOT NULL,
+                "updatedAt" TIMESTAMP NOT NULL,
+                "ipAddress" TEXT,
+                "userAgent" TEXT,
+                "userId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE
+              );
+              CREATE INDEX "session_userId_idx" ON "session" ("userId");
+
+              CREATE TABLE "account" (
+                "id" TEXT PRIMARY KEY,
+                "accountId" TEXT NOT NULL,
+                "providerId" TEXT NOT NULL,
+                "userId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "accessToken" TEXT,
+                "refreshToken" TEXT,
+                "idToken" TEXT,
+                "accessTokenExpiresAt" TIMESTAMP,
+                "refreshTokenExpiresAt" TIMESTAMP,
+                "scope" TEXT,
+                "password" TEXT,
+                "createdAt" TIMESTAMP NOT NULL,
+                "updatedAt" TIMESTAMP NOT NULL
+              );
+              CREATE INDEX "account_userId_idx" ON "account" ("userId");
+              CREATE UNIQUE INDEX "account_provider_account_idx" ON "account" ("providerId", "accountId");
+
+              CREATE TABLE "verification" (
+                "id" TEXT PRIMARY KEY,
+                "identifier" TEXT NOT NULL,
+                "value" TEXT NOT NULL,
+                "expiresAt" TIMESTAMP NOT NULL,
+                "createdAt" TIMESTAMP,
+                "updatedAt" TIMESTAMP
+              );
+              CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");
+
+              CREATE TABLE "two_factor" (
+                "id" TEXT PRIMARY KEY,
+                "userId" TEXT NOT NULL UNIQUE REFERENCES "user" ("id") ON DELETE CASCADE,
+                "secret" TEXT NOT NULL,
+                "backupCodes" TEXT NOT NULL,
+                "verified" BOOLEAN NOT NULL DEFAULT FALSE,
+                "failedVerificationCount" INTEGER NOT NULL DEFAULT 0,
+                "lockedUntil" TIMESTAMP
+              );
+
+              CREATE TABLE "passkey" (
+                "id" TEXT PRIMARY KEY,
+                "name" TEXT,
+                "publicKey" TEXT NOT NULL,
+                "userId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "credentialID" TEXT NOT NULL UNIQUE,
+                "counter" INTEGER NOT NULL DEFAULT 0,
+                "deviceType" TEXT NOT NULL,
+                "backedUp" BOOLEAN NOT NULL DEFAULT FALSE,
+                "transports" TEXT,
+                "createdAt" TIMESTAMP,
+                "aaguid" TEXT
+              );
+              CREATE INDEX "passkey_userId_idx" ON "passkey" ("userId");
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              DROP TABLE IF EXISTS "passkey";
+              DROP TABLE IF EXISTS "two_factor";
+              DROP TABLE IF EXISTS "verification";
+              DROP TABLE IF EXISTS "account";
+              DROP TABLE IF EXISTS "session";
+              DROP TABLE IF EXISTS "user";

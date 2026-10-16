@@ -16,7 +16,8 @@ export interface CharacterRecord {
   notes: string;
 }
 
-const STORAGE_KEY = "characters";
+const DEFAULT_STORAGE_KEY = ["grimoire", "characters", "v1"].join(".");
+const PREVIOUS_STORAGE_KEY = "characters";
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 const standardArray: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
 
@@ -24,19 +25,25 @@ function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function loadCharacters(): CharacterRecord[] {
-  try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is CharacterRecord =>
-      item !== null && typeof item === "object" && typeof item.id === "string" &&
-      typeof item.name === "string" && Number.isInteger(item.level) && item.level >= 1 && item.level <= 20 &&
-      item.scores !== null && typeof item.scores === "object" && abilities.every(({ key }) =>
-        Number.isInteger(item.scores[key]) && item.scores[key] >= 1 && item.scores[key] <= 30),
-    );
-  } catch {
-    return [];
+function loadCharacters(storageKey: string): CharacterRecord[] {
+  const records = new Map<string, CharacterRecord>();
+  for (const key of [storageKey, ...(storageKey === DEFAULT_STORAGE_KEY ? [PREVIOUS_STORAGE_KEY] : [])]) {
+    try {
+      const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+      if (!Array.isArray(parsed)) continue;
+      for (const item of parsed) {
+        if (item !== null && typeof item === "object" && typeof item.id === "string" &&
+          typeof item.name === "string" && Number.isInteger(item.level) && item.level >= 1 && item.level <= 20 &&
+          item.scores !== null && typeof item.scores === "object" && abilities.every(({ key: ability }) =>
+            Number.isInteger(item.scores[ability]) && item.scores[ability] >= 1 && item.scores[ability] <= 30)) {
+          records.set(item.id, item as CharacterRecord);
+        }
+      }
+    } catch {
+      // A malformed old storage value should not hide valid records in the other key.
+    }
   }
+  return [...records.values()];
 }
 
 function ScoreFields({ scores, onChange, locale }: { scores: AbilityScores; onChange: (key: AbilityKey, value: number) => void; locale: Locale }) {
@@ -102,14 +109,14 @@ function CharacterEditor({ character, onSave, onCancel, locale }: {
 }
 
 /** CRUD for character records; stores compatible records for party/encounter selection. */
-export default function CharacterBuilder({ locale }: { locale: Locale }) {
+export default function CharacterBuilder({ locale, storageKey = DEFAULT_STORAGE_KEY }: { locale: Locale; storageKey?: string }) {
   const [characters, setCharacters] = useState<CharacterRecord[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedKey, setLoadedKey] = useState("");
   const [editing, setEditing] = useState<CharacterRecord | undefined>();
   const [showEditor, setShowEditor] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
 
-  useEffect(() => { setCharacters(loadCharacters()); setLoaded(true); }, []);
+  useEffect(() => { setCharacters(loadCharacters(storageKey)); setLoadedKey(storageKey); }, [storageKey]);
   useEffect(() => {
     const resetPrintState = () => {
       delete document.body.dataset.printingSheet;
@@ -119,8 +126,8 @@ export default function CharacterBuilder({ locale }: { locale: Locale }) {
     return () => window.removeEventListener("afterprint", resetPrintState);
   }, []);
   useEffect(() => {
-    if (loaded) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(characters));
-  }, [characters, loaded]);
+    if (loadedKey === storageKey) window.localStorage.setItem(storageKey, JSON.stringify(characters));
+  }, [characters, loadedKey, storageKey]);
 
   function save(record: CharacterRecord) {
     setCharacters((current) => current.some(({ id }) => id === record.id)

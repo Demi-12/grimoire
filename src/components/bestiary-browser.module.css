@@ -1,0 +1,42 @@
+.explorer { --b-ink: #34291d; --b-paper: #f2e8d2; --b-rust: #7e3327; --b-gold: #a9864c; color: var(--b-ink); }
+.header { margin-bottom: 20px; text-align: center; }
+.kicker { margin: 0 0 8px; color: var(--b-rust); font: 700 10px/1.4 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+.header h2 { margin: 0; color: #40271f; font: 700 clamp(27px, 4vw, 38px)/1.1 Georgia, serif; }
+.header>p:last-child { margin: 9px 0 0; color: #6e5c47; font: italic 14px/1.5 Georgia, serif; }
+.controls { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 12px; align-items: end; padding: 15px; border: 1px solid #c8b58f; background: rgba(245,236,217,.76); }
+.controls label { display: grid; gap: 6px; }
+.controls label span { color: #785f40; font: 700 9px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.controls input, .controls select { width: 100%; min-height: 40px; padding: 0 11px; color: #362a20; border: 1px solid #b9a47f; border-radius: 0; background: #faf5e9; font: 13px Georgia, serif; }
+.controls input:focus, .controls select:focus { outline: 2px solid #9c7440; outline-offset: 1px; }
+.resultsHeader { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 15px 0 8px; color: #6e5638; font: 700 10px ui-monospace, monospace; letter-spacing: .09em; text-transform: uppercase; }
+.resultsHeader small { font-size: 9px; font-weight: 400; }
+.list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.creature { display: flex; align-items: center; min-width: 0; gap: 10px; padding: 10px 12px; text-align: left; color: #38291f; border: 1px solid #cdbb98; background: rgba(255,252,242,.64); cursor: pointer; transition: background .14s ease, border-color .14s ease, transform .14s ease; }
+.creature:hover { border-color: #9c7440; background: #f8eed9; transform: translateY(-1px); }
+.creature.active { border-color: #8e3d2e; background: #eedac0; box-shadow: inset 3px 0 #8e3d2e; }
+.sigle { flex: 0 0 24px; color: #987441; font-size: 20px; text-align: center; }
+.creatureName { display: block; min-width: 0; overflow: hidden; font: 700 14px Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
+.creatureName small { display: block; margin-top: 3px; overflow: hidden; color: #83725b; font: 9px ui-monospace, monospace; text-overflow: ellipsis; }
+.action { flex: 0 0 auto; margin-left: auto; color: #805035; font: 10px Georgia, serif; white-space: nowrap; }
+.action b { margin-left: 5px; font-size: 15px; }
+.status, .empty, .error { padding: 22px 15px; color: #594832; border: 1px dashed #b59a69; background: rgba(245,236,217,.68); font: italic 14px Georgia, serif; text-align: center; }
+.error strong { color: #7e3327; font-style: normal; }
+.error p { margin: 7px 0 12px; }
+.error button, .pagination button { min-height: 34px; padding: 0 11px; color: #432d20; border: 1px solid #aa8955; background: #f8efd9; font: 12px Georgia, serif; cursor: pointer; }
+.error button:hover, .pagination button:not(:disabled):hover { background: #e9d5af; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 14px; margin: 14px 0 0; color: #684f34; font: 11px ui-monospace, monospace; }
+.pagination button:disabled { opacity: .48; cursor: not-allowed; }
+.sheet { margin-top: 24px; scroll-margin-top: 20px; }
+:global(:root[data-theme="dark"]) .explorer { --b-ink: #eee4d1; --b-paper: #28251f; color: #eee4d1; }
+:global(:root[data-theme="dark"]) .header h2 { color: #f0dfc2; }
+:global(:root[data-theme="dark"]) .header>p:last-child, :global(:root[data-theme="dark"]) .controls label span, :global(:root[data-theme="dark"]) .resultsHeader { color: #c1ae8e; }
+:global(:root[data-theme="dark"]) .controls { border-color: #665638; background: rgba(40,37,31,.82); }
+:global(:root[data-theme="dark"]) .controls input, :global(:root[data-theme="dark"]) .controls select { color: #eee4d1; border-color: #665638; background: #211f1a; }
+:global(:root[data-theme="dark"]) .creature { color: #eee4d1; border-color: #5e503b; background: rgba(40,37,31,.75); }
+:global(:root[data-theme="dark"]) .creature:hover, :global(:root[data-theme="dark"]) .creature.active { background: #403529; border-color: #b48a54; }
+:global(:root[data-theme="dark"]) .creatureName small { color: #c1ae8e; }
+:global(:root[data-theme="dark"]) .action, :global(:root[data-theme="dark"]) .sigle, :global(:root[data-theme="dark"]) .pagination { color: #d1b27d; }
+:global(:root[data-theme="dark"]) .status, :global(:root[data-theme="dark"]) .empty, :global(:root[data-theme="dark"]) .error { color: #eee4d1; background: #28251f; border-color: #a78b57; }
+:global(:root[data-theme="dark"]) .error strong { color: #e0a08a; }
+:global(:root[data-theme="dark"]) .error button, :global(:root[data-theme="dark"]) .pagination button { color: #eee4d1; border-color: #a78b57; background: #342c20; }
+@media (max-width: 600px) { .controls { grid-template-columns: minmax(0, 1fr); } .list { grid-template-columns: minmax(0, 1fr); } .action { font-size: 9px; } .pagination { gap: 7px; } }

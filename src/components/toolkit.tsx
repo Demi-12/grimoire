@@ -3,10 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import CharacterBuilder from "@/components/character-builder";
 import EncounterBuilder from "@/components/encounter-builder";
+import CampaignManager from "@/components/campaign-manager";
+import BestiaryBrowser from "@/components/bestiary-browser";
+import { AuthPanel } from "@/components/auth/auth-panel";
+import { authClient } from "@/lib/auth-client";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
 
-type View = "home" | "characters" | "encounters";
+type View = "home" | "characters" | "encounters" | "account";
 type Theme = "light" | "dark";
 
 function readSaved<T>(key: string, fallback: T): T {
@@ -23,12 +27,24 @@ function makeId() {
 }
 
 export default function Toolkit() {
+  const authSession = authClient.useSession();
+  const accountId = authSession.data?.user.id;
+  const characterStorageKey = accountId
+    ? ["grimoire", "users", accountId, "characters", "v1"].join(".")
+    : ["grimoire", "characters", "v1"].join(".");
+  const creatureStorageKey = accountId
+    ? ["grimoire", "users", accountId, "creatures", "v1"].join(".")
+    : ["grimoire", "creatures", "v1"].join(".");
+  const campaignStorageKey = accountId
+    ? ["grimoire", "users", accountId, "campaigns", "v1"].join(".")
+    : ["grimoire", "campaigns", "v1"].join(".");
   const [view, setView] = useState<View>("home");
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<Theme>("light");
   const [themeReady, setThemeReady] = useState(false);
   const [localeReady, setLocaleReady] = useState(false);
-  const [characters, setCharacters] = useState<{ id: string }[]>([]);
+  const [dataLoadedFor, setDataLoadedFor] = useState("");
+  const [characters, setCharacters] = useState<{ id: string; name: string; level: number }[]>([]);
   const [creatures, setCreatures] = useState<Creature[]>(sampleCreatures);
   const [creatureName, setCreatureName] = useState("");
   const [creatureXp, setCreatureXp] = useState(100);
@@ -37,8 +53,6 @@ export default function Toolkit() {
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
   useEffect(() => {
-    setCharacters(readSaved("grimoire.characters.v1", []));
-    setCreatures(readSaved("grimoire.creatures.v1", sampleCreatures));
     let savedLocale: string | null = null;
     try {
       savedLocale = window.localStorage.getItem("grimoire.locale.v1");
@@ -59,11 +73,17 @@ export default function Toolkit() {
     setLocaleReady(true);
   }, []);
   useEffect(() => {
-    if (view === "home") setCharacters(readSaved("grimoire.characters.v1", []));
-  }, [view]);
+    if (authSession.isPending) return;
+    setCharacters(readSaved(characterStorageKey, characterStorageKey === "grimoire.characters.v1" ? readSaved("characters", []) : []));
+    setCreatures(readSaved(creatureStorageKey, sampleCreatures));
+    setDataLoadedFor(`${characterStorageKey}|${creatureStorageKey}`);
+  }, [authSession.isPending, characterStorageKey, creatureStorageKey]);
   useEffect(() => {
-    window.localStorage.setItem("grimoire.creatures.v1", JSON.stringify(creatures));
-  }, [creatures]);
+    if (view === "home" && !authSession.isPending) setCharacters(readSaved(characterStorageKey, characterStorageKey === "grimoire.characters.v1" ? readSaved("characters", []) : []));
+  }, [view, authSession.isPending, characterStorageKey]);
+  useEffect(() => {
+    if (dataLoadedFor === `${characterStorageKey}|${creatureStorageKey}`) window.localStorage.setItem(creatureStorageKey, JSON.stringify(creatures));
+  }, [creatures, characterStorageKey, creatureStorageKey, dataLoadedFor]);
   useEffect(() => {
     if (localeReady) {
       try {
@@ -86,7 +106,11 @@ export default function Toolkit() {
     }
   }, [theme, themeReady]);
 
-  const title = view === "home" ? t("nav.home") : view === "characters" ? t("nav.characters") : t("nav.encounters");
+  if (authSession.isPending || dataLoadedFor !== `${characterStorageKey}|${creatureStorageKey}`) {
+    return <main className="app-shell min-h-screen bg-paper text-ink"><p role="status" className="page-content">{locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"}</p></main>;
+  }
+
+  const title = view === "home" ? t("nav.home") : view === "characters" ? t("nav.characters") : view === "encounters" ? t("nav.encounters") : t("nav.account");
 
   function addCreature(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,6 +127,7 @@ export default function Toolkit() {
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><span aria-hidden="true">⌂</span>{t("nav.home")}</button>
         <button className={view === "characters" ? "active" : ""} onClick={() => setView("characters")}><span aria-hidden="true">♙</span>{t("nav.characters")}<small>{characters.length}</small></button>
         <button className={view === "encounters" ? "active" : ""} onClick={() => setView("encounters")}><span aria-hidden="true">⚔</span>{t("nav.encounters")}</button>
+        <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">♙</span>{t("nav.account")}</button>
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.localData")}</p></div>
     </aside>
@@ -123,17 +148,24 @@ export default function Toolkit() {
 
       {view === "characters" && <div className="page-content">
         <div className="section-title page-title"><div><p className="eyebrow">{t("characters.kicker")}</p><h1>{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
-        <CharacterBuilder locale={locale} />
+        <CharacterBuilder locale={locale} storageKey={characterStorageKey} />
+        <CampaignManager characters={characters} locale={locale} storageKey={campaignStorageKey} />
         <p className="local-data-note">{t("characters.localData")}</p>
       </div>}
 
       {view === "encounters" && <div className="page-content">
         <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: creatures.length })}</button></div>
-        <EncounterBuilder locale={locale} creatures={creatures} />
+        <EncounterBuilder locale={locale} creatures={creatures} characterStorageKey={characterStorageKey} />
+        <BestiaryBrowser locale={locale} onAddCreature={(creature) => setCreatures((current) => current.some((item) => item.id === creature.id) ? current : [creature, ...current])} />
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
           <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => setCreatures((current) => current.filter((item) => item.id !== creature.id))}>{t("catalog.remove")}</button>}</div>)}</div>
         </section>}
+      </div>}
+
+      {view === "account" && <div className="page-content">
+        <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
+        <AuthPanel locale={locale} />
       </div>}
       <footer className="app-footer"><span>{t("footer.brand")}</span><span>{t("footer.rules")}</span></footer>
     </section>

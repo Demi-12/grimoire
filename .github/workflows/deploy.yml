@@ -47,7 +47,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd \"\$HOME/grimoire\" && git fetch --quiet origin '$DEPLOY_SHA' && git checkout --quiet --detach '$DEPLOY_SHA' && docker compose up -d --build --remove-orphans"
+            "cd \"\$HOME/grimoire\" && git fetch --quiet origin '$DEPLOY_SHA' && git checkout --quiet --detach '$DEPLOY_SHA' && docker compose up -d db && docker compose -f compose.yaml -f compose.liquibase.yaml run --rm liquibase update && docker compose up -d --build --remove-orphans"
 
       - name: Remove temporary SSH material
         if: always()

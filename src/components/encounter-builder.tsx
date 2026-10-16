@@ -9,7 +9,10 @@ import {
   type Creature,
   type Difficulty,
   type EncounterSuggestion,
+  type EncounterRole,
+  type PartyRoleProfile,
 } from "@/lib/rules";
+import MonsterSheet from "@/components/monster-sheet";
 
 export interface EncounterBuilderProps {
   locale: Locale;
@@ -17,9 +20,44 @@ export interface EncounterBuilderProps {
   partyLevels?: number[];
   /** Optional campaign creature catalog. */
   creatures?: Creature[];
+  /** Characters belonging to the current local user profile. */
+  characterStorageKey?: string;
 }
 
-type SavedCharacter = { id: string; name: string; level: number };
+type SavedCharacter = {
+  id: string;
+  name: string;
+  level: number;
+  className?: string;
+  scores?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>;
+};
+
+type PartyRoles = Record<"frontline" | "damage" | "support" | "control" | "scouting", string[]>;
+const roleKeys: EncounterRole[] = ["frontline", "damage", "support", "control", "scouting"];
+
+function inferRoles(characters: SavedCharacter[]): PartyRoles {
+  const roles: PartyRoles = { frontline: [], damage: [], support: [], control: [], scouting: [] };
+  for (const character of characters) {
+    const name = character.className?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() ?? "";
+    const score = character.scores ?? {};
+    const add = (role: keyof PartyRoles) => roles[role].push(character.name);
+    let recognized = false;
+    if (/barbarian|barbar[oa]|fighter|guerrer[oa]|paladin|monk|monje/.test(name)) { add("frontline"); recognized = true; }
+    if (/rogue|picar[oa]|ranger|explorador[oa]|fighter|guerrer[oa]|barbarian|barbar[oa]|warlock|bruj[oa]/.test(name)) { add("damage"); recognized = true; }
+    if (/cleric|clerig[oa]|druid|druida|bard|bard[oa]|paladin/.test(name)) { add("support"); recognized = true; }
+    if (/wizard|mago|sorcerer|hechicer[oa]|warlock|bruj[oa]|bard|bard[oa]|druid|druida|monk|monje/.test(name)) { add("control"); recognized = true; }
+    if (/rogue|picar[oa]|ranger|explorador[oa]|bard|bard[oa]|monk|monje|druid|druida/.test(name)) { add("scouting"); recognized = true; }
+    if (!recognized) {
+      // For custom class names, ability scores provide a modest, explicit heuristic.
+      if ((score.str ?? 0) >= 14 || (score.con ?? 0) >= 14) add("frontline");
+      if ((score.dex ?? 0) >= 14 || (score.str ?? 0) >= 14) add("damage");
+      if ((score.wis ?? 0) >= 14 || (score.cha ?? 0) >= 14) add("support");
+      if ((score.int ?? 0) >= 14 || (score.wis ?? 0) >= 14) add("control");
+      if ((score.dex ?? 0) >= 14 || (score.wis ?? 0) >= 14) add("scouting");
+    }
+  }
+  return roles;
+}
 
 function isSavedCharacter(value: unknown): value is SavedCharacter {
   if (!value || typeof value !== "object") return false;
@@ -30,7 +68,8 @@ function isSavedCharacter(value: unknown): value is SavedCharacter {
     && Number.isFinite(character.level);
 }
 
-function EncounterOption({ suggestion, index, locale }: { suggestion: EncounterSuggestion; index: number; locale: Locale }) {
+function EncounterOption({ suggestion, index, locale, roles }: { suggestion: EncounterSuggestion; index: number; locale: Locale; roles: PartyRoles }) {
+  const [openMonster, setOpenMonster] = useState<string | null>(null);
   const percent = Math.round((suggestion.totalXp / suggestion.budget) * 100);
   const margin = suggestion.budget - suggestion.totalXp;
   const feedbackKey = percent >= 90
@@ -78,17 +117,31 @@ function EncounterOption({ suggestion, index, locale }: { suggestion: EncounterS
         {suggestion.lines.map(({ creature, quantity }) => (
           <div className="creature-line" key={creature.id}>
             <span className="creature-glyph" aria-hidden="true">✦</span>
-            <span>{creatureName(creature)}<small>{creature.xp.toLocaleString(numberLocale)} {translate(locale, "encounter.xp")} · {creature.id.startsWith("sample-") ? translate(locale, "creature.sample.source") : creature.source}</small></span>
+            <span>{creatureName(creature)}<small>{creature.xp.toLocaleString(numberLocale)} {translate(locale, "encounter.xp")} · {creature.id.startsWith("sample-") ? translate(locale, "creature.sample.source") : creature.source}</small>
+              {creature.monsterSlug && <button type="button" className="small-action" onClick={() => setOpenMonster((current) => current === creature.monsterSlug ? null : creature.monsterSlug!)}>{locale === "es" ? "Ver ficha" : "View stat block"}</button>}
+            </span>
             <b>×{quantity}</b>
+            {openMonster === creature.monsterSlug && creature.monsterSlug && <div className="w-full basis-full"><MonsterSheet monsterSlug={creature.monsterSlug} locale={locale} /></div>}
           </div>
         ))}
+      </div>
+      <div className="encounter-footnote mt-3 text-xs leading-relaxed text-muted" aria-label={translate(locale, "encounter.roles.aria")}>
+        <strong>{translate(locale, "encounter.roles.title")}</strong>
+        {Object.entries(roles).some(([, members]) => members.length > 0) ? (
+          <>
+            <p>{translate(locale, "encounter.roles.coverage", { roles: Object.entries(roles).filter(([, members]) => members.length).map(([role, members]) => `${translate(locale, `encounter.roles.${role}`)} (${members.length})`).join(", ") })}</p>
+            <p>{translate(locale, "encounter.roles.gaps", { roles: Object.entries(roles).filter(([, members]) => !members.length).map(([role]) => translate(locale, `encounter.roles.${role}`)).join(", ") || translate(locale, "encounter.roles.none") })}</p>
+            {suggestion.roleFit && <p>{translate(locale, "encounter.roles.monsterFit", { roles: suggestion.roleFit.monsterRoles.map((role) => translate(locale, `encounter.roles.${role}`)).join(", "), gaps: suggestion.roleFit.focusedRoles.map((role) => translate(locale, `encounter.roles.${role}`)).join(", ") || translate(locale, "encounter.roles.none"), score: suggestion.roleFit.score })}</p>}
+            {!suggestion.roleFit && <p>{translate(locale, "encounter.roles.caveat")}</p>}
+          </>
+        ) : <p>{translate(locale, "encounter.roles.unknown")}</p>}
       </div>
     </article>
   );
 }
 
 /** Encounter suggestions for a party, with visible budget feedback and one-click rerolls. */
-export default function EncounterBuilder({ partyLevels: initialPartyLevels, creatures = sampleCreatures, locale }: EncounterBuilderProps) {
+export default function EncounterBuilder({ partyLevels: initialPartyLevels, creatures = sampleCreatures, locale, characterStorageKey = "grimoire.characters.v1" }: EncounterBuilderProps) {
   const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [storageMessageKey, setStorageMessageKey] = useState("");
@@ -101,7 +154,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem("grimoire.characters.v1");
+      const stored = window.localStorage.getItem(characterStorageKey) ?? (characterStorageKey === "grimoire.characters.v1" ? window.localStorage.getItem("characters") : null);
       if (stored) {
         const parsed: unknown = JSON.parse(stored);
         if (!Array.isArray(parsed)) throw new Error("Invalid saved character format");
@@ -117,7 +170,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
     } finally {
       setStorageLoaded(true);
     }
-  }, []);
+  }, [characterStorageKey]);
 
   const partyLevels = useMemo(() => {
     if (initialPartyLevels?.length) {
@@ -128,10 +181,13 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
     return Array.from({ length: partySize }, () => partyLevel);
   }, [initialPartyLevels, partyLevel, partySize, savedCharacters, selectedCharacterIds]);
   const budget = encounterBudget(partyLevels, difficulty);
+  const selectedParty = savedCharacters.filter((character) => selectedCharacterIds.includes(character.id));
+  const partyRoles = inferRoles(selectedParty);
+  const roleProfile: PartyRoleProfile = Object.fromEntries(roleKeys.map((role) => [role, partyRoles[role].length]));
   const numberLocale = locale === "es" ? "es-ES" : "en-US";
 
   function generate() {
-    setSuggestions(suggestEncounters(creatures, partyLevels, difficulty));
+    setSuggestions(suggestEncounters(creatures, partyLevels, difficulty, Math.random, 4, roleProfile));
     setRoll((current) => current + 1);
   }
 
@@ -195,7 +251,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
         {!suggestions.length ? (
           <div className="results-empty"><div className="empty-orbit" aria-hidden="true">⚔</div><p>{translate(locale, "encounter.empty.prompt")}<br /><b>{translate(locale, "encounter.empty.action")}</b> {translate(locale, "encounter.empty.detail")}</p></div>
         ) : (
-          <div className="encounter-card-list">{suggestions.map((suggestion, index) => <EncounterOption key={`${roll}-${index}`} suggestion={suggestion} index={index} locale={locale} />)}</div>
+          <div className="encounter-card-list">{suggestions.map((suggestion, index) => <EncounterOption key={`${roll}-${index}`} suggestion={suggestion} index={index} locale={locale} roles={partyRoles} />)}</div>
         )}
         <p className="rules-source">{translate(locale, "encounter.rulesNote")}</p>
       </section>
