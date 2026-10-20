@@ -1,10 +1,17 @@
 name: Deploy
 
+# Despliega en el servidor de casa mediante un runner self-hosted.
+# - Automático: cada vez que el CI termina bien en main.
+# - Manual: Actions → Deploy → Run workflow (permite elegir rama).
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       branch:
-        description: Branch to deploy to the home server
+        description: Rama a desplegar en el servidor de casa
         required: true
         default: main
         type: string
@@ -18,30 +25,97 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy selected branch to the home server
-    if: github.ref == 'refs/heads/main' && github.actor == 'Demi-12'
-    runs-on: [self-hosted, linux, x64, grimoire-deploy]
+    name: Deploy to the home server
+    # Solo despliega si lo lanzas tú, o si el CI de main ha pasado.
+    if: >-
+      github.actor == 'Demi-12' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
+    # Etiquetas que un runner Linux tiene por defecto al registrarlo.
+    # Si añades más runners self-hosted al repo, vuelve a añadir una
+    # etiqueta propia (p. ej. grimoire-deploy) aquí y en el runner.
+    runs-on: [self-hosted, linux]
     timeout-minutes: 30
+    env:
+      # Carpeta del checkout de producción en el servidor (contiene el .env).
+      # Puedes cambiarla con la variable de repo GRIMOIRE_DIR.
+      GRIMOIRE_DIR: ${{ vars.GRIMOIRE_DIR || '' }}
+      REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+      DEPLOY_BRANCH: ${{ inputs.branch || 'main' }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || '' }}
     steps:
-      - name: Validate branch name
-        env:
-          DEPLOY_BRANCH: ${{ inputs.branch }}
+      - name: Check server prerequisites
         shell: bash
         run: |
           set -euo pipefail
           if [[ ! "$DEPLOY_BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
-            echo "Invalid branch name" >&2
+            echo "::error::Nombre de rama no válido: $DEPLOY_BRANCH"
             exit 2
           fi
+          command -v git >/dev/null || { echo "::error::git no está instalado en el servidor"; exit 1; }
+          command -v docker >/dev/null || { echo "::error::docker no está instalado en el servidor"; exit 1; }
+          docker compose version >/dev/null 2>&1 || { echo "::error::Falta Docker Compose v2 (docker compose)"; exit 1; }
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error::El usuario '$(whoami)' del runner no puede usar Docker. Ejecuta: sudo usermod -aG docker $(whoami) y reinicia el servicio del runner."
+            exit 1
+          fi
+          echo "Runner: $(hostname) como $(whoami)"
 
-      - name: Fetch selected branch and deploy locally
-        env:
-          DEPLOY_BRANCH: ${{ inputs.branch }}
+      - name: Update production checkout
         shell: bash
         run: |
           set -euo pipefail
-          repo="$HOME/grimoire"
-          git -C "$repo" fetch --quiet origin "refs/heads/$DEPLOY_BRANCH"
-          git -C "$repo" checkout --quiet --detach FETCH_HEAD
-          cd "$repo"
-          CLOUDFLARE_TUNNEL_TOKEN=local-only docker compose up -d --build app db
+          repo="${GRIMOIRE_DIR:-$HOME/grimoire}"
+          if [ ! -d "$repo/.git" ]; then
+            echo "No existe $repo; clonando el repositorio..."
+            git clone --quiet "$REPO_URL" "$repo"
+          fi
+          git -C "$repo" remote set-url origin "$REPO_URL"
+          if [ -n "$DEPLOY_SHA" ]; then
+            git -C "$repo" fetch --quiet origin main
+            git -C "$repo" checkout --quiet --detach "$DEPLOY_SHA"
+          else
+            git -C "$repo" fetch --quiet origin "refs/heads/$DEPLOY_BRANCH"
+            git -C "$repo" checkout --quiet --detach FETCH_HEAD
+          fi
+          echo "Desplegando $(git -C "$repo" log -1 --format='%h %s')"
+          echo "GRIMOIRE_REPO=$repo" >> "$GITHUB_ENV"
+
+      - name: Build and start containers
+        shell: bash
+        working-directory: ${{ env.GRIMOIRE_REPO }}
+        run: |
+          set -euo pipefail
+          if [ ! -f .env ]; then
+            echo "::error::Falta $PWD/.env en el servidor. Cópialo de .env.example y rellena POSTGRES_* y DATABASE_URL."
+            exit 1
+          fi
+          # Si el .env tiene token del túnel, levanta también cloudflared.
+          if grep -Eq '^CLOUDFLARE_TUNNEL_TOKEN=.+' .env; then
+            services="app db tunnel"
+          else
+            echo "Sin CLOUDFLARE_TUNNEL_TOKEN en .env: se despliega solo app y db."
+            export CLOUDFLARE_TUNNEL_TOKEN=local-only
+            services="app db"
+          fi
+          docker compose up -d --build --remove-orphans $services
+          docker image prune -f >/dev/null
+
+      - name: Wait until the app responds
+        shell: bash
+        working-directory: ${{ env.GRIMOIRE_REPO }}
+        run: |
+          set -euo pipefail
+          grep -Eq '^CLOUDFLARE_TUNNEL_TOKEN=.+' .env || export CLOUDFLARE_TUNNEL_TOKEN=local-only
+          for i in $(seq 1 30); do
+            if docker compose exec -T app wget -q -O /dev/null http://127.0.0.1:3000/; then
+              echo "La app responde."
+              docker compose ps
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::La app no responde tras 60 s"
+          docker compose ps
+          docker compose logs --tail 80 app
+          exit 1
