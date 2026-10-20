@@ -4,6 +4,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { abilities, abilityModifier, type AbilityKey, type AbilityScores, proficiencyBonus } from "@/lib/rules";
 import { translate, type Locale } from "@/lib/i18n";
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
+import CharacterWizard, { describeBuild, type WizardResult } from "@/components/character-wizard";
+import { deriveSheet, type CharacterBuild, type DerivedSheet } from "@/lib/character-sheet";
+import { findBackground, findClass, findSpecies, originFeats, say, skillKeys } from "@/lib/dnd2024";
 
 /** Character shape shared with the encounter builder through local storage. */
 export interface CharacterRecord {
@@ -15,7 +18,20 @@ export interface CharacterRecord {
   level: number;
   scores: AbilityScores;
   notes: string;
+  /** Present for characters made with the 2024 step-by-step creator. */
+  build?: CharacterBuild;
 }
+
+const signed = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
+/** Starting gear chosen in the creator, without the coin entries. */
+function startingItems(build: CharacterBuild, locale: Locale): string[] {
+  const cls = findClass(build.classId);
+  const bg = findBackground(build.backgroundId);
+  const options = [cls?.equipment.find((option) => option.id === build.classEquipment), bg?.equipment.find((option) => option.id === build.backgroundEquipment)];
+  return options.flatMap((option) => option?.items ?? []).filter((item) => !/ GP$/.test(item.en)).map((item) => say(item, locale));
+}
+
+const sheetFor = (character: CharacterRecord): DerivedSheet | null => character.build ? deriveSheet(character.build, character.level) : null;
 
 const DEFAULT_LOCATION = storageLocation("characters");
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
@@ -119,6 +135,7 @@ export default function CharacterBuilder({ locale, storageKey = DEFAULT_LOCATION
   const [loadedKey, setLoadedKey] = useState("");
   const [editing, setEditing] = useState<CharacterRecord | undefined>();
   const [showEditor, setShowEditor] = useState(false);
+  const [wizard, setWizard] = useState<{ record?: CharacterRecord } | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
 
   useEffect(() => { setCharacters(loadCharacters(storageKey)); setLoadedKey(storageKey); }, [storageKey]);
@@ -144,6 +161,18 @@ export default function CharacterBuilder({ locale, storageKey = DEFAULT_LOCATION
     setEditing(undefined);
   }
 
+  function saveFromWizard(result: WizardResult) {
+    const described = describeBuild(result.build, locale);
+    save({ id: wizard?.record?.id ?? makeId(), name: result.name, level: result.level, notes: result.notes, build: result.build,
+      className: described.className, species: described.species, background: described.background, scores: described.scores });
+    setWizard(null);
+  }
+
+  function startEdit(record: CharacterRecord) {
+    if (record.build) { setShowEditor(false); setWizard({ record }); return; }
+    setWizard(null); setEditing(record); setShowEditor(true);
+  }
+
   function remove(record: CharacterRecord) {
     if (window.confirm(translate(locale, "character.deleteConfirm", { name: record.name }))) setCharacters((current) => current.filter(({ id }) => id !== record.id));
   }
@@ -157,12 +186,17 @@ export default function CharacterBuilder({ locale, storageKey = DEFAULT_LOCATION
   return <section aria-labelledby="characters-title">
     <div className="section-heading"><div><p className="eyebrow">{translate(locale, "character.groupKicker")}</p><h2 id="characters-title">{translate(locale, "character.title")}</h2>
       <p>{translate(locale, "character.description")}</p></div>
-      {!showEditor && <button className="button button-primary" onClick={() => { setEditing(undefined); setShowEditor(true); }}>{translate(locale, "character.newButton")}</button>}
+      {!showEditor && !wizard && <div className="builder-actions">
+        <button className="button button-quiet" onClick={() => { setEditing(undefined); setShowEditor(true); }}>{translate(locale, "character.quickButton")}</button>
+        <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.newButton")}</button>
+      </div>}
     </div>
+    {wizard && <CharacterWizard locale={locale} onCancel={() => setWizard(null)} onSave={saveFromWizard}
+      initial={wizard.record?.build ? { name: wizard.record.name, level: wizard.record.level, notes: wizard.record.notes, build: wizard.record.build } : undefined} />}
     {showEditor && <CharacterEditor character={editing} locale={locale} onSave={save} onCancel={() => { setShowEditor(false); setEditing(undefined); }} />}
-    {characters.length === 0 && !showEditor ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
-      <button className="button button-primary" onClick={() => setShowEditor(true)}>{translate(locale, "character.createFirst")}</button></div> :
-      <div className="character-grid">{characters.map((character) => <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
+    {characters.length === 0 && !showEditor && !wizard ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
+      <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.createFirst")}</button></div> :
+      <div className="character-grid">{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
         <div className="character-card-top"><span className="avatar-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><span className="level-pill">{translate(locale, "character.levelPill", { level: character.level })}</span></div>
         <h3>{character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
         <div className="export-only export-sheet-content">
@@ -178,39 +212,48 @@ export default function CharacterBuilder({ locale, storageKey = DEFAULT_LOCATION
               <div className="export-abilities">{abilities.map(({ key }) => { const score = character.scores[key]; const modifier = abilityModifier(score); return <div key={key}><span>{translate(locale, `ability.${key}`)}</span><b>{score}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
             </section>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetCombat")}</h4>
-              <div className="export-combat">{["character.armorClass", "character.initiative", "character.speed", "character.hitPoints", "character.hitDice"].map((key) => <div key={key}>{translate(locale, key)}<b /></div>)}</div>
+              <div className="export-combat">{([["character.armorClass", sheet?.armorClass], ["character.initiative", sheet ? signed(sheet.initiative) : undefined], ["character.speed", sheet?.speed], ["character.hitPoints", sheet?.hitPoints], ["character.hitDice", sheet?.hitDice]] as const).map(([key, value]) => <div key={key}>{translate(locale, key)}<b>{value ?? ""}</b></div>)}</div>
             </section>
             <div className="sheet-columns">
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetSavingThrows")}</h4><div className="sheet-line-list">{abilities.map(({ key }) => <div key={key}><span>{translate(locale, `ability.${key}`)}</span><i /> <b /></div>)}</div></section>
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetSkills")}</h4><div className="sheet-line-list sheet-skill-list">{["acrobatics", "animalHandling", "arcana", "athletics", "deception", "history", "insight", "intimidation", "investigation", "medicine", "nature", "perception", "performance", "persuasion", "religion", "sleightOfHand", "stealth", "survival"].map((skill) => <div key={skill}><span>{translate(locale, `skill.${skill}`)}</span><i /><b /></div>)}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetSavingThrows")}</h4><div className="sheet-line-list">{abilities.map(({ key }) => <div key={key}><span>{translate(locale, `ability.${key}`)}</span><i className={sheet?.saves[key].proficient ? "filled" : undefined} /> <b>{sheet ? signed(sheet.saves[key].bonus) : ""}</b></div>)}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetSkills")}</h4><div className="sheet-line-list sheet-skill-list">{skillKeys.map((skill) => <div key={skill}><span>{translate(locale, `skill.${skill}`)}</span><i className={sheet?.skills[skill].expertise ? "filled expert" : sheet?.skills[skill].proficient ? "filled" : undefined} /><b>{sheet ? signed(sheet.skills[skill].bonus) : ""}</b></div>)}</div></section>
             </div>
             <section className="sheet-section"><h4>{translate(locale, "character.notes")}</h4><div className="sheet-note-area">{character.notes}</div></section>
             <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
           </section>
           <section className="sheet-page sheet-page-extra">
             <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{translate(locale, "character.sheetAdventurerRecord")}</h2><small>{character.name}</small></header>
-            <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><div className="sheet-writing-area tall" /></section>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><div className="sheet-writing-area tall">{character.build && <p className="sheet-filled">{[
+              ...(findClass(character.build.classId)?.features ?? []).map((feature) => say(feature, locale)),
+              ...(sheet?.feats ?? []).map((feat) => say(originFeats[feat].name, locale)),
+            ].join(" · ")}{sheet?.spellSaveDc ? ` · ${translate(locale, "character.spellDc")} ${sheet.spellSaveDc}, ${translate(locale, "character.spellAttack")} ${signed(sheet.spellAttack ?? 0)}` : ""}</p>}</div></section>
             <div className="sheet-columns">
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><div className="sheet-writing-area medium" /></section>
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetProficiencies")}</h4><div className="sheet-writing-area medium" /></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><div className="sheet-writing-area medium">{character.build && <p className="sheet-filled">{(findSpecies(character.build.speciesId)?.traits ?? []).map((trait) => say(trait, locale)).join(" · ")}{sheet?.darkvision ? ` · ${translate(locale, "character.darkvision")} ${sheet.darkvision}` : ""}</p>}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetProficiencies")}</h4><div className="sheet-writing-area medium">{character.build && (() => { const cls = findClass(character.build.classId); return cls ? <p className="sheet-filled">{say(cls.armor, locale)} · {say(cls.weapons, locale)}{cls.tools ? ` · ${say(cls.tools, locale)}` : ""}</p> : null; })()}</div></section>
             </div>
-            <section className="sheet-section"><h4>{translate(locale, "character.sheetEquipment")}</h4><div className="sheet-equipment-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetQuantity")}</b><b>{translate(locale, "character.sheetWeight")}</b><b>{translate(locale, "character.sheetNotes")}</b></div>{Array.from({ length: 7 }, (_, index) => <div key={index}><span /><span /><span /><span /></div>)}</div></section>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetEquipment")}</h4><div className="sheet-equipment-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetQuantity")}</b><b>{translate(locale, "character.sheetWeight")}</b><b>{translate(locale, "character.sheetNotes")}</b></div>{(() => { const items = character.build ? startingItems(character.build, locale) : []; return Array.from({ length: Math.max(7, items.length) }, (_, index) => <div key={index}><span>{items[index] ?? ""}</span><span /><span /><span /></div>); })()}</div></section>
             <div className="sheet-columns">
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetStory")}</h4><div className="sheet-writing-area short" /></section>
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetTreasure")}</h4><div className="sheet-writing-area short" /></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetStory")}</h4><div className="sheet-writing-area short">{character.build?.appearance && <p className="sheet-filled">{character.build.appearance}</p>}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetTreasure")}</h4><div className="sheet-writing-area short">{sheet && <p className="sheet-filled">{sheet.gold} {locale === "es" ? "po" : "GP"}</p>}</div></section>
             </div>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetSpells")}</h4><div className="sheet-spell-lines">{Array.from({ length: 4 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div></section>
             <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
           </section>
         </div>
+        {sheet && <div className="card-vitals">
+          <div><span>{translate(locale, "character.acShort")}</span><b>{sheet.armorClass}</b></div>
+          <div><span>{translate(locale, "character.hpShort")}</span><b>{sheet.hitPoints}</b></div>
+          <div><span>{translate(locale, "character.initShort")}</span><b>{signed(sheet.initiative)}</b></div>
+          <div><span>{translate(locale, "character.speedShort")}</span><b>{sheet.speed}</b></div>
+        </div>}
         <div className="mini-stats">{abilities.map(({ key }) => { const modifier = abilityModifier(character.scores[key]); return <div key={key}>
           <span>{translate(locale, `ability.${key}`).slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><b>{character.scores[key]}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
         {character.notes && <p className="character-notes">{character.notes}</p>}
         <div className="character-card-footer"><span>{translate(locale, "character.proficiencyShort")} <b>+{proficiencyBonus(character.level)}</b></span><div>
           <button className="small-action export-action" type="button" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
-          <button className="small-action" onClick={() => { setEditing(character); setShowEditor(true); }}>{translate(locale, "character.edit")}</button>
+          <button className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
           <button className="small-action danger-action" onClick={() => remove(character)}>{translate(locale, "character.delete")}</button>
         </div></div>
-      </article>)}</div>}
+      </article>; })}</div>}
   </section>;
 }

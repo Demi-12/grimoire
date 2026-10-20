@@ -43,8 +43,29 @@ export interface Creature {
   source: string;
   /** Optional tactical tags inferred from a stat block. Untagged creatures stay role-neutral. */
   roleTags?: EncounterRole[];
-  /** Slug in the 2024 SRD API, when this creature came from the bestiary. */
+  /** Slug in the SRD API, when this creature came from the bestiary. */
   monsterSlug?: string;
+  /** Challenge rating and creature type, when known (SRD monsters). */
+  cr?: number;
+  type?: string;
+}
+
+export interface EncounterOptions {
+  /** Maximum number of different creatures in one encounter (e.g. a leader and its minions). */
+  maxKinds?: number;
+  /** Maximum number of individual creatures. */
+  maxCreatures?: number;
+}
+
+function weightedPick<T>(items: T[], weights: number[], random: () => number): number {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let pick = random() * total;
+  let index = 0;
+  while (index < weights.length - 1 && pick >= weights[index]) {
+    pick -= weights[index];
+    index += 1;
+  }
+  return index;
 }
 
 export interface EncounterLine {
@@ -81,9 +102,22 @@ function buildOneSuggestion(
   budget: number,
   random: () => number,
   partyRoles?: PartyRoleProfile,
+  options: EncounterOptions = {},
 ): EncounterSuggestion | null {
-  const viable = creatures.filter((creature) => creature.xp > 0 && creature.xp <= budget);
-  if (!viable.length) return null;
+  const affordable = creatures.filter((creature) => creature.xp > 0 && creature.xp <= budget);
+  if (!affordable.length) return null;
+  const maxCreatures = Math.max(1, Math.min(20, options.maxCreatures ?? 20));
+  // Large catalogs: skip creatures too weak to matter for this budget when stronger ones exist.
+  const meaningful = affordable.filter((creature) => creature.xp * maxCreatures >= budget * 0.5);
+  const pool = options.maxKinds && meaningful.length ? meaningful : affordable;
+  const hasPartyRoles = !!partyRoles && Object.values(partyRoles).some((count) => typeof count === "number" && count > 0);
+  const roleWeight = (option: Creature) => {
+    if (!hasPartyRoles || !option.roleTags?.length) return 1;
+    return 1 + option.roleTags.reduce((weight, role) => {
+      const count = partyRoles![role];
+      return weight + (count === undefined ? 0 : count > 0 ? 0.15 : 0.85);
+    }, 0);
+  };
 
   let best: EncounterSuggestion | null = null;
   for (let attempt = 0; attempt < 80; attempt += 1) {
@@ -91,25 +125,23 @@ function buildOneSuggestion(
     let remaining = budget;
     let totalXp = 0;
     let count = 0;
-    while (count < 20) {
-      const options = viable.filter((creature) => creature.xp <= remaining);
-      if (!options.length) break;
-      const hasPartyRoles = partyRoles && Object.values(partyRoles).some((count) => typeof count === "number" && count > 0);
-      const weights = options.map((option) => {
-        if (!hasPartyRoles || !option.roleTags?.length) return 1;
-        return 1 + option.roleTags.reduce((weight, role) => {
-          const count = partyRoles[role];
-          return weight + (count === undefined ? 0 : count > 0 ? 0.15 : 0.85);
-        }, 0);
-      });
-      const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
-      let pick = random() * weightTotal;
-      let optionIndex = 0;
-      while (optionIndex < weights.length - 1 && pick >= weights[optionIndex]) {
-        pick -= weights[optionIndex];
-        optionIndex += 1;
+    // With a kind limit, first choose which creatures appear, then only fill with those.
+    let viable = pool;
+    if (options.maxKinds) {
+      const kinds = 1 + Math.floor(random() * Math.max(1, options.maxKinds));
+      const chosen: Creature[] = [];
+      let candidates = [...pool];
+      while (chosen.length < kinds && candidates.length) {
+        const index = weightedPick(candidates, candidates.map(roleWeight), random);
+        chosen.push(candidates[index]);
+        candidates = candidates.filter((_, candidate) => candidate !== index);
       }
-      const creature = options[optionIndex];
+      viable = chosen;
+    }
+    while (count < maxCreatures) {
+      const choices = viable.filter((creature) => creature.xp <= remaining);
+      if (!choices.length) break;
+      const creature = choices[weightedPick(choices, choices.map(roleWeight), random)];
       const existing = lines.get(creature.id);
       if (existing) existing.quantity += 1;
       else lines.set(creature.id, { creature, quantity: 1 });
@@ -152,6 +184,7 @@ export function suggestEncounters(
   random: () => number = Math.random,
   limit = 4,
   partyRoles?: PartyRoleProfile,
+  options: EncounterOptions = {},
 ): EncounterSuggestion[] {
   const budget = encounterBudget(levels, difficulty);
   if (!levels.length || !creatures.length || budget <= 0) return [];
@@ -159,7 +192,7 @@ export function suggestEncounters(
   const suggestions: EncounterSuggestion[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < limit * 5 && suggestions.length < limit; index += 1) {
-    const suggestion = buildOneSuggestion(creatures, budget, random, partyRoles);
+    const suggestion = buildOneSuggestion(creatures, budget, random, partyRoles, options);
     if (!suggestion) break;
     suggestion.difficulty = difficulty;
     const key = suggestion.lines
