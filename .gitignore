@@ -19,3 +19,6 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# Server-local Compose settings (ports, extra services)
+compose.override.yaml
