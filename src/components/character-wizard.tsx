@@ -30,7 +30,7 @@ type Props = {
 
 const copy = {
   en: {
-    kicker: "CHARACTER CREATION · 2024 RULES", create: "Forge a new adventurer", edit: "Revise your adventurer",
+    kicker: "Character creation, 2024 rules", create: "Forge a new adventurer", edit: "Revise your adventurer",
     steps: ["Class", "Background", "Species", "Abilities", "Proficiencies", "Equipment", "Details", "Summary"],
     back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator",
     stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
@@ -66,7 +66,7 @@ const copy = {
     srd: "Rules data from the System Reference Document 5.2 (CC-BY-4.0).",
   },
   es: {
-    kicker: "CREACIÓN DE PERSONAJE · REGLAS 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
+    kicker: "Creación de personaje, reglas 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
     steps: ["Clase", "Trasfondo", "Especie", "Características", "Competencias", "Equipo", "Detalles", "Resumen"],
     back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador",
     stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,

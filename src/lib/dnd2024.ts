@@ -4,7 +4,7 @@
  * their SRD subclass, the 9 species, the 4 SRD backgrounds and the SRD origin feats.
  * Names are given in English and Spanish; rules text is summarized, not reproduced.
  */
-import type { AbilityKey } from "@/lib/rules";
+import type { AbilityKey } from "./rules";
 
 export type Text = { en: string; es: string };
 

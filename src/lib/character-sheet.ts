@@ -1,9 +1,9 @@
 /** Derived character sheet values for characters built with the 2024 step-by-step creator. */
-import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "@/lib/rules";
+import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "./rules";
 import {
   armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
-} from "@/lib/dnd2024";
+} from "./dnd2024";
 
 export type AbilityMethod = "standard" | "pointBuy" | "rolled";
 export type BonusMode = "plus2plus1" | "plus1x3";

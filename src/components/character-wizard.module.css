@@ -6,7 +6,7 @@
   box-shadow: 0 0 0 4px var(--white), 0 0 0 5px var(--line), 0 14px 30px rgba(43, 24, 10, .14);
 }
 .head { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 12px; }
-.kicker { margin: 0 0 6px; font: 9px var(--mono); letter-spacing: .14em; color: var(--green); }
+.kicker { margin: 0 0 6px; font: 13px var(--mono); letter-spacing: .02em; color: var(--green); }
 .head h2 { margin: 0; font: 600 26px/1.15 var(--serif); color: var(--ink); }
 .close { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 20px; cursor: pointer; }
 
@@ -16,7 +16,7 @@
 .step span { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; font: 600 10px var(--serif); background: var(--white); }
 .step:hover { color: var(--ink); }
 .current { color: var(--ink); background: var(--white); box-shadow: inset 0 -3px var(--green); }
-.current span { background: var(--green); border-color: var(--green); color: #fff7e6; }
+.current span { background: var(--crimson-fill, var(--green)); border-color: var(--crimson-fill, var(--green)); color: #fff7e6; }
 .done span { background: color-mix(in srgb, var(--lime) 45%, var(--white)); border-color: var(--lime); color: var(--ink); }
 
 .body { padding: 20px 24px 8px; }
@@ -66,7 +66,7 @@
 
 .abilityTable { border: 1px solid var(--line); }
 .abilityHead, .abilityRow { display: grid; grid-template-columns: minmax(110px, 1.4fr) 1.4fr .7fr .7fr .7fr; align-items: center; gap: 8px; padding: 8px 12px; }
-.abilityHead { background: var(--green); color: #fff3df; font: 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.abilityHead { background: var(--crimson-fill, var(--green)); color: #fff3df; font: 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .abilityRow { border-top: 1px solid var(--line); font-size: 13px; }
 .abilityRow:nth-child(odd) { background: color-mix(in srgb, var(--paper) 60%, transparent); }
 .abilityRow b { font: 600 13px var(--serif); }
