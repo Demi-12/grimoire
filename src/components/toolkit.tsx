@@ -39,7 +39,8 @@ export default function Toolkit() {
   const [themeReady, setThemeReady] = useState(false);
   const [localeReady, setLocaleReady] = useState(false);
   const [dataLoadedFor, setDataLoadedFor] = useState("");
-  const [characters, setCharacters] = useState<{ id: string; name: string; level: number }[]>([]);
+  const [characters, setCharacters] = useState<{ id: string; name: string; level: number; className?: string; species?: string }[]>([]);
+  const [campaignCount, setCampaignCount] = useState(0);
   const [creatures, setCreatures] = useState<Creature[]>(sampleCreatures);
   const [creatureName, setCreatureName] = useState("");
   const [creatureXp, setCreatureXp] = useState(100);
@@ -74,8 +75,11 @@ export default function Toolkit() {
     setDataLoadedFor(`${characterStorageKey}|${creatureStorageKey}`);
   }, [authSession.isPending, characterStorageKey, creatureStorageKey]);
   useEffect(() => {
-    if (view === "home" && !authSession.isPending) setCharacters(readSaved(characterStorageKey, isGuestLocation(characterStorageKey, "characters") ? readSaved(LEGACY_CHARACTERS_LOCATION, []) : []));
-  }, [view, authSession.isPending, characterStorageKey]);
+    if (view !== "home" || authSession.isPending) return;
+    setCharacters(readSaved(characterStorageKey, isGuestLocation(characterStorageKey, "characters") ? readSaved(LEGACY_CHARACTERS_LOCATION, []) : []));
+    const campaigns = readSaved<unknown>(campaignStorageKey, []);
+    setCampaignCount(Array.isArray(campaigns) ? campaigns.length : 0);
+  }, [view, authSession.isPending, characterStorageKey, campaignStorageKey]);
   useEffect(() => {
     if (dataLoadedFor === `${characterStorageKey}|${creatureStorageKey}`) window.localStorage.setItem(creatureStorageKey, JSON.stringify(creatures));
   }, [creatures, characterStorageKey, creatureStorageKey, dataLoadedFor]);
@@ -133,12 +137,28 @@ export default function Toolkit() {
         <label className="inline-flex items-center gap-2 text-xs text-muted"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="rounded-md border border-line bg-parchment px-2 py-1.5 text-ink focus-visible:ring-2 focus-visible:ring-forest" value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
         <span className="edition-badge">{t("common.edition")}</span></header>
       {view === "home" && <div className="page-content">
-        <section className="welcome-banner"><div className="banner-copy"><p className="eyebrow light-eyebrow"><span /> {t("home.journal")}</p><h1>{locale === "es" ? <>Las grandes historias<br />empiezan <em>aquí.</em></> : <>Great stories<br />start <em>here.</em></>}</h1><p>{t("home.description")}</p><div className="banner-actions"><button className="button button-lime" onClick={() => setView("characters")}>{t("home.createCharacter")} <span>↗</span></button><button className="button button-outline" onClick={() => setView("encounters")}>{t("home.prepareEncounter")}</button></div></div><div className="banner-art" aria-hidden="true"><div className="art-ring ring-a" /><div className="art-ring ring-b" /><span>✳</span><small>EST. MMXXIV</small></div></section>
-        <section className="dashboard-section"><div className="section-title"><div><p className="eyebrow">{t("home.startingPoint")}</p><h2>{t("home.toolbox")}</h2></div><span className="section-aside">{t("home.savedCharacters", { count: characters.length, label: t(characters.length === 1 ? "home.characterSingular" : "home.characterPlural") })}</span></div><div className="dashboard-grid">
-          <button className="dashboard-card" onClick={() => setView("characters")}><span className="dashboard-icon">♙</span><span className="card-kicker">{t("home.charactersKicker")}</span><strong>{t("home.characterCardTitle")}</strong><p>{t("home.characterCardDescription")}</p><span className="card-link">{t("home.openCreator")} <b>↗</b></span></button>
-          <button className="dashboard-card" onClick={() => setView("encounters")}><span className="dashboard-icon crossed-swords">⚔</span><span className="card-kicker">{t("home.encountersKicker")}</span><strong>{t("home.encounterCardTitle")}</strong><p>{t("home.encounterCardDescription")}</p><span className="card-link">{t("home.generateEncounter")} <b>↗</b></span></button>
-        </div></section>
-        <div className="privacy-note"><span>◈</span><p><b>{t("home.privacyTitle")}</b> {t("home.privacyDescription")}</p></div>
+        <header className="desk-head">
+          <div><h1>{t("home.title")}</h1><p>{accountId ? t("home.signedIn", { name: authSession.data?.user.name ?? "" }) : t("home.guest")}</p></div>
+          <div className="desk-actions">
+            <button className="button button-quiet" onClick={() => setView("encounters")}>⚔ {t("home.generateEncounter")}</button>
+            <button className="button button-primary" onClick={() => setView("characters")}>✦ {t("home.createCharacter")}</button>
+          </div>
+        </header>
+        <section className="tool-grid" aria-label={t("home.toolbox")}>
+          <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true">♙</span><strong>{t("nav.characters")}</strong><b>{characters.length}</b><small>{t("home.tool.characters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true">⚑</span><strong>{t("home.campaigns")}</strong><b>{campaignCount}</b><small>{t("home.tool.campaigns")}</small></button>
+          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true">⚔</span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true">⚿</span><strong>{t("nav.account")}</strong><b className="tool-status">{accountId ? "✓" : "—"}</b><small>{t(accountId ? "home.tool.accountOn" : "home.tool.accountOff")}</small></button>
+        </section>
+        <section className="desk-panel">
+          <div className="desk-panel-head"><h2>{t("home.recent")}</h2>{characters.length > 4 && <button className="small-action" onClick={() => setView("characters")}>{t("home.seeAll", { count: characters.length })}</button>}</div>
+          {characters.length ? <ul className="roster">{characters.slice(0, 4).map((character) => <li key={character.id}>
+            <button onClick={() => setView("characters")}><span className="roster-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+              <span className="roster-name">{character.name}<small>{[character.className, character.species].filter(Boolean).join(" · ") || t("character.adventurer")}</small></span>
+              <span className="roster-level">{t("character.levelPill", { level: character.level })}</span></button>
+          </li>)}</ul> : <p className="desk-empty">{t("home.noCharacters")} <button className="small-action" onClick={() => setView("characters")}>{t("home.createCharacter")}</button></p>}
+        </section>
+        <p className="local-data-note">◈ {t("home.privacyDescription")}</p>
       </div>}
 
       {view === "characters" && <div className="page-content">

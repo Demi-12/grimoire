@@ -138,3 +138,44 @@ export async function fetchMonster(slug: string, signal?: AbortSignal): Promise<
 export function srdLabel(edition?: MonsterEdition) {
   return edition === "2014" ? "SRD 5.1 · 2014" : "SRD 5.2 · 2024";
 }
+
+/** Compact SRD monster entry served by /api/monsters/catalog. */
+export type SrdMonster = { index: string; name: string; cr: number; xp: number; type: string; size: string; roles: MonsterRole[] };
+
+export async function fetchSrdCatalog(signal?: AbortSignal): Promise<{ edition?: MonsterEdition; monsters: SrdMonster[] }> {
+  const response = await fetch("/api/monsters/catalog", { headers: { Accept: "application/json" }, signal });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new MonsterApiError(body?.error ?? "Could not load the bestiary.", response.status);
+  }
+  const payload = (await response.json()) as { edition?: unknown; monsters?: unknown };
+  if (!Array.isArray(payload.monsters)) throw new MonsterApiError("The bestiary returned an unexpected response.");
+  const monsters = payload.monsters.filter((entry): entry is SrdMonster => !!entry && typeof entry === "object"
+    && typeof (entry as SrdMonster).index === "string" && typeof (entry as SrdMonster).xp === "number" && typeof (entry as SrdMonster).cr === "number");
+  const edition = payload.edition === "2024" || payload.edition === "2014" ? payload.edition : undefined;
+  return { edition, monsters };
+}
+
+export function formatChallenge(cr?: number) {
+  if (cr === undefined) return "—";
+  return cr === 0.125 ? "1/8" : cr === 0.25 ? "1/4" : cr === 0.5 ? "1/2" : String(cr);
+}
+
+const creatureTypes: Record<string, { en: string; es: string }> = {
+  aberration: { en: "Aberration", es: "Aberración" }, beast: { en: "Beast", es: "Bestia" }, celestial: { en: "Celestial", es: "Celestial" },
+  construct: { en: "Construct", es: "Constructo" }, dragon: { en: "Dragon", es: "Dragón" }, elemental: { en: "Elemental", es: "Elemental" },
+  fey: { en: "Fey", es: "Feérico" }, fiend: { en: "Fiend", es: "Infernal" }, giant: { en: "Giant", es: "Gigante" },
+  humanoid: { en: "Humanoid", es: "Humanoide" }, monstrosity: { en: "Monstrosity", es: "Monstruosidad" }, ooze: { en: "Ooze", es: "Cieno" },
+  plant: { en: "Plant", es: "Planta" }, undead: { en: "Undead", es: "Muerto viviente" }, swarm: { en: "Swarm", es: "Enjambre" },
+};
+
+/** Groups "swarm of tiny beasts" and similar variants under one filter key. */
+export function creatureTypeKey(type: string) {
+  const lower = type.toLowerCase().trim();
+  if (lower.startsWith("swarm")) return "swarm";
+  return Object.keys(creatureTypes).find((key) => lower.startsWith(key)) ?? (lower || "other");
+}
+
+export function creatureTypeLabel(key: string, locale: "en" | "es") {
+  return creatureTypes[key]?.[locale] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
