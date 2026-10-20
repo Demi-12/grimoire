@@ -14,7 +14,7 @@ import {
 } from "@/lib/rules";
 import MonsterSheet from "@/components/monster-sheet";
 import { creatureTypeKey, creatureTypeLabel, fetchSrdCatalog, formatChallenge, srdLabel, type MonsterEdition, type SrdMonster } from "@/lib/monster-api";
-import { isGuestLocation, LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
+import type { Campaign, Character } from "@/lib/api-client";
 
 export interface EncounterBuilderProps {
   locale: Locale;
@@ -22,14 +22,13 @@ export interface EncounterBuilderProps {
   partyLevels?: number[];
   /** Optional campaign creature catalog. */
   creatures?: Creature[];
-  /** Characters belonging to the current local user profile. */
-  characterStorageKey?: string;
+  /** Characters the user can see: their own and those in shared campaigns. */
+  characters?: Character[];
+  /** Campaigns the user belongs to, for one-click party selection. */
+  campaigns?: Campaign[];
 }
 
-type SavedCharacter = {
-  id: string;
-  name: string;
-  level: number;
+type SavedCharacter = Pick<Character, "id" | "name" | "level" | "campaignId" | "ownerName" | "editable"> & {
   className?: string;
   scores?: Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>;
 };
@@ -59,15 +58,6 @@ function inferRoles(characters: SavedCharacter[]): PartyRoles {
     }
   }
   return roles;
-}
-
-function isSavedCharacter(value: unknown): value is SavedCharacter {
-  if (!value || typeof value !== "object") return false;
-  const character = value as Partial<SavedCharacter>;
-  return typeof character.id === "string"
-    && typeof character.name === "string"
-    && typeof character.level === "number"
-    && Number.isFinite(character.level);
 }
 
 function EncounterOption({ suggestion, index, locale, roles }: { suggestion: EncounterSuggestion; index: number; locale: Locale; roles: PartyRoles }) {
@@ -143,11 +133,9 @@ function EncounterOption({ suggestion, index, locale, roles }: { suggestion: Enc
 }
 
 /** Encounter suggestions for a party, with visible budget feedback and one-click rerolls. */
-export default function EncounterBuilder({ partyLevels: initialPartyLevels, creatures = sampleCreatures, locale, characterStorageKey = storageLocation("characters") }: EncounterBuilderProps) {
-  const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
+export default function EncounterBuilder({ partyLevels: initialPartyLevels, creatures = sampleCreatures, locale, characters = [], campaigns = [] }: EncounterBuilderProps) {
+  const savedCharacters: SavedCharacter[] = characters;
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
-  const [storageMessageKey, setStorageMessageKey] = useState("");
-  const [storageLoaded, setStorageLoaded] = useState(false);
   const [partySize, setPartySize] = useState(4);
   const [partyLevel, setPartyLevel] = useState(3);
   const [difficulty, setDifficulty] = useState<Difficulty>("moderate");
@@ -187,26 +175,6 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
     return [...srdCreatures, ...creatures.filter((creature) => !ids.has(creature.id))];
   }, [source, creatures, srdCreatures]);
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(characterStorageKey) ?? (isGuestLocation(characterStorageKey, "characters") ? window.localStorage.getItem(LEGACY_CHARACTERS_LOCATION) : null);
-      if (stored) {
-        const parsed: unknown = JSON.parse(stored);
-        if (!Array.isArray(parsed)) throw new Error("Invalid saved character format");
-        const valid = parsed.filter(isSavedCharacter).map((character) => ({
-          ...character,
-          level: Math.min(20, Math.max(1, Math.floor(character.level))),
-        }));
-        if (valid.length !== parsed.length) setStorageMessageKey("encounter.storage.incomplete");
-        setSavedCharacters(valid);
-      }
-    } catch {
-      setStorageMessageKey("encounter.storage.unavailable");
-    } finally {
-      setStorageLoaded(true);
-    }
-  }, [characterStorageKey]);
-
   const partyLevels = useMemo(() => {
     if (initialPartyLevels?.length) {
       return initialPartyLevels.map((level) => Math.min(20, Math.max(1, Math.floor(level))));
@@ -236,8 +204,17 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
             <p className="selected-party-note">{translate(locale, "encounter.party.levelSummary", { count: partyLevels.length, levels: partyLevels.join(", ") })}</p>
           ) : (
             <>
-              {storageLoaded && savedCharacters.length > 0 && <>
+              {savedCharacters.length > 0 && <>
                 <p className="title-description">{translate(locale, "encounter.party.savedDescription")}</p>
+                {campaigns.length > 0 && <label className="party-campaign-select">{translate(locale, "encounter.party.fromCampaign")}
+                  <select value="" onChange={(event) => {
+                    const ids = savedCharacters.filter((character) => character.campaignId === event.target.value).map((character) => character.id);
+                    if (event.target.value) setSelectedCharacterIds(ids);
+                  }}>
+                    <option value="">…</option>
+                    {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                  </select>
+                </label>}
                 <div className="party-select-list" role="group" aria-label={translate(locale, "encounter.party.savedAria")}>
                   {savedCharacters.map((character) => (
                     <label className="party-select" key={character.id}>
@@ -249,12 +226,11 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
                           ? [...current, character.id]
                           : current.filter((id) => id !== character.id))}
                       />
-                      <span>{character.name}<small>{translate(locale, "encounter.party.level", { level: character.level })}</small></span>
+                      <span>{character.name}<small>{translate(locale, "encounter.party.level", { level: character.level })}{character.ownerName && !character.editable ? ` · ${character.ownerName}` : ""}</small></span>
                     </label>
                   ))}
                 </div>
               </>}
-              {storageMessageKey && <p role="status" className="encounter-footnote">{translate(locale, storageMessageKey)}</p>}
               {selectedCharacterIds.length > 0 && savedCharacters.some((character) => selectedCharacterIds.includes(character.id)) ? (
                 <p className="selected-party-note" aria-live="polite">{translate(locale, "encounter.party.selectedSummary", { count: partyLevels.length, levels: partyLevels.join(", ") })}</p>
               ) : (

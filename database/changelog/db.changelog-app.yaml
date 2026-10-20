@@ -1,0 +1,71 @@
+databaseChangeLog:
+  - changeSet:
+      id: users-001-roles-and-approval
+      author: grimoire
+      comment: >-
+        Site roles (admin, dm, player) and an approval status so new sign-ups wait for an admin.
+        Accounts created before this change start as pending; GRIMOIRE_ADMIN_EMAILS promotes the owner.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user"
+                ADD COLUMN "role" TEXT NOT NULL DEFAULT 'player',
+                ADD COLUMN "status" TEXT NOT NULL DEFAULT 'pending';
+              ALTER TABLE "user"
+                ADD CONSTRAINT "user_role_check" CHECK ("role" IN ('admin', 'dm', 'player')),
+                ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('pending', 'approved', 'blocked'));
+              CREATE INDEX "user_status_idx" ON "user" ("status");
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              DROP INDEX IF EXISTS "user_status_idx";
+              ALTER TABLE "user" DROP COLUMN IF EXISTS "status", DROP COLUMN IF EXISTS "role";
+
+  - changeSet:
+      id: data-001-campaigns-and-characters
+      author: grimoire
+      comment: Campaigns shared between accounts and characters stored server-side.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "campaign" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "ownerId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "name" TEXT NOT NULL CHECK (char_length(btrim("name")) BETWEEN 1 AND 80),
+                "description" TEXT NOT NULL DEFAULT '' CHECK (char_length("description") <= 1000),
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+              CREATE INDEX "campaign_ownerId_idx" ON "campaign" ("ownerId");
+
+              CREATE TABLE "campaign_member" (
+                "campaignId" UUID NOT NULL REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                "userId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "role" TEXT NOT NULL CHECK ("role" IN ('dm', 'player')),
+                "addedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY ("campaignId", "userId")
+              );
+              CREATE INDEX "campaign_member_userId_idx" ON "campaign_member" ("userId");
+
+              CREATE TABLE "character" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "ownerId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "campaignId" UUID REFERENCES "campaign" ("id") ON DELETE SET NULL,
+                "name" TEXT NOT NULL CHECK (char_length(btrim("name")) BETWEEN 1 AND 50),
+                "level" INTEGER NOT NULL CHECK ("level" BETWEEN 1 AND 20),
+                "data" JSONB NOT NULL DEFAULT '{}'::jsonb,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+              CREATE INDEX "character_ownerId_idx" ON "character" ("ownerId");
+              CREATE INDEX "character_campaignId_idx" ON "character" ("campaignId");
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              DROP TABLE IF EXISTS "character";
+              DROP TABLE IF EXISTS "campaign_member";
+              DROP TABLE IF EXISTS "campaign";
