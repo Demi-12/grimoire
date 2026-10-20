@@ -1,22 +1,11 @@
 import "server-only";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { passkey } from "@better-auth/passkey";
-import { Pool } from "pg";
 import { twoFactor } from "better-auth/plugins";
 import { sendAuthEmail } from "@/lib/auth-email";
-
-const globalForAuth = globalThis as typeof globalThis & { grimoireAuthPool?: Pool };
-
-const pool =
-  globalForAuth.grimoireAuthPool ??
-  new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
-  });
-
-if (process.env.NODE_ENV !== "production") globalForAuth.grimoireAuthPool = pool;
+import { pool } from "@/lib/db";
+import { parseAdminEmails } from "@/lib/permissions";
 
 const baseURL = process.env.BETTER_AUTH_URL?.trim() || "http://localhost:3000";
 /** Extra origins allowed to sign in, e.g. the LAN address alongside a public HTTPS URL. */
@@ -32,6 +21,35 @@ export const auth = betterAuth({
   baseURL,
   trustedOrigins: [...new Set([baseURL, ...extraOrigins])],
   database: pool,
+  user: {
+    // Managed only by the server (sign-up hook and admin panel); clients can't set them.
+    additionalFields: {
+      role: { type: "string", required: false, defaultValue: "player", input: false },
+      status: { type: "string", required: false, defaultValue: "pending", input: false },
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          // New accounts wait for an admin, except the owners listed in GRIMOIRE_ADMIN_EMAILS.
+          const isOwner = parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase());
+          return { data: { ...user, role: isOwner ? "admin" : "player", status: isOwner ? "approved" : "pending" } };
+        },
+      },
+    },
+    session: {
+      create: {
+        before: async (session) => {
+          const result = await pool.query<{ status: string }>('SELECT "status" FROM "user" WHERE "id" = $1', [session.userId]);
+          if (result.rows[0]?.status === "blocked") {
+            throw new APIError("FORBIDDEN", { message: "This account has been blocked by an administrator." });
+          }
+          return { data: session };
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: emailConfigured,

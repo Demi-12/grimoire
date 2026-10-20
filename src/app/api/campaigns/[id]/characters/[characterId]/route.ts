@@ -1,0 +1,16 @@
+import { NextResponse } from "next/server";
+import { dataErrorResponse, jsonError, requireApproved } from "@/lib/access";
+import { removeCampaignCharacter } from "@/lib/data";
+import { isUuid } from "@/lib/permissions";
+
+export const dynamic = "force-dynamic";
+
+/** Take a character out of the campaign without deleting it. */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; characterId: string }> }) {
+  const user = await requireApproved();
+  if (user instanceof NextResponse) return user;
+  const { id, characterId } = await params;
+  if (!isUuid(id) || !isUuid(characterId)) return jsonError(404, "Not found.");
+  const result = await removeCampaignCharacter(user, id, characterId);
+  return result.ok ? new NextResponse(null, { status: 204 }) : dataErrorResponse(result.error);
+}

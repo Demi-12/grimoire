@@ -26,7 +26,7 @@ Si Windows indica que `npm` no se reconoce, instala o repara Node.js 22 desde el
 
 ## Servidor y acceso público
 
-El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con las variables de `.env.example`: PostgreSQL, `BETTER_AUTH_SECRET` (genera uno con `openssl rand -base64 32`) y `BETTER_AUTH_URL` con la URL pública exacta del toolkit (la de Cloudflare; las passkeys y las cookies dependen de ella), y opcionalmente SMTP y `CLOUDFLARE_TUNNEL_TOKEN`. Liquibase usa por defecto el mismo usuario de PostgreSQL. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
+El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con las variables de `.env.example`: PostgreSQL, `BETTER_AUTH_SECRET` (genera uno con `openssl rand -base64 32`) y `GRIMOIRE_ADMIN_EMAILS` con tu correo, `BETTER_AUTH_URL` con la URL pública exacta del toolkit (la de Cloudflare; las passkeys y las cookies dependen de ella), y opcionalmente SMTP y `CLOUDFLARE_TUNNEL_TOKEN`. Liquibase usa por defecto el mismo usuario de PostgreSQL. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
 
 Los ajustes propios del servidor (por ejemplo publicar la app en la IP de la LAN) van en un `compose.override.yaml` junto al checkout, que está fuera de Git y Docker Compose combina automáticamente con `compose.yaml`; así no bloquean los deploys:
 
@@ -52,15 +52,25 @@ El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano
 
 El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env`. Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`. Antes de reconstruir la app levanta `db` y aplica las migraciones de Liquibase; el `.env` necesita además las variables de Better Auth, SMTP y Liquibase de `.env.example`.
 
+## Usuarios y acceso
+
+Grimoire es privado: hay que iniciar sesión para usarlo. Cualquiera puede registrarse, pero la cuenta queda **pendiente** hasta que un admin la apruebe en **Usuarios**. Mientras tanto, esa persona solo ve un aviso de espera.
+
+- **Primer admin:** pon tu correo en `GRIMOIRE_ADMIN_EMAILS` (en el `.env` del servidor; admite varios separados por comas). Esa cuenta se aprueba y se hace admin automáticamente al registrarse o en su próximo acceso, también si ya existía. Las cuentas creadas antes de esta versión empiezan como pendientes.
+- **Roles del sitio:** *Admin* gestiona cuentas; *Dungeon Master* puede abrir campañas; *Jugador* se une a las campañas a las que le añaden. El admin puede cambiar roles, bloquear (cierra sus sesiones y le impide entrar), cerrar sesiones o borrar cuentas. No puede modificarse a sí mismo y siempre queda al menos un admin aprobado.
+- **Campañas compartidas:** el DM crea la campaña y añade a cuentas aprobadas como jugadores o co-DMs. Cada jugador pone sus personajes en la campaña; todos los miembros ven el grupo y el generador de encuentros puede cargar el grupo de una campaña de un clic. Solo el dueño edita su personaje; el DM puede sacarlo de la campaña. Al borrar una campaña los personajes vuelven a sus dueños.
+- **Datos anteriores:** si el navegador tenía personajes o campañas de la versión local, el resumen ofrece importarlos a la cuenta una vez.
+
+Personajes (incluidas las elecciones del creador paso a paso) y campañas viven en PostgreSQL (migración `database/changelog/db.changelog-app.yaml`). El catálogo de criaturas propio sigue guardándose en el navegador de cada cuenta.
+
 ## Primera versión
 
 - El creador de personajes guía paso a paso con las reglas de 2024 (SRD 5.2): clase, trasfondo (aumentos de característica, dote de origen, habilidades), especie, características (matriz estándar, compra por 27 puntos o 4d6), competencias, equipo inicial y detalles. La ficha calcula PG, CA, iniciativa, salvaciones, habilidades con pericia, percepción pasiva, CD de conjuros y oro, y se imprime con esos valores. Los personajes antiguos siguen editándose con la edición rápida.
 - El SRD solo incluye cuatro trasfondos (Acólito, Criminal, Sabio, Soldado) y una subclase por clase; para opciones del manual completo, usa las notas o la edición rápida.
 - El generador usa presupuestos por personaje de dificultad baja, moderada y alta; suma el presupuesto según el nivel de cada aventurero y propone combinaciones que no exceden el total.
 - El generador puede usar todos los monstruos del SRD desde la API pública de D&D 5e (dnd5eapi.co), filtrar por tipo de criatura y limitar cada encuentro a 1-3 tipos de criatura. El servidor descarga el catálogo la primera vez (unos segundos) y lo guarda en memoria un día; necesita salida a Internet.
-- El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP. Los datos quedan en el almacenamiento local del navegador; todavía no se guardan en PostgreSQL ni se sincronizan entre dispositivos.
+- El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP; el catálogo queda en el almacenamiento local del navegador.
 - Las cuentas incluyen registro e inicio de sesión, verificación y recuperación por correo, 2FA TOTP con códigos de respaldo y passkeys. SMTP es opcional: si lo configuras se exige verificar el correo y se puede recuperar la contraseña; sin SMTP las cuentas funcionan pero sin verificación ni recuperación por correo. El TOTP protege el acceso con contraseña; el acceso con passkey es passwordless y no pide un segundo código por defecto.
-- El gestor permite agrupar personajes en campañas. Las campañas, los personajes y el catálogo se guardan localmente en el navegador bajo el perfil activo; cada cuenta usa su propio espacio local, pero los datos aún no se sincronizan entre dispositivos. Los personajes del perfil local previo al inicio de sesión no se copian automáticamente a una cuenta.
 - El bestiario consulta la API pública del SRD de D&D 5e (dnd5eapi.co) desde rutas del servidor, usando el SRD 2024 y, si no tiene monstruos, el SRD 2014, muestra fichas de monstruos y permite añadirlos al generador. Las etiquetas tácticas se infieren de sus estadísticas y no sustituyen el juicio del DM.
 - Las propuestas son orientativas. Revisa capacidades especiales, composición y contexto antes de usar un encuentro.
 
