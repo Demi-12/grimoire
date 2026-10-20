@@ -55,9 +55,10 @@ jobs:
           CLOUDFLARE_TUNNEL_TOKEN: ci
           BETTER_AUTH_SECRET: ci-placeholder-not-a-secret
           BETTER_AUTH_URL: http://localhost:3000
-          SMTP_HOST: localhost
-          SMTP_FROM: ci@example.invalid
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          # Migration job with default credentials (no LIQUIBASE_* set).
+          docker compose -f compose.yaml -f compose.liquibase.yaml config --quiet
 
       - name: Build application container
         env:
@@ -68,6 +69,4 @@ jobs:
           CLOUDFLARE_TUNNEL_TOKEN: ci
           BETTER_AUTH_SECRET: ci-placeholder-not-a-secret
           BETTER_AUTH_URL: http://localhost:3000
-          SMTP_HOST: localhost
-          SMTP_FROM: ci@example.invalid
         run: docker compose build app

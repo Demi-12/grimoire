@@ -106,7 +106,9 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         if (password !== confirmation) throw new Error(t.passwordMismatch);
         const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin });
         if (result.error) throw result.error;
-        notice(t.verifyEmail);
+        // Without SMTP the server signs the new account in directly instead of asking for verification.
+        if (result.data && "token" in result.data && result.data.token) window.location.assign("/");
+        else notice(t.verifyEmail);
       } else if (mode === "sign-in") {
         const result = await authClient.signIn.email({ email: email.trim(), password, callbackURL: window.location.origin });
         if (result.error) throw result.error;

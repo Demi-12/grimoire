@@ -18,6 +18,9 @@ const pool =
 
 if (process.env.NODE_ENV !== "production") globalForAuth.grimoireAuthPool = pool;
 
+/** Without SMTP (e.g. a fresh home server) accounts work but email verification and resets are off. */
+const emailConfigured = Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
+
 export const auth = betterAuth({
   appName: "Grimoire",
   secret: process.env.BETTER_AUTH_SECRET,
@@ -26,7 +29,7 @@ export const auth = betterAuth({
   database: pool,
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    requireEmailVerification: emailConfigured,
     minPasswordLength: 12,
     maxPasswordLength: 128,
     resetPasswordTokenExpiresIn: 30 * 60,
@@ -40,7 +43,7 @@ export const auth = betterAuth({
     },
   },
   emailVerification: {
-    sendOnSignUp: true,
+    sendOnSignUp: emailConfigured,
     expiresIn: 60 * 60,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
