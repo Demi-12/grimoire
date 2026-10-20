@@ -273,3 +273,104 @@ body {
   .button, .dashboard-card { transition: none; }
   .button:hover { transform: none; }
 }
+
+/* ───────────── Texture: paper grain, vellum, leather and gilt corners ───────────── */
+:root {
+  /* Fine grain and broad mottling, generated with SVG turbulence (no image files). */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .2 0 0 0 0 .09 0 0 0 .13 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --mottle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006' numOctaves='4' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .3 0 0 0 0 .12 0 0 0 .28 -.06'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E");
+  --leather-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='turbulence' baseFrequency='.55' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3C/svg%3E");
+  --corner: rgba(181, 138, 58, .75);
+}
+:root[data-theme="dark"] {
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .95 0 0 0 0 .8 0 0 0 0 .6 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --corner: rgba(216, 170, 85, .55);
+}
+
+body { background-image: var(--grain), var(--mottle),
+  radial-gradient(ellipse at 0% 0%, rgba(255, 250, 235, .55), transparent 45%),
+  radial-gradient(ellipse at 100% 100%, rgba(140, 92, 40, .2), transparent 50%); }
+:root[data-theme="dark"] body { background-image: var(--grain),
+  radial-gradient(ellipse at 15% 0%, rgba(216, 140, 60, .12), transparent 45%),
+  radial-gradient(ellipse at 100% 100%, rgba(146, 38, 16, .14), transparent 55%); }
+
+/* Leather sidebar with tooled stitching along the edge. */
+.sidebar { background-image: var(--leather-grain), linear-gradient(180deg, #3a2419, #241510 70%); }
+.sidebar::after { content: ""; position: absolute; inset: 8px 7px 8px 8px; border: 1px dashed rgba(216, 170, 85, .3); pointer-events: none; }
+:root[data-theme="dark"] .sidebar { background-image: var(--leather-grain), linear-gradient(180deg, #1d130e, #110b08); }
+
+/* Vellum panels: grain, an inner gilt rule and corner brackets. */
+.editor-panel, .catalog-panel, .character-card, .encounter-controls, .encounter-results, .desk-panel, .tool-tile {
+  position: relative;
+  background-image: var(--grain), linear-gradient(180deg, rgba(255, 252, 242, .5), transparent 40%);
+  box-shadow: inset 0 0 0 3px var(--white), inset 0 0 0 4px rgba(181, 138, 58, .35), 0 6px 18px rgba(60, 35, 12, .09);
+}
+.character-card { box-shadow: inset 0 0 0 4px rgba(181, 138, 58, 0), 0 6px 18px rgba(60, 35, 12, .09); }
+.editor-panel::after, .catalog-panel::after, .encounter-controls::after, .encounter-results::after, .desk-panel::after, .tool-tile::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  --c: var(--corner);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 16px 1.5px, linear-gradient(var(--c), var(--c)) top left / 1.5px 16px,
+    linear-gradient(var(--c), var(--c)) top right / 16px 1.5px, linear-gradient(var(--c), var(--c)) top right / 1.5px 16px,
+    linear-gradient(var(--c), var(--c)) bottom left / 16px 1.5px, linear-gradient(var(--c), var(--c)) bottom left / 1.5px 16px,
+    linear-gradient(var(--c), var(--c)) bottom right / 16px 1.5px, linear-gradient(var(--c), var(--c)) bottom right / 1.5px 16px;
+  background-repeat: no-repeat;
+}
+:root[data-theme="dark"] .editor-panel, :root[data-theme="dark"] .catalog-panel, :root[data-theme="dark"] .character-card,
+:root[data-theme="dark"] .encounter-controls, :root[data-theme="dark"] .encounter-results, :root[data-theme="dark"] .desk-panel, :root[data-theme="dark"] .tool-tile {
+  background-image: var(--grain), linear-gradient(180deg, rgba(216, 170, 85, .05), transparent 40%);
+  box-shadow: inset 0 0 0 3px var(--white), inset 0 0 0 4px rgba(216, 170, 85, .2), 0 6px 18px rgba(0, 0, 0, .35);
+}
+.encounter-card { background-image: var(--grain); }
+.control-section { border-bottom: 0; background: linear-gradient(90deg, transparent, var(--line), transparent) bottom / 100% 1px no-repeat; }
+
+/* Section headings carry a small fleuron and a tapered rule. */
+.desk-panel-head h2, .results-heading h2, .control-heading h2 { display: flex; align-items: center; gap: 8px; }
+.desk-panel-head h2::before { content: "❧"; color: var(--crimson); font-size: .9em; }
+
+/* ───────────── Home as a working desk ───────────── */
+.desk-head { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; padding-bottom: 14px; margin-bottom: 20px; }
+.desk-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--crimson); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.desk-head h1 { margin: 0; font: 500 clamp(30px, 4vw, 40px)/1.1 var(--serif); color: var(--ink); }
+.desk-head p { margin: 4px 0 0; color: var(--muted); font-style: italic; }
+.desk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tool-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tool-tile {
+  display: grid; grid-template-columns: auto 1fr; grid-template-areas: "glyph name" "glyph count" "note note";
+  align-items: center; column-gap: 12px; row-gap: 2px; padding: 16px 16px 14px; text-align: left;
+  border: 1px solid var(--line); background-color: var(--white); color: var(--ink); cursor: pointer;
+}
+.tool-tile:hover { border-color: var(--crimson); }
+.tool-glyph { grid-area: glyph; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: #fff3df; font-size: 20px;
+  background: radial-gradient(circle at 35% 30%, #b8432a, var(--crimson-fill) 60%, #5e1508); box-shadow: inset 0 0 0 2px rgba(226, 180, 92, .8), 0 2px 4px rgba(60, 20, 5, .3); }
+.tool-tile strong { grid-area: name; font: 500 16px var(--serif); }
+.tool-tile b { grid-area: count; font: 700 26px/1 var(--serif); color: var(--crimson); }
+.tool-tile .tool-status { font-size: 22px; }
+.tool-tile small { grid-area: note; margin-top: 8px; padding-top: 8px; border-top: 1px dotted var(--line); color: var(--muted); font-size: 12px; }
+
+.desk-panel { margin-top: 18px; padding: 18px 20px; border: 1px solid var(--line); background-color: var(--white); }
+.desk-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.desk-panel-head h2 { margin: 0; font: 500 21px var(--serif); color: var(--ink); }
+.roster { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.roster button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 2px; border: 0; border-bottom: 1px dotted var(--line); background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.roster button:hover .roster-name { color: var(--crimson); }
+.roster-mark { flex: none; width: 34px; height: 34px; display: grid; place-items: center; background: var(--crimson-fill); color: #fff3df; font: 500 16px var(--serif); box-shadow: inset 0 0 0 2px #e2b45c; }
+.roster-name { display: grid; min-width: 0; font: 500 16px var(--serif); }
+.roster-name small { font: italic 12px var(--sans); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-level { margin-left: auto; font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.desk-empty { margin: 4px 0 0; color: var(--muted); font-style: italic; }
+
+@media (max-width: 900px) { .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .roster { grid-template-columns: 1fr; }
+  .tool-grid { gap: 8px; }
+  .tool-tile { padding: 12px; column-gap: 10px; }
+  .tool-glyph { width: 36px; height: 36px; font-size: 16px; }
+  .desk-actions { width: 100%; }
+  .desk-actions .button { flex: 1; }
+  .sidebar::after { display: none; }
+}
