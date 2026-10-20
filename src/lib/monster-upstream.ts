@@ -1,4 +1,5 @@
 import "server-only";
+import { inferMonsterRoles, type MonsterRole, type MonsterStatBlock } from "@/lib/monster-api";
 
 /**
  * Server-side access to the public D&D 5e SRD API (https://www.dnd5eapi.co).
@@ -71,4 +72,69 @@ export function upstreamErrorResponse(cause: unknown) {
       : "Could not reach the monster service. Check the server's internet connection.",
     status: 502,
   };
+}
+
+/** XP by challenge rating (SRD), used when a stat block omits its XP. */
+export const XP_BY_CR: Record<string, number> = {
+  "0": 10, "0.125": 25, "0.25": 50, "0.5": 100, "1": 200, "2": 450, "3": 700, "4": 1100, "5": 1800, "6": 2300,
+  "7": 2900, "8": 3900, "9": 5000, "10": 5900, "11": 7200, "12": 8400, "13": 10000, "14": 11500, "15": 13000,
+  "16": 15000, "17": 18000, "18": 20000, "19": 22000, "20": 25000, "21": 33000, "22": 41000, "23": 50000,
+  "24": 62000, "25": 75000, "26": 90000, "27": 105000, "28": 120000, "29": 135000, "30": 155000,
+};
+
+export interface CompactMonster {
+  index: string;
+  name: string;
+  cr: number;
+  xp: number;
+  type: string;
+  size: string;
+  roles: MonsterRole[];
+}
+
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+let catalogCache: { at: number; promise: Promise<{ edition: MonsterEdition; monsters: CompactMonster[] }> } | undefined;
+
+async function mapLimited<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function buildCatalog() {
+  const { edition, results } = await fetchMonsterIndex();
+  const monsters = await mapLimited(results, 8, async (entry) => {
+    if (!entry.index) return null;
+    try {
+      const { body } = await getJson(`/monsters/${encodeURIComponent(entry.index)}`, edition);
+      if (!body || typeof body !== "object") return null;
+      const stat = body as MonsterStatBlock;
+      const cr = typeof stat.challenge_rating === "number" ? stat.challenge_rating : Number.NaN;
+      const xp = typeof stat.xp === "number" && stat.xp > 0 ? stat.xp : XP_BY_CR[String(cr)];
+      if (!Number.isFinite(cr) || !xp) return null;
+      return { index: entry.index, name: stat.name, cr, xp, type: (stat.type ?? "").toLowerCase(), size: stat.size ?? "", roles: inferMonsterRoles(stat) };
+    } catch {
+      return null; // One failing stat block should not hide the rest of the bestiary.
+    }
+  });
+  const list = monsters.filter((monster): monster is CompactMonster => monster !== null);
+  if (!list.length) throw new UpstreamError("The monster service returned no usable stat blocks.", 502);
+  return { edition, monsters: list.sort((a, b) => a.cr - b.cr || a.name.localeCompare(b.name)) };
+}
+
+/** Every SRD monster with CR, XP, type and inferred roles; cached in memory for a day. */
+export function fetchMonsterCatalog() {
+  if (!catalogCache || Date.now() - catalogCache.at > CATALOG_TTL_MS) {
+    const promise = buildCatalog();
+    catalogCache = { at: Date.now(), promise };
+    promise.catch(() => { if (catalogCache?.promise === promise) catalogCache = undefined; });
+  }
+  return catalogCache.promise;
 }

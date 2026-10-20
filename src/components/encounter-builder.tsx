@@ -13,6 +13,7 @@ import {
   type PartyRoleProfile,
 } from "@/lib/rules";
 import MonsterSheet from "@/components/monster-sheet";
+import { creatureTypeKey, creatureTypeLabel, fetchSrdCatalog, formatChallenge, srdLabel, type MonsterEdition, type SrdMonster } from "@/lib/monster-api";
 import { isGuestLocation, LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 
 export interface EncounterBuilderProps {
@@ -118,7 +119,7 @@ function EncounterOption({ suggestion, index, locale, roles }: { suggestion: Enc
         {suggestion.lines.map(({ creature, quantity }) => (
           <div className="creature-line" key={creature.id}>
             <span className="creature-glyph" aria-hidden="true">✦</span>
-            <span>{creatureName(creature)}<small>{creature.xp.toLocaleString(numberLocale)} {translate(locale, "encounter.xp")} · {creature.id.startsWith("sample-") ? translate(locale, "creature.sample.source") : creature.source}</small>
+            <span>{creatureName(creature)}<small>{creature.cr !== undefined && <>{translate(locale, "encounter.cr")} {formatChallenge(creature.cr)} · </>}{creature.type && <>{creatureTypeLabel(creatureTypeKey(creature.type), locale)} · </>}{creature.xp.toLocaleString(numberLocale)} {translate(locale, "encounter.xp")} · {creature.id.startsWith("sample-") ? translate(locale, "creature.sample.source") : creature.source}</small>
               {creature.monsterSlug && <button type="button" className="small-action" onClick={() => setOpenMonster((current) => current === creature.monsterSlug ? null : creature.monsterSlug!)}>{locale === "es" ? "Ver ficha" : "View stat block"}</button>}
             </span>
             <b>×{quantity}</b>
@@ -152,6 +153,39 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
   const [difficulty, setDifficulty] = useState<Difficulty>("moderate");
   const [suggestions, setSuggestions] = useState<EncounterSuggestion[]>([]);
   const [roll, setRoll] = useState(0);
+  const [source, setSource] = useState<"srd" | "custom" | "both">("srd");
+  const [srd, setSrd] = useState<{ edition?: MonsterEdition; monsters: SrdMonster[] } | null>(null);
+  const [srdError, setSrdError] = useState("");
+  const [srdAttempt, setSrdAttempt] = useState(0);
+  const [types, setTypes] = useState<string[]>([]);
+  const [maxKinds, setMaxKinds] = useState(2);
+  const usesSrd = source !== "custom";
+
+  useEffect(() => {
+    if (!usesSrd || srd) return;
+    const controller = new AbortController();
+    setSrdError("");
+    fetchSrdCatalog(controller.signal).then(setSrd).catch((cause: unknown) => {
+      if (!controller.signal.aborted) setSrdError(cause instanceof Error ? cause.message : "Request failed");
+    });
+    return () => controller.abort();
+  }, [usesSrd, srd, srdAttempt]);
+
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const monster of srd?.monsters ?? []) counts.set(creatureTypeKey(monster.type), (counts.get(creatureTypeKey(monster.type)) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => creatureTypeLabel(a[0], locale).localeCompare(creatureTypeLabel(b[0], locale)));
+  }, [srd, locale]);
+  const srdCreatures = useMemo<Creature[]>(() => (srd?.monsters ?? [])
+    .filter((monster) => !types.length || types.includes(creatureTypeKey(monster.type)))
+    .map((monster) => ({ id: `srd-${monster.index}`, name: monster.name, xp: monster.xp, source: `D&D ${srdLabel(srd?.edition)}`, roleTags: monster.roles, monsterSlug: monster.index, cr: monster.cr, type: monster.type })),
+  [srd, types]);
+  const pool = useMemo(() => {
+    if (source === "custom") return creatures;
+    if (source === "srd") return srdCreatures;
+    const ids = new Set(srdCreatures.map((creature) => creature.id));
+    return [...srdCreatures, ...creatures.filter((creature) => !ids.has(creature.id))];
+  }, [source, creatures, srdCreatures]);
 
   useEffect(() => {
     try {
@@ -188,7 +222,8 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
   const numberLocale = locale === "es" ? "es-ES" : "en-US";
 
   function generate() {
-    setSuggestions(suggestEncounters(creatures, partyLevels, difficulty, Math.random, 4, roleProfile));
+    setSuggestions(suggestEncounters(pool, partyLevels, difficulty, Math.random, 4, roleProfile,
+      source === "custom" ? { maxCreatures: 20 } : { maxKinds, maxCreatures: 12 }));
     setRoll((current) => current + 1);
   }
 
@@ -242,8 +277,34 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
             ))}
           </div>
         </div>
+        <div className="control-section">
+          <div className="control-heading"><span className="step-number">03</span><div><h2>{translate(locale, "encounter.monsters.title")}</h2><p>{translate(locale, "encounter.monsters.description")}</p></div></div>
+          <div className="difficulty-options source-options">
+            {(["srd", "both", "custom"] as const).map((item) => (
+              <button type="button" key={item} aria-pressed={source === item} className={`difficulty-option ${source === item ? "selected" : ""}`} onClick={() => setSource(item)}>
+                <b>{translate(locale, `encounter.monsters.source.${item}`)}</b>
+                <small>{item === "custom" ? translate(locale, "encounter.monsters.customCount", { count: creatures.length }) : srd ? translate(locale, "encounter.monsters.srdCount", { count: srd.monsters.length, edition: srdLabel(srd.edition) }) : translate(locale, "encounter.monsters.api")}</small>
+              </button>
+            ))}
+          </div>
+          {usesSrd && !srd && !srdError && <p className="encounter-footnote" role="status">{translate(locale, "encounter.monsters.loading")}</p>}
+          {usesSrd && srdError && <p className="encounter-footnote monster-error" role="alert">{translate(locale, "encounter.monsters.error")} {srdError} <button type="button" className="small-action" onClick={() => setSrdAttempt((attempt) => attempt + 1)}>{translate(locale, "encounter.monsters.retry")}</button></p>}
+          {usesSrd && srd && <>
+            <p className="filter-label">{translate(locale, "encounter.monsters.types")}</p>
+            <div className="type-chips" role="group" aria-label={translate(locale, "encounter.monsters.types")}>
+              <button type="button" className={`type-chip ${types.length ? "" : "on"}`} aria-pressed={!types.length} onClick={() => setTypes([])}>{translate(locale, "encounter.monsters.allTypes")}</button>
+              {typeCounts.map(([key, count]) => <button type="button" key={key} aria-pressed={types.includes(key)} className={`type-chip ${types.includes(key) ? "on" : ""}`}
+                onClick={() => setTypes((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])}>{creatureTypeLabel(key, locale)} <small>{count}</small></button>)}
+            </div>
+            <label className="kinds-field">{translate(locale, "encounter.monsters.kinds")}
+              <select value={maxKinds} onChange={(event) => setMaxKinds(Number(event.target.value))}>
+                {[1, 2, 3].map((value) => <option key={value} value={value}>{translate(locale, `encounter.monsters.kinds.${value}`)}</option>)}
+              </select>
+            </label>
+          </>}
+        </div>
         <div className="budget-summary"><span>{translate(locale, "encounter.budget.title")}</span><strong>{budget.toLocaleString(numberLocale)} <small>{translate(locale, "encounter.xp")}</small></strong><p>{translate(locale, "encounter.budget.partyRules", { count: partyLevels.length })}</p></div>
-        <button className="button button-primary generate-button" type="button" onClick={generate} disabled={!creatures.length}>
+        <button className="button button-primary generate-button" type="button" onClick={generate} disabled={!pool.length}>
           {roll ? `↻ ${translate(locale, "encounter.regenerate")}` : `✦ ${translate(locale, "encounter.generate")}`}
         </button>
       </section>
