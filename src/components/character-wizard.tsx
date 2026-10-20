@@ -162,10 +162,8 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
   const last = c.steps.length - 1;
 
   function chooseClass(classId: ClassId) {
-    const next = findClass(classId)!;
     update({ classId, classSkills: [], expertise: [], classEquipment: "A",
       ...(build.abilityMethod === "standard" ? { baseScores: suggestedAssignment(STANDARD_ARRAY, classId) } : {}) });
-    if (!next.spellcasting) update({});
   }
   function chooseBackground(backgroundId: BackgroundId) {
     const next = findBackground(backgroundId)!;
@@ -202,7 +200,9 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
     setStep(target);
   }
   function finish() {
-    if (!name.trim()) { setStep(6); return; }
+    // The stepper allows jumping ahead, so check every step before saving.
+    const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === 6 && !name.trim()));
+    if (incomplete >= 0) { setStep(incomplete); return; }
     onSave({ name: name.trim(), level, notes: notes.trim(), build });
   }
 
