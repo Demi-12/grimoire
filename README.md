@@ -22,7 +22,7 @@ Si Windows indica que `npm` no se reconoce, instala o repara Node.js 22 desde el
 - No copiar archivos de entorno ni claves a imágenes Docker; `.dockerignore` aplica la misma exclusión que `.gitignore`.
 - El CI ejecuta Gitleaks sobre el historial del repositorio y detiene PRs con credenciales detectadas. Si se filtra alguna, hay que revocarla y rotarla; borrarla del último commit no invalida el secreto anterior.
 - PostgreSQL no publica puertos al host ni a Internet. La aplicación se conecta por la red privada de Docker.
-- El deploy requiere `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` y `DEPLOY_KNOWN_HOSTS` como secretos del Environment `production`; `DEPLOY_PORT` es una variable opcional no secreta. La clave SSH debe ser exclusiva, de privilegio mínimo y restringida a la tarea de despliegue.
+- El deploy se ejecuta en un runner self-hosted dentro del servidor de casa, así que no necesita secretos en GitHub ni abrir puertos: los secretos viven solo en el `.env` del servidor.
 
 ## Servidor y acceso público
 
@@ -30,7 +30,16 @@ El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio 
 
 El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
-El workflow actualiza el checkout a un commit concreto tras CI. No habilites el Environment de producción ni añadas sus secretos hasta que el servidor y su clave de host estén verificados.
+## Deploy con runner self-hosted
+
+El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano desde Actions → Deploy → Run workflow (eligiendo rama). Corre en el propio servidor con un runner self-hosted:
+
+1. En GitHub: Settings → Actions → Runners → New self-hosted runner → Linux x64, y sigue los comandos en el servidor (`./config.sh --url https://github.com/Demi-12/grimoire --token ...`).
+2. Instálalo como servicio para que siga activo tras reiniciar: `sudo ./svc.sh install && sudo ./svc.sh start`.
+3. Da acceso a Docker al usuario del runner: `sudo usermod -aG docker <usuario>` y reinicia el servicio (`sudo ./svc.sh stop && sudo ./svc.sh start`).
+4. Comprueba que en Settings → Actions → Runners aparece en verde como *Idle*.
+
+El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env`. Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`.
 
 ## Primera versión
 
