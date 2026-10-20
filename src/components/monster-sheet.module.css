@@ -1,0 +1,60 @@
+.frame {
+  --sheet-ink: #2d241c;
+  --sheet-paper: #f6edda;
+  --sheet-rust: #8f342b;
+  --sheet-gold: #b18b49;
+  position: relative;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 38px);
+  overflow: hidden;
+  color: var(--sheet-ink);
+  background:
+    radial-gradient(ellipse at 50% -15%, rgba(255,255,255,.8), transparent 58%),
+    repeating-linear-gradient(0deg, rgba(90,61,33,.018), rgba(90,61,33,.018) 1px, transparent 1px, transparent 4px),
+    var(--sheet-paper);
+  border: 1px solid #c7a76b;
+  box-shadow: inset 0 0 0 5px #f6edda, inset 0 0 0 6px rgba(177,139,73,.5), 0 14px 35px rgba(32,24,15,.16);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.frame::before, .frame::after { position: absolute; color: var(--sheet-gold); font-size: 21px; line-height: 1; content: "✧"; }
+.frame::before { top: 13px; left: 14px; }
+.frame::after { right: 14px; bottom: 13px; }
+.loading, .error, .empty { padding: 35px 20px; text-align: center; border: 1px dashed #b18b49; color: #514234; background: #f6edda; }
+.loading { animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .62; } }
+.error { color: #792a22; }
+.eyebrow { margin: 0 0 7px; color: var(--sheet-rust); font: 700 10px/1.4 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+.header { padding: 2px 0 15px; text-align: center; border-bottom: 3px double var(--sheet-rust); }
+.name { margin: 0; color: #43271e; font: 700 clamp(26px, 5vw, 42px)/1.1 Georgia, serif; letter-spacing: .015em; }
+.kind { margin: 8px 0 0; color: #685744; font-size: 14px; font-style: italic; }
+.quickStats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 16px 0; border-block: 1px solid #b18b49; }
+.quickStats div { padding: 10px 5px; text-align: center; }
+.quickStats div + div { border-left: 1px solid #cbb88e; }
+.quickStats strong { display: block; color: #43271e; font-size: 20px; }
+.quickStats span, .ability span { color: #755f48; font: 700 9px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.section { margin-top: 18px; }
+.sectionTitle { margin: 0 0 8px; padding-bottom: 4px; color: var(--sheet-rust); border-bottom: 1px solid #b18b49; font: 700 13px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.ability { padding: 8px 3px; text-align: center; border: 1px solid #d2bf98; background: rgba(255,255,255,.27); }
+.ability b { display: block; margin-top: 3px; font-size: 18px; }
+.ability small { color: #725a3f; font-size: 11px; }
+.facts { display: grid; gap: 5px; margin: 12px 0 0; font-size: 13px; line-height: 1.45; }
+.facts p { margin: 0; }
+.facts b { color: #542b20; }
+.trait { margin: 10px 0 0; font-size: 13px; line-height: 1.55; }
+.trait strong { color: #43271e; font-size: 14px; font-style: italic; }
+.trait p { margin: 3px 0 0; white-space: pre-line; }
+.source { margin: 24px 0 0; color: #836e51; font: 9px ui-monospace, monospace; text-align: center; }
+.legal { margin: 7px auto 0; max-width: 620px; color: #836e51; font: 10px/1.45 Georgia, serif; text-align: center; }
+.legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 480px) { .frame { padding: 22px 16px; } .abilities { gap: 4px; } .ability span { font-size: 8px; letter-spacing: 0; } .quickStats strong { font-size: 17px; } }
+:global(:root[data-theme="dark"]) .frame { --sheet-ink: #eee4d1; --sheet-paper: #28251f; --sheet-rust: #d68b6c; --sheet-gold: #a78b57; color: var(--sheet-ink); background: radial-gradient(ellipse at 50% -15%, rgba(120,91,48,.18), transparent 58%), #28251f; box-shadow: inset 0 0 0 5px #28251f, inset 0 0 0 6px rgba(167,139,87,.52), 0 14px 35px rgba(0,0,0,.28); }
+:global(:root[data-theme="dark"]) .name, :global(:root[data-theme="dark"]) .quickStats strong, :global(:root[data-theme="dark"]) .trait strong { color: #f0dfc2; }
+:global(:root[data-theme="dark"]) .kind, :global(:root[data-theme="dark"]) .quickStats span, :global(:root[data-theme="dark"]) .ability span, :global(:root[data-theme="dark"]) .ability small, :global(:root[data-theme="dark"]) .source { color: #c1ae8e; }
+:global(:root[data-theme="dark"]) .legal { color: #c1ae8e; }
+:global(:root[data-theme="dark"]) .ability { border-color: #5d503b; background: rgba(0,0,0,.13); }
+:global(:root[data-theme="dark"]) .quickStats { border-color: #a78b57; }
+:global(:root[data-theme="dark"]) .quickStats div + div { border-color: #5d503b; }
+:global(:root[data-theme="dark"]) .loading, :global(:root[data-theme="dark"]) .empty, :global(:root[data-theme="dark"]) .error { color: #eee4d1; background: #28251f; border-color: #a78b57; }

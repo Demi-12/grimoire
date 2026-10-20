@@ -10,6 +10,8 @@ export const abilities = [
 export type AbilityKey = (typeof abilities)[number]["key"];
 export type AbilityScores = Record<AbilityKey, number>;
 export type Difficulty = "low" | "moderate" | "high";
+export type EncounterRole = "frontline" | "damage" | "support" | "control" | "scouting";
+export type PartyRoleProfile = Partial<Record<EncounterRole, number>>;
 
 const encounterBudgets: Record<number, Record<Difficulty, number>> = {
   1: { low: 50, moderate: 75, high: 100 },
@@ -39,6 +41,10 @@ export interface Creature {
   name: string;
   xp: number;
   source: string;
+  /** Optional tactical tags inferred from a stat block. Untagged creatures stay role-neutral. */
+  roleTags?: EncounterRole[];
+  /** Slug in the 2024 SRD API, when this creature came from the bestiary. */
+  monsterSlug?: string;
 }
 
 export interface EncounterLine {
@@ -51,6 +57,8 @@ export interface EncounterSuggestion {
   totalXp: number;
   budget: number;
   difficulty: Difficulty;
+  /** Omitted when party roles or monster role tags are unavailable. */
+  roleFit?: { score: number; focusedRoles: EncounterRole[]; monsterRoles: EncounterRole[] };
 }
 
 export function abilityModifier(score: number): number {
@@ -72,6 +80,7 @@ function buildOneSuggestion(
   creatures: Creature[],
   budget: number,
   random: () => number,
+  partyRoles?: PartyRoleProfile,
 ): EncounterSuggestion | null {
   const viable = creatures.filter((creature) => creature.xp > 0 && creature.xp <= budget);
   if (!viable.length) return null;
@@ -85,7 +94,22 @@ function buildOneSuggestion(
     while (count < 20) {
       const options = viable.filter((creature) => creature.xp <= remaining);
       if (!options.length) break;
-      const creature = options[Math.floor(random() * options.length)];
+      const hasPartyRoles = partyRoles && Object.values(partyRoles).some((count) => typeof count === "number" && count > 0);
+      const weights = options.map((option) => {
+        if (!hasPartyRoles || !option.roleTags?.length) return 1;
+        return 1 + option.roleTags.reduce((weight, role) => {
+          const count = partyRoles[role];
+          return weight + (count === undefined ? 0 : count > 0 ? 0.15 : 0.85);
+        }, 0);
+      });
+      const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+      let pick = random() * weightTotal;
+      let optionIndex = 0;
+      while (optionIndex < weights.length - 1 && pick >= weights[optionIndex]) {
+        pick -= weights[optionIndex];
+        optionIndex += 1;
+      }
+      const creature = options[optionIndex];
       const existing = lines.get(creature.id);
       if (existing) existing.quantity += 1;
       else lines.set(creature.id, { creature, quantity: 1 });
@@ -95,11 +119,30 @@ function buildOneSuggestion(
       if (remaining <= budget * 0.08 && random() > 0.45) break;
     }
     if (!count) continue;
-    const suggestion = { lines: [...lines.values()], totalXp, budget, difficulty: "moderate" as const };
-    if (!best || suggestion.totalXp > best.totalXp) best = suggestion;
+    const suggestion: EncounterSuggestion = { lines: [...lines.values()], totalXp, budget, difficulty: "moderate" };
+    const roleFit = assessEncounterRoles(suggestion.lines, partyRoles);
+    if (roleFit) suggestion.roleFit = roleFit;
+    const rank = (candidate: EncounterSuggestion) => {
+      const xpFit = candidate.totalXp / budget;
+      return xpFit + (candidate.roleFit ? candidate.roleFit.score / 100 * 0.12 : 0);
+    };
+    if (!best || rank(suggestion) > rank(best)) best = suggestion;
     if (totalXp >= budget * 0.9) break;
   }
   return best;
+}
+
+function assessEncounterRoles(lines: EncounterLine[], partyRoles?: PartyRoleProfile): EncounterSuggestion["roleFit"] {
+  if (!partyRoles || !Object.values(partyRoles).some((count) => typeof count === "number" && count > 0)) return undefined;
+  const monsterRoles = [...new Set(lines.flatMap(({ creature }) => creature.roleTags ?? []))];
+  if (!monsterRoles.length) return undefined;
+  const knownRoles = monsterRoles.filter((role) => partyRoles[role] !== undefined);
+  if (!knownRoles.length) return undefined;
+  const focusedRoles = knownRoles.filter((role) => partyRoles[role] === 0);
+  // Prefer tagged threats that exercise lanes the party has less coverage for, while XP
+  // remains the primary difficulty control and the score only breaks close comparisons.
+  const score = Math.round((focusedRoles.length / knownRoles.length) * 100);
+  return { score, focusedRoles, monsterRoles };
 }
 
 export function suggestEncounters(
@@ -108,6 +151,7 @@ export function suggestEncounters(
   difficulty: Difficulty,
   random: () => number = Math.random,
   limit = 4,
+  partyRoles?: PartyRoleProfile,
 ): EncounterSuggestion[] {
   const budget = encounterBudget(levels, difficulty);
   if (!levels.length || !creatures.length || budget <= 0) return [];
@@ -115,7 +159,7 @@ export function suggestEncounters(
   const suggestions: EncounterSuggestion[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < limit * 5 && suggestions.length < limit; index += 1) {
-    const suggestion = buildOneSuggestion(creatures, budget, random);
+    const suggestion = buildOneSuggestion(creatures, budget, random, partyRoles);
     if (!suggestion) break;
     suggestion.difficulty = difficulty;
     const key = suggestion.lines
@@ -126,7 +170,11 @@ export function suggestEncounters(
     seen.add(key);
     suggestions.push(suggestion);
   }
-  return suggestions.sort((a, b) => b.totalXp - a.totalXp);
+  return suggestions.sort((a, b) => {
+    const rank = (candidate: EncounterSuggestion) => candidate.totalXp / budget
+      + (candidate.roleFit ? candidate.roleFit.score / 100 * 0.12 : 0);
+    return rank(b) - rank(a);
+  });
 }
 
 export const sampleCreatures: Creature[] = [
