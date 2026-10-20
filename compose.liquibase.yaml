@@ -3,7 +3,9 @@ services:
     image: liquibase/liquibase:4.33.0
     profiles: [migration]
     environment:
-      LIQUIBASE_COMMAND_CHANGELOG_FILE: /liquibase/changelog/db.changelog-master.yaml
+      # Liquibase resolves changelogs against its search path, not as absolute file paths.
+      LIQUIBASE_SEARCH_PATH: /liquibase/changelog
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: db.changelog-master.yaml
       LIQUIBASE_COMMAND_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in the server environment}
       LIQUIBASE_COMMAND_USERNAME: ${LIQUIBASE_DB_USERNAME:-${POSTGRES_USER:?Set POSTGRES_USER in the server environment}}
       LIQUIBASE_COMMAND_PASSWORD: ${LIQUIBASE_DB_PASSWORD:-${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the server environment}}
