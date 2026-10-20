@@ -5,6 +5,7 @@ on:
     paths:
       - "database/changelog/**"
       - "compose.liquibase.yaml"
+      - "compose.yaml"
       - ".github/workflows/liquibase-pr.yml"
   workflow_dispatch:
 
@@ -64,3 +65,36 @@ jobs:
           LIQUIBASE_COMMAND_USERNAME: grimoire_ci
           LIQUIBASE_COMMAND_PASSWORD: ci-only-password
         run: liquibase --changelog-file=database/changelog/db.changelog-master.yaml update
+
+  compose-migration:
+    name: Run the deploy migration with Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      POSTGRES_DB: grimoire_ci
+      POSTGRES_USER: grimoire_ci
+      POSTGRES_PASSWORD: ci-only-password
+      DATABASE_URL: postgresql://grimoire_ci:ci-only-password@db:5432/grimoire_ci
+      CLOUDFLARE_TUNNEL_TOKEN: local-only
+      BETTER_AUTH_SECRET: ci-placeholder-not-a-secret
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      # Same commands as the Deploy workflow, so path or mount mistakes fail here first.
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait db
+
+      - name: Apply migrations
+        run: docker compose -f compose.yaml -f compose.liquibase.yaml run --rm liquibase update
+
+      - name: Re-run migrations (must be a no-op)
+        run: docker compose -f compose.yaml -f compose.liquibase.yaml run --rm liquibase update
+
+      - name: Check auth tables exist
+        run: docker compose exec -T db psql -U grimoire_ci -d grimoire_ci -tAc "select count(*) from information_schema.tables where table_name in ('user','session','account','verification','two_factor','passkey')" | grep -qx 6
+
+      - name: Stop services
+        if: always()
+        run: docker compose down -v
