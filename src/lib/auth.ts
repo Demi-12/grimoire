@@ -18,14 +18,19 @@ const pool =
 
 if (process.env.NODE_ENV !== "production") globalForAuth.grimoireAuthPool = pool;
 
+const baseURL = process.env.BETTER_AUTH_URL?.trim() || "http://localhost:3000";
+/** Extra origins allowed to sign in, e.g. the LAN address alongside a public HTTPS URL. */
+const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+  .split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
+
 /** Without SMTP (e.g. a fresh home server) accounts work but email verification and resets are off. */
 const emailConfigured = Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
 
 export const auth = betterAuth({
   appName: "Grimoire",
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-  trustedOrigins: process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : undefined,
+  baseURL,
+  trustedOrigins: [...new Set([baseURL, ...extraOrigins])],
   database: pool,
   emailAndPassword: {
     enabled: true,
@@ -72,12 +77,13 @@ export const auth = betterAuth({
   plugins: [
     twoFactor({ issuer: "Grimoire", allowPasswordless: true, twoFactorTable: "two_factor" }),
     passkey({
-      rpID: process.env.PASSKEY_RP_ID?.trim() || new URL(process.env.BETTER_AUTH_URL ?? "http://localhost:3000").hostname,
+      rpID: process.env.PASSKEY_RP_ID?.trim() || new URL(baseURL).hostname,
       rpName: "Grimoire",
-      origin: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+      origin: baseURL,
     }),
   ],
   advanced: {
-    useSecureCookies: process.env.NODE_ENV === "production",
+    // Browsers drop Secure cookies over plain HTTP (e.g. http://192.168.x.x:3000), which would break sign-in.
+    useSecureCookies: baseURL.startsWith("https://"),
   },
 });

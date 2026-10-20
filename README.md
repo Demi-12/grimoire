@@ -28,6 +28,17 @@ Si Windows indica que `npm` no se reconoce, instala o repara Node.js 22 desde el
 
 El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con las variables de `.env.example`: PostgreSQL, `BETTER_AUTH_SECRET` (genera uno con `openssl rand -base64 32`) y `BETTER_AUTH_URL` con la URL pública exacta del toolkit (la de Cloudflare; las passkeys y las cookies dependen de ella), y opcionalmente SMTP y `CLOUDFLARE_TUNNEL_TOKEN`. Liquibase usa por defecto el mismo usuario de PostgreSQL. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
 
+Los ajustes propios del servidor (por ejemplo publicar la app en la IP de la LAN) van en un `compose.override.yaml` junto al checkout, que está fuera de Git y Docker Compose combina automáticamente con `compose.yaml`; así no bloquean los deploys:
+
+```yaml
+services:
+  app:
+    ports:
+      - "192.168.1.210:3000:3000"
+```
+
+Si abres el toolkit desde varias URLs (la de la LAN y la pública), pon la principal en `BETTER_AUTH_URL` y las demás en `BETTER_AUTH_TRUSTED_ORIGINS`, separadas por comas. Con `http://` las cookies de sesión no se marcan como seguras para que el inicio de sesión funcione en la LAN; las passkeys necesitan HTTPS.
+
 El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
 ## Deploy con runner self-hosted
