@@ -26,6 +26,8 @@ export interface WizardResult {
 type Props = {
   locale: Locale;
   initial?: { name: string; level: number; notes: string; build: CharacterBuild };
+  /** Quick sheet: every step on one page, picking with selects; saves the same build as the guided creator. */
+  quick?: boolean;
   onSave: (result: WizardResult) => void;
   onCancel: () => void;
 };
@@ -34,7 +36,7 @@ const copy = {
   en: {
     kicker: "Character creation, 2024 rules", create: "Forge a new adventurer", edit: "Revise your adventurer",
     steps: ["Class", "Background", "Species", "Abilities", "Proficiencies", "Equipment", "Details", "Summary"],
-    back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator",
+    back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator", quickCreate: "Quick sheet",
     stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
     classIntro: "Your class is the heart of your adventurer: it sets your Hit Points, proficiencies and core features.",
     level: "Starting level", hitDie: "Hit Die", primary: "Primary ability", saves: "Saving throws", armor: "Armor training",
@@ -70,7 +72,7 @@ const copy = {
   es: {
     kicker: "Creación de personaje, reglas 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
     steps: ["Clase", "Trasfondo", "Especie", "Características", "Competencias", "Equipo", "Detalles", "Resumen"],
-    back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador",
+    back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador", quickCreate: "Edición rápida",
     stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
     classIntro: "La clase es el corazón de tu aventurero: define sus puntos de golpe, competencias y rasgos principales.",
     level: "Nivel inicial", hitDie: "Dado de golpe", primary: "Característica principal", saves: "Tiradas de salvación", armor: "Entrenamiento con armaduras",
@@ -144,7 +146,7 @@ function SkillPicker({ options, chosen, limit, locked, onChange, locale, lockedL
   })}</div>;
 }
 
-export default function CharacterWizard({ locale, initial, onSave, onCancel }: Props) {
+export default function CharacterWizard({ locale, initial, quick = false, onSave, onCancel }: Props) {
   const c = copy[locale];
   const [step, setStep] = useState(0);
   const [build, setBuild] = useState<CharacterBuild>(initial?.build ?? newBuild());
@@ -160,7 +162,14 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
   const feats = characterFeats(build);
   const bgSkills = new Set<SkillKey>(bg.skills);
   const beforeClass = new Set<SkillKey>([...bg.skills, ...build.speciesSkills]);
-  const issues = [...stepIssues(build, step), ...(step === 6 && !name.trim() ? ["name"] : [])];
+  const show = (target: number) => quick || step === target;
+  const issues = quick
+    ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...(name.trim() ? [] : ["name"])])]
+    : [...stepIssues(build, step), ...(step === 6 && !name.trim() ? ["name"] : [])];
+  const heading = (target: number) => quick && <h3 className={styles.sectionTitle}>{c.steps[target]}</h3>;
+  const selectFor = (items: { id: string; name: { en: string; es: string } }[], value: string, onPick: (id: never) => void) =>
+    <label className={styles.field}><select value={value} aria-label={c.steps[0]} onChange={(event) => (onPick as (id: string) => void)(event.target.value)}>
+      {items.map((item) => <option key={item.id} value={item.id}>{say(item.name, locale)}</option>)}</select></label>;
   const last = c.steps.length - 1;
 
   function chooseClass(classId: ClassId) {
@@ -217,23 +226,24 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
 
   return <section className={styles.wizard} aria-labelledby="wizard-title">
     <header className={styles.head}>
-      <div><p className={styles.kicker}>✦ {c.kicker}</p><h2 id="wizard-title">{initial ? c.edit : c.create}</h2></div>
+      <div><p className={styles.kicker}>✦ {c.kicker}</p><h2 id="wizard-title">{quick ? c.quickCreate : initial ? c.edit : c.create}</h2></div>
       <button type="button" className={styles.close} onClick={onCancel} aria-label={c.close}>×</button>
     </header>
 
-    <nav className={styles.steps} aria-label={c.stepOf(step + 1, c.steps.length)}>
+    {!quick && <nav className={styles.steps} aria-label={c.stepOf(step + 1, c.steps.length)}>
       {c.steps.map((label, index) => <button type="button" key={label} className={`${styles.step} ${index === step ? styles.current : ""} ${index < step ? styles.done : ""}`}
         aria-current={index === step ? "step" : undefined} onClick={() => go(index)}>
         <span>{index < step ? "✓" : ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][index]}</span>{label}
       </button>)}
-    </nav>
+    </nav>}
 
     <div className={styles.body}>
-      {step === 0 && <>
+      {show(0) && <>
+        {heading(0)}
         <p className={styles.intro}>{c.classIntro}</p>
-        <div className={styles.cardGrid}>{classes.map((item) => <Choice key={item.id} selected={item.id === build.classId} onClick={() => chooseClass(item.id)}>
+        {quick ? selectFor(classes, build.classId, chooseClass) : <div className={styles.cardGrid}>{classes.map((item) => <Choice key={item.id} selected={item.id === build.classId} onClick={() => chooseClass(item.id)}>
           <strong>{say(item.name, locale)}</strong><small>d{item.hitDie} · {item.primary.map((key) => translate(locale, `ability.${key}`)).join(" / ")}</small><em>{say(item.summary, locale)}</em>
-        </Choice>)}</div>
+        </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(cls.name, locale)}</h3>
           <dl className={styles.facts}>
@@ -255,11 +265,12 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         </div>
       </>}
 
-      {step === 1 && <>
+      {show(1) && <>
+        {heading(1)}
         <p className={styles.intro}>{c.backgroundIntro}</p>
-        <div className={styles.cardGrid}>{backgrounds.map((item) => <Choice key={item.id} selected={item.id === build.backgroundId} onClick={() => chooseBackground(item.id)}>
+        {quick ? selectFor(backgrounds, build.backgroundId, chooseBackground) : <div className={styles.cardGrid}>{backgrounds.map((item) => <Choice key={item.id} selected={item.id === build.backgroundId} onClick={() => chooseBackground(item.id)}>
           <strong>{say(item.name, locale)}</strong><small>{item.abilities.map((key) => translate(locale, `ability.${key}`).slice(0, 3)).join(" · ")}</small><em>{say(item.summary, locale)}</em>
-        </Choice>)}</div>
+        </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(bg.name, locale)}</h3>
           <dl className={styles.facts}>
@@ -271,11 +282,12 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         </div>
       </>}
 
-      {step === 2 && <>
+      {show(2) && <>
+        {heading(2)}
         <p className={styles.intro}>{c.speciesIntro}</p>
-        <div className={styles.cardGrid}>{species.map((item) => <Choice key={item.id} selected={item.id === build.speciesId} onClick={() => chooseSpecies(item.id)}>
+        {quick ? selectFor(species, build.speciesId, chooseSpecies) : <div className={styles.cardGrid}>{species.map((item) => <Choice key={item.id} selected={item.id === build.speciesId} onClick={() => chooseSpecies(item.id)}>
           <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait, locale)).join(" · ")}</em>
-        </Choice>)}</div>
+        </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(sp.name, locale)}</h3>
           <dl className={styles.facts}>
@@ -291,7 +303,7 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
           </div></fieldset>}
           {sp.skillChoice && <fieldset className={styles.group}><legend>{c.chooseSkill(sp.skillChoice.count)}</legend>
             <SkillPicker locale={locale} lockedLabel={c.already} options={sp.skillChoice.options.length ? sp.skillChoice.options : skillKeys} chosen={build.speciesSkills}
-              limit={sp.skillChoice.count} locked={bgSkills} onChange={(speciesSkills) => update({ speciesSkills })} />
+              limit={sp.skillChoice.count} locked={bgSkills} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
           </fieldset>}
           {sp.originFeat && <fieldset className={styles.group}><legend>{c.chooseFeat}</legend><div className={styles.pills}>
             {(Object.keys(originFeats) as FeatId[]).map((feat) => <Choice key={feat} selected={build.speciesFeat === feat} onClick={() => update({ speciesFeat: feat, featSkills: [] })}>
@@ -305,7 +317,8 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         </div>
       </>}
 
-      {step === 3 && <>
+      {show(3) && <>
+        {heading(3)}
         <p className={styles.intro}>{c.abilitiesIntro}</p>
         <div className={styles.tabs} role="radiogroup">{(["standard", "pointBuy", "rolled"] as AbilityMethod[]).map((method) =>
           <Choice key={method} selected={build.abilityMethod === method} onClick={() => setMethod(method)}><strong>{c.methods[method]}</strong><small>{c.methodHelp[method]}</small></Choice>)}</div>
@@ -354,11 +367,12 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         {!validBaseScores(build) && <p className={styles.warning} role="alert">{c.issues.scores}</p>}
       </>}
 
-      {step === 4 && <>
+      {show(4) && <>
+        {heading(4)}
         <p className={styles.intro}>{c.profIntro}</p>
         <fieldset className={styles.group}><legend>{say(cls.name, locale)} · {c.skillsPick(cls.skillCount)}</legend>
           <SkillPicker locale={locale} lockedLabel={c.already} options={classOptions} chosen={build.classSkills} limit={cls.skillCount}
-            locked={beforeClass} onChange={(classSkills) => update({ classSkills, expertise: build.expertise.filter((skill) => proficientForExpertise.includes(skill) || classSkills.includes(skill)) })} />
+            locked={beforeClass} onChange={(classSkills) => update({ classSkills, featSkills: build.featSkills.filter((skill) => !classSkills.includes(skill)), expertise: build.expertise.filter((skill) => proficientForExpertise.includes(skill) || classSkills.includes(skill)) })} />
         </fieldset>
         {feats.includes("skilled") && <fieldset className={styles.group}><legend>{c.skilled}</legend>
           <SkillPicker locale={locale} lockedLabel={c.already} options={skillKeys} chosen={build.featSkills} limit={3}
@@ -370,7 +384,8 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         </fieldset>}
       </>}
 
-      {step === 5 && <>
+      {show(5) && <>
+        {heading(5)}
         <p className={styles.intro}>{c.equipmentIntro}</p>
         {[{ title: `${c.classKit} · ${say(cls.name, locale)}`, options: cls.equipment, value: build.classEquipment, set: (id: string) => update({ classEquipment: id as CharacterBuild["classEquipment"] }) },
           { title: `${c.backgroundKit} · ${say(bg.name, locale)}`, options: bg.equipment, value: build.backgroundEquipment, set: (id: string) => update({ backgroundEquipment: id as CharacterBuild["backgroundEquipment"] }) },
@@ -382,7 +397,8 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         <p className={styles.gold}>{c.totalGold}: <b>{sheet?.gold ?? 0} {locale === "es" ? "po" : "GP"}</b></p>
       </>}
 
-      {step === 6 && <>
+      {show(6) && <>
+        {heading(6)}
         <p className={styles.intro}>{c.detailsIntro}</p>
         <div className={styles.formGrid}>
           <label className={styles.field}>{c.name}<input autoFocus required maxLength={50} value={name} onChange={(event) => setName(event.target.value)} placeholder={c.namePlaceholder} /></label>
@@ -403,7 +419,7 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         <label className={styles.field}>{c.notes}<textarea rows={3} maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
       </>}
 
-      {step === 7 && sheet && <>
+      {show(7) && sheet && <>
         <p className={styles.intro}>{c.summaryIntro}</p>
         <article className={styles.summary}>
           <header><h3>{name || "—"}</h3><p>{[say(sp.lineages?.find((item) => item.id === build.lineageId)?.name, locale), say(sp.name, locale), say(cls.name, locale), `${locale === "es" ? "nivel" : "level"} ${sheet.level}`].filter(Boolean).join(" · ")}</p>
@@ -434,10 +450,10 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
 
     <footer className={styles.foot}>
       <span className={styles.issues} role="status">{issues.map((issue) => c.issues[issue]).filter(Boolean).join(" ")}</span>
-      <button type="button" className="button button-quiet" onClick={step ? () => go(step - 1) : onCancel}>{step ? `‹ ${c.back}` : c.cancel}</button>
-      {step < last
+      <button type="button" className="button button-quiet" onClick={!quick && step ? () => go(step - 1) : onCancel}>{!quick && step ? `‹ ${c.back}` : c.cancel}</button>
+      {!quick && step < last
         ? <button type="button" className="button button-primary" onClick={() => go(step + 1)} disabled={issues.length > 0}>{c.next} ›</button>
-        : <button type="button" className="button button-primary" onClick={finish}>✦ {c.save}</button>}
+        : <button type="button" className="button button-primary" onClick={finish} disabled={quick && issues.length > 0}>✦ {c.save}</button>}
     </footer>
     <p className={styles.srd}>{c.srd}</p>
   </section>;
