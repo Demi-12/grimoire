@@ -228,10 +228,10 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
   function changeLocale(next: Locale) { setLocale(next); savePreference({ locale: next }); }
   function changeTheme(next: Theme) { setTheme(next); savePreference({ theme: next }); }
 
-  const controls = <>
-    <button type="button" className="theme-toggle ml-auto rounded-md border border-line px-2 py-1.5 text-xs text-ink" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀︎" : "☾"}<span>{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
-    <label className="inline-flex items-center gap-2 text-xs text-muted"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="rounded-md border border-line bg-parchment px-2 py-1.5 text-ink focus-visible:ring-2 focus-visible:ring-forest" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
-  </>;
+  const controls = <div className="header-controls">
+    <button type="button" className="header-control theme-toggle" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}><span className="theme-glyph" aria-hidden="true">{theme === "dark" ? "☀\uFE0E" : "☾\uFE0E"}</span><span className="theme-label">{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
+    <label className="header-select"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="header-control" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
+  </div>;
 
   // Everyone must sign in; blocked accounts only see a notice.
   if (!accountId || !me || me.status !== "approved") {

@@ -465,3 +465,21 @@ body { font-variant-emoji: text; }
 @keyframes skeleton-shimmer{to{transform:translateX(100%)}}
 @keyframes spinner-turn{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.skeleton::after{animation:none;display:none}.spinner{animation-duration:1.6s}}
+/* Header controls: theme, language and edition share one height, radius, border and type */
+.workspace-header .header-controls{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+.workspace-header .header-control,.workspace-header .edition-badge{box-sizing:border-box;height:34px;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;font:500 11px/1 var(--font-serif);letter-spacing:.04em;color:var(--ink)}
+.workspace-header .header-control,.workspace-header .header-control option{background:var(--paper);padding:0 12px;cursor:pointer;gap:7px}
+.workspace-header .header-control:hover{border-color:var(--gilt)}
+.workspace-header .header-control:focus-visible{outline:2px solid var(--gilt);outline-offset:2px}
+.workspace-header .header-select{display:inline-flex}
+.workspace-header select.header-control{padding-right:8px}
+.theme-glyph{font-size:15px;line-height:1;font-family:"Segoe UI Symbol","Apple Symbols",sans-serif;font-variant-emoji:text}
+.workspace-header .edition-badge{margin-left:8px;padding:0 12px;background:transparent;color:var(--muted);border-radius:6px;cursor:default}
+:root[data-theme="dark"] .workspace-header .header-control,.workspace-header .header-control option{background:#26221b;border-color:#65573c;color:#efe5d0}
+:root[data-theme="dark"] .workspace-header .edition-badge{border-color:#4a4334;color:#c4b18a}
+@media (max-width: 650px) {
+  .workspace-header .header-controls{gap:6px}
+  .workspace-header .header-control{height:32px;padding:0 9px}
+  .workspace-header .theme-label{display:none}
+  .workspace-header select.header-control{max-width:84px;padding:0 4px}
+}
