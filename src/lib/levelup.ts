@@ -3,7 +3,7 @@
  * The guide in components/level-up.tsx only collects choices; everything it shows about the result comes from here.
  */
 import { proficiencyBonus, type AbilityKey } from "./rules";
-import { findClass, say, type ClassId, type SkillKey, type Text } from "./dnd2024";
+import { canMasterWeapon, findClass, say, weaponMasteryCount, type ClassId, type SkillKey, type Text, type WeaponId } from "./dnd2024";
 import { allFeats, finalScores, levelChoices, proficientSkills, type CharacterBuild, type FeatPick, type LevelUpChoice } from "./character-sheet";
 import {
   asiFeats, BOON_LEVEL, classFeatures, classScaling, epicBoons, expertiseGrant, featInfo, fightingStyleLevel, isAsiLevel,
@@ -11,7 +11,7 @@ import {
   type SpellProgress,
 } from "./levelup-data";
 
-export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "expertise";
+export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "expertise" | "mastery";
 export type SubclassPick = { kind: "srd" } | { kind: "custom"; name: string };
 
 export const MAX_LEVEL = 20;
@@ -25,7 +25,14 @@ export function levelUpSteps(build: CharacterBuild, level: number): LevelStep[] 
   else if (isAsiLevel(build.classId, level)) steps.push("asi");
   if (fightingStyleLevel(build.classId, level, build.useSubclass)) steps.push("fightingStyle");
   if (expertiseGrant(build.classId, level)) steps.push("expertise");
+  if (masteriesToAdd(build, level) > 0) steps.push("mastery");
   return steps;
+}
+
+/** Weapon Mastery picks still missing at `level`: new slots, or every slot for builds saved before masteries were tracked. */
+export function masteriesToAdd(build: CharacterBuild, level: number): number {
+  const current = (build.weaponMasteries ?? []).filter((id) => canMasterWeapon(build.classId, id));
+  return Math.max(0, weaponMasteryCount(build.classId, level) - new Set(current).size);
 }
 
 export const expertiseFor = (build: CharacterBuild, level: number): ExpertiseGrant | null => expertiseGrant(build.classId, level);
@@ -80,7 +87,7 @@ function asiValid(build: CharacterBuild, level: number, asi: LevelUpChoice["asi"
 }
 
 /** Problems that block this level-up, as keys the guide turns into messages. Empty means ready to save. */
-export function levelUpIssues(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): string[] {
+export function levelUpIssues(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null, masteries: WeaponId[] = []): string[] {
   const steps = levelUpSteps(build, level);
   const issues: string[] = [];
   const cls = findClass(build.classId);
@@ -99,11 +106,18 @@ export function levelUpIssues(build: CharacterBuild, level: number, choice: Leve
     const picked = choice.expertise ?? [];
     if (!grant || new Set(picked).size !== Math.min(grant.count, options.size) || picked.some((skill) => !options.has(skill))) issues.push("expertise");
   }
+  if (steps.includes("mastery")) {
+    const owned = new Set(build.weaponMasteries ?? []);
+    if (new Set(masteries).size !== masteriesToAdd(build, level) || masteries.some((id) => owned.has(id) || !canMasterWeapon(build.classId, id))) issues.push("mastery");
+  }
   return issues;
 }
 
-/** Records a level-up on the build. Choices the level doesn't offer are dropped so stale picks can't leak in. */
-export function applyLevelUp(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): CharacterBuild {
+/**
+ * Records a level-up on the build. Choices the level doesn't offer are dropped so stale picks can't leak in.
+ * New Weapon Mastery picks join the build's list, like the subclass they apply to the character rather than to one level.
+ */
+export function applyLevelUp(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null, masteries: WeaponId[] = []): CharacterBuild {
   const steps = levelUpSteps(build, level);
   const clean: LevelUpChoice = { level };
   if (choice.hp !== undefined) clean.hp = choice.hp;
@@ -114,6 +128,7 @@ export function applyLevelUp(build: CharacterBuild, level: number, choice: Level
   const next: CharacterBuild = { ...build, levelUps: [...(build.levelUps ?? []).filter((entry) => entry.level < level), clean] };
   if (steps.includes("subclass") && subclass?.kind === "srd") { next.useSubclass = true; delete next.customSubclass; }
   if (steps.includes("subclass") && subclass?.kind === "custom") { next.useSubclass = false; next.customSubclass = subclass.name.trim().slice(0, MAX_CUSTOM_SUBCLASS); }
+  if (steps.includes("mastery")) next.weaponMasteries = [...(build.weaponMasteries ?? []).filter((id) => canMasterWeapon(build.classId, id)), ...masteries];
   return next;
 }
 

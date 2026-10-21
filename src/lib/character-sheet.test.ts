@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { backgrounds, classes, species, weaponTable } from "./dnd2024";
-import { attackList, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
+import { backgrounds, canMasterWeapon, classes, masterableWeapons, masteryProperties, species, weaponIds, weaponMasteryCount, weaponTable } from "./dnd2024";
+import { attackList, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, validWeaponMasteries, type CharacterBuild } from "./character-sheet";
 
 const fighter: CharacterBuild = {
   version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
   abilityMethod: "standard", baseScores: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
   bonusMode: "plus2plus1", bonusAbilities: ["str", "con"], classSkills: ["perception", "survival"],
   speciesSkills: ["insight"], speciesFeat: "alert", featSkills: [], expertise: [], languages: [1, 4],
-  classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "",
+  weaponMasteries: ["greatsword", "flail", "javelin"], classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "",
 };
 
 describe("2024 ability scores", () => {
@@ -94,7 +94,7 @@ describe("attack list", () => {
     const attacks = attackList(fighter, sheet);
     expect(attacks.length).toBeGreaterThan(0);
     for (const attack of attacks) expect(attack.bonus).toBe(attack.modifier + sheet.proficiency);
-    const barbarian = { ...fighter, classId: "barbarian" as const, classEquipment: "A" as const };
+    const barbarian = { ...fighter, classId: "barbarian" as const, classEquipment: "A" as const, weaponMasteries: [] };
     const greataxe = attackList(barbarian, deriveSheet(barbarian, 1)!).find((attack) => attack.name.en === "Greataxe");
     expect(greataxe).toMatchObject({ dice: "1d12", modifier: 3, bonus: 5 }); // STR 17, proficient (+2)
     // Taking the gold instead of the class gear leaves only the background's weapons (Soldier: Spear, Shortbow).
@@ -110,5 +110,56 @@ describe("weapon data", () => {
       const named = option.items.map((item) => byName.get(item.en.replace(/^\d+ /, "").replace(/s$/, "").replace(/^.*Focus \((.*)\)$/, "$1")) ?? byName.get(item.en.replace(/^\d+ /, ""))).filter(Boolean);
       expect(option.weapons ?? []).toEqual(expect.arrayContaining(named as string[]));
     }
+  });
+});
+
+describe("weapon mastery", () => {
+  it("gives every 2024 weapon one of the eight mastery properties, checked against SRD 5.2", () => {
+    expect(weaponIds).toHaveLength(38);
+    for (const id of weaponIds) expect(masteryProperties[weaponTable[id].mastery], id).toBeDefined();
+    expect(Object.fromEntries((["club", "dagger", "greatclub", "handaxe", "quarterstaff", "spear", "dart", "battleaxe", "glaive", "greataxe", "halberd", "lance", "longsword", "pike", "rapier", "scimitar", "shortsword", "whip", "heavyCrossbow", "longbow"] as const).map((id) => [id, weaponTable[id].mastery])))
+      .toEqual({ club: "slow", dagger: "nick", greatclub: "push", handaxe: "vex", quarterstaff: "topple", spear: "sap", dart: "vex", battleaxe: "topple", glaive: "graze", greataxe: "cleave",
+        halberd: "cleave", lance: "topple", longsword: "sap", pike: "push", rapier: "vex", scimitar: "nick", shortsword: "vex", whip: "slow", heavyCrossbow: "push", longbow: "slow" });
+  });
+
+  it("scales the number of masteries with level for Barbarians and Fighters only", () => {
+    expect([1, 4, 10, 20].map((level) => weaponMasteryCount("barbarian", level))).toEqual([2, 3, 4, 4]);
+    expect([1, 3, 4, 10, 16].map((level) => weaponMasteryCount("fighter", level))).toEqual([3, 3, 4, 5, 6]);
+    expect(weaponMasteryCount("paladin", 20)).toBe(2);
+    expect(weaponMasteryCount("wizard", 20)).toBe(0);
+  });
+
+  it("limits each class to the weapons its feature allows", () => {
+    expect(canMasterWeapon("barbarian", "maul")).toBe(true);
+    expect(canMasterWeapon("barbarian", "longbow")).toBe(false);
+    expect(masterableWeapons("fighter")).toHaveLength(38);
+    expect(masterableWeapons("ranger")).toHaveLength(38);
+    expect(canMasterWeapon("rogue", "quarterstaff")).toBe(true);
+    expect(canMasterWeapon("rogue", "rapier")).toBe(true);
+    expect(canMasterWeapon("rogue", "handCrossbow")).toBe(true);
+    expect(canMasterWeapon("rogue", "longsword")).toBe(false);
+    expect(masterableWeapons("cleric")).toEqual([]);
+  });
+
+  it("requires exactly the class's number of distinct, allowed weapons in the creator", () => {
+    expect(validWeaponMasteries(fighter, 1)).toBe(true);
+    expect(validWeaponMasteries(fighter, 4)).toBe(false);
+    expect(validWeaponMasteries({ ...fighter, weaponMasteries: ["greatsword", "greatsword", "flail"] }, 1)).toBe(false);
+    expect(validWeaponMasteries({ classId: "barbarian", weaponMasteries: ["greataxe", "longbow"] }, 1)).toBe(false);
+    expect(validWeaponMasteries({ classId: "wizard" }, 5)).toBe(true);
+    expect(stepIssues({ ...fighter, weaponMasteries: undefined }, 4)).toContain("weaponMasteries");
+    expect(stepIssues(fighter, 4)).not.toContain("weaponMasteries");
+    expect(stepIssues(fighter, 4, 4)).toContain("weaponMasteries");
+  });
+
+  it("shows the mastery of chosen weapons on the attack list, including ones outside the starting gear", () => {
+    const attacks = attackList({ ...fighter, weaponMasteries: ["greatsword", "flail", "rapier"] }, deriveSheet(fighter, 1)!);
+    const byName = Object.fromEntries(attacks.map((attack) => [attack.name.en, attack]));
+    expect(byName.Greatsword.mastery).toBe("graze");
+    expect(byName.Javelin.mastery).toBeUndefined();
+    expect(byName.Rapier).toMatchObject({ mastery: "vex", dice: "1d8" });
+    expect(byName.Greatsword.masteryAlternatives).toBeUndefined();
+    const veteran = attackList(fighter, deriveSheet(fighter, 9)!).find((attack) => attack.name.en === "Flail");
+    expect(veteran?.masteryAlternatives).toEqual(["push", "slow"]); // Tactical Master; Flail already has Sap
   });
 });

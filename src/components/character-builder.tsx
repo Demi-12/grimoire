@@ -7,8 +7,8 @@ import { translate, type Locale } from "@/lib/i18n";
 import type { Campaign, Character, CharacterDraft } from "@/lib/api-client";
 import CharacterWizard, { describeBuild, type WizardResult } from "@/components/character-wizard";
 import LevelUp, { type LevelUpResult } from "@/components/level-up";
-import { attackList, deriveSheet, type CharacterBuild, type DerivedSheet } from "@/lib/character-sheet";
-import { alignments, backgrounds, classes, findBackground, findClass, findSpecies, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
+import { attackList, deriveSheet, type CharacterBuild, type DerivedSheet, type SheetAttack } from "@/lib/character-sheet";
+import { alignments, backgrounds, classes, findBackground, findClass, findSpecies, masteryProperties, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
 import { featInfo } from "@/lib/levelup-data";
 import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
 
@@ -19,6 +19,14 @@ function startingItems(build: CharacterBuild, locale: Locale): string[] {
   const bg = findBackground(build.backgroundId);
   const options = [cls?.equipment.find((option) => option.id === build.classEquipment), bg?.equipment.find((option) => option.id === build.backgroundEquipment)];
   return options.flatMap((option) => option?.items ?? []).filter((item) => !/ GP$/.test(item.en)).map((item) => say(item, locale));
+}
+
+/** Mastery property of a mastered weapon, plus the Tactical Master swaps when the Fighter has them. */
+function masteryNote(attack: SheetAttack, locale: Locale): string {
+  if (!attack.mastery) return "";
+  const name = `${translate(locale, "character.sheetMastery")}: ${say(masteryProperties[attack.mastery].name, locale)}`;
+  if (!attack.masteryAlternatives) return name;
+  return `${name} (${translate(locale, "character.sheetTacticalMaster")}: ${attack.masteryAlternatives.map((id) => say(masteryProperties[id].name, locale)).join(", ")})`;
 }
 
 const sheetFor = (character: Character): DerivedSheet | null => character.build ? deriveSheet(character.build, character.level) : null;
@@ -243,9 +251,9 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
               <div className="export-combat">{([["character.armorClass", sheet?.armorClass], ["character.initiative", sheet ? signed(sheet.initiative) : undefined], ["character.speed", sheet?.speed], ["character.hitPoints", sheet?.hitPoints], ["character.hitDice", sheet?.hitDice]] as const).map(([key, value]) => <div key={key}>{translate(locale, key)}<b>{value ?? ""}</b></div>)}</div>
             </section>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetAttacks")}</h4>
-              <div className="sheet-equipment-table sheet-attack-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetAttackBonus")}</b><b>{translate(locale, "character.sheetDamage")}</b></div>
+              <div className="sheet-equipment-table sheet-attack-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetAttackBonus")}</b><b>{translate(locale, "character.sheetDamage")}</b><b>{translate(locale, "character.sheetAttackNotes")}</b></div>
                 {(() => { const attacks = character.build && sheet ? attackList(character.build, sheet) : []; return Array.from({ length: Math.max(4, attacks.length) }, (_, index) => { const attack = attacks[index];
-                  return <div key={index}><span>{attack ? say(attack.name, locale) : ""}</span><span>{attack ? signed(attack.bonus) : ""}</span><span>{attack ? `${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}` : ""}</span></div>; }); })()}</div></section>
+                  return <div key={index}><span>{attack ? say(attack.name, locale) : ""}</span><span>{attack ? signed(attack.bonus) : ""}</span><span>{attack ? `${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}` : ""}</span><span>{attack ? masteryNote(attack, locale) : ""}</span></div>; }); })()}</div></section>
             <div className="sheet-columns">
               <section className="sheet-section"><h4>{translate(locale, "character.sheetSavingThrows")}</h4><div className="sheet-line-list">{abilities.map(({ key }) => <div key={key}><span>{translate(locale, `ability.${key}`)}</span><i className={sheet?.saves[key].proficient ? "filled" : undefined} /> <b>{sheet ? signed(sheet.saves[key].bonus) : ""}</b></div>)}</div></section>
               <section className="sheet-section"><h4>{translate(locale, "character.sheetSkills")}</h4><div className="sheet-line-list sheet-skill-list">{skillKeys.map((skill) => <div key={skill}><span>{translate(locale, `skill.${skill}`)}</span><i className={sheet?.skills[skill].expertise ? "filled expert" : sheet?.skills[skill].proficient ? "filled" : undefined} /><b>{sheet ? signed(sheet.skills[skill].bonus) : ""}</b></div>)}</div></section>

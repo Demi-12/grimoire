@@ -3,10 +3,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { abilities, abilityModifier, type AbilityKey } from "@/lib/rules";
 import { translate, type Locale } from "@/lib/i18n";
-import { findClass, findSpecies, magicInitiateLists, say, skillKeys, type MagicInitiateList, type SkillKey } from "@/lib/dnd2024";
+import { findClass, findSpecies, magicInitiateLists, masterableWeapons, masteryProperties, say, skillKeys, weaponTable, type MagicInitiateList, type SkillKey, type WeaponId } from "@/lib/dnd2024";
 import { deriveSheet, finalScores, type CharacterBuild, type FeatPick, type LevelUpChoice } from "@/lib/character-sheet";
 import {
-  asiFeatOptions, averageHitDie, applyLevelUp, expertiseFor, expertiseOptions, levelGains, levelUpIssues, levelUpSteps, MAX_CUSTOM_SUBCLASS, MAX_LEVEL,
+  asiFeatOptions, averageHitDie, applyLevelUp, expertiseFor, expertiseOptions, levelGains, levelUpIssues, levelUpSteps, masteriesToAdd, MAX_CUSTOM_SUBCLASS, MAX_LEVEL,
   subclassLabel, type LevelStep, type SubclassPick,
 } from "@/lib/levelup";
 import { epicBoons, featInfo, fightingStyles, subclassFeatures, type Feature, type LevelFeatId, type FightingStyleId } from "@/lib/levelup-data";
@@ -29,14 +29,14 @@ const copy = {
   en: {
     kicker: "Level up", title: (name: string, level: number) => `${name} reaches level ${level}`, close: "Close level up", back: "Back", next: "Continue",
     confirm: "Confirm level up", cancel: "Cancel", stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
-    steps: { overview: "What's new", hp: "Hit points", subclass: "Subclass", asi: "Improvement", boon: "Epic Boon", fightingStyle: "Fighting Style", expertise: "Expertise", review: "Review" } as Record<string, string>,
+    steps: { overview: "What's new", hp: "Hit points", subclass: "Subclass", asi: "Improvement", boon: "Epic Boon", fightingStyle: "Fighting Style", expertise: "Expertise", mastery: "Weapon Mastery", review: "Review" } as Record<string, string>,
     reassure: "Nothing is saved until the last step, and you can go back at any time. If you're unsure, the options marked “Recommended” are safe picks for a new player.",
     newFeatures: "New abilities", noFeatures: "This level has no brand-new class feature. You still get more Hit Points, and the choices on the next steps.",
     proficiency: "Proficiency Bonus", proficiencyHelp: "Added to attacks, saves and skills you're trained in. It grows at levels 5, 9, 13 and 17.",
     numbers: "Numbers that grew", spellsTitle: "Your magic grows", cantrips: "Cantrips known", prepared: "Prepared spells", slots: "Spell slots", pact: (count: number, level: number) => `${count} slots of level ${level} (they recharge on a Short Rest)`,
     spellHint: "Choose your new spells with your Dungeon Master or from your class list. Grimoire doesn't track the spell list yet, so note them in your sheet's notes.",
     spellbookHint: "Wizards also copy two new spells into their spellbook every level.", subclassFeaturesTitle: "From your subclass",
-    choicesAhead: "Coming up, you'll choose:", aheadNames: { subclass: "your subclass", asi: "an Ability Score Improvement or a feat", boon: "an Epic Boon", fightingStyle: "a Fighting Style", expertise: "Expertise skills" } as Record<string, string>,
+    choicesAhead: "Coming up, you'll choose:", aheadNames: { subclass: "your subclass", asi: "an Ability Score Improvement or a feat", boon: "an Epic Boon", fightingStyle: "a Fighting Style", expertise: "Expertise skills", mastery: "weapons to master" } as Record<string, string>,
     hpIntro: "Hit Points (HP) measure how much punishment you can take. Each level adds a bit more, plus your Constitution modifier. You can take the fixed average or roll your Hit Die.",
     hpAverage: "Take the average", hpAverageHelp: "A fixed number, no luck involved.", hpRoll: "Roll the die", hpRollHelp: "Could be higher or lower than average. At the table, roll a real die if you prefer.",
     recommended: "Recommended", rollFor: "Roll for me", rollLabel: (die: number) => `Result of your d${die}`, hpGain: (gain: number) => `You gain +${gain} HP this level (your Constitution modifier is included).`,
@@ -50,26 +50,27 @@ const copy = {
     boonIntro: "At level 19 heroes receive an Epic Boon: a powerful gift that goes beyond normal limits. It also adds +1 to an ability score (up to 30).", boonAbility: "Choose the ability that gets +1",
     styleIntro: "A Fighting Style is a specialty with your weapons or armor. It's a permanent bonus, so pick the one that matches how you like to fight.", styleHint: "Not sure? Defense is simple and works for everyone wearing armor.",
     expertiseIntro: (count: number) => `Expertise doubles your Proficiency Bonus on a skill you already know. Choose ${count} of your skills.`, expertiseNone: "You don't have a skill left to improve.",
+    masteryIntro: (count: number) => count === 1 ? "Your training lets you use the mastery property of one more kind of weapon. Choose it." : `Choose ${count} kinds of weapons whose mastery property you can use.`,
     reviewIntro: "Here is everything that will change. If it looks right, confirm and your sheet is updated.", rows: {
-      level: "Level", hp: "Hit Points", proficiency: "Proficiency Bonus", ac: "Armor Class", scores: "Ability scores", subclass: "Subclass", feat: "Feat", style: "Fighting Style", expertise: "Expertise",
+      level: "Level", hp: "Hit Points", proficiency: "Proficiency Bonus", ac: "Armor Class", scores: "Ability scores", subclass: "Subclass", feat: "Feat", style: "Fighting Style", expertise: "Expertise", mastery: "Weapon Mastery",
     } as Record<string, string>,
     issues: {
       hp: "Enter the number you rolled (1 to your die size).", subclass: "Choose a subclass or write its name.", asi: "Finish your improvement or feat.", boon: "Choose an Epic Boon and the ability that gets +1.",
-      fightingStyle: "Choose a Fighting Style.", expertise: "Choose the skills to improve.",
+      fightingStyle: "Choose a Fighting Style.", expertise: "Choose the skills to improve.", mastery: "Choose the weapons to master.",
     } as Record<string, string>,
     maxLevel: "This character is already at the maximum level.",
   },
   es: {
     kicker: "Subir de nivel", title: (name: string, level: number) => `${name} llega al nivel ${level}`, close: "Cerrar subida de nivel", back: "Atrás", next: "Continuar",
     confirm: "Confirmar subida de nivel", cancel: "Cancelar", stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
-    steps: { overview: "Novedades", hp: "Puntos de golpe", subclass: "Subclase", asi: "Mejora", boon: "Don épico", fightingStyle: "Estilo de combate", expertise: "Pericia", review: "Revisión" } as Record<string, string>,
+    steps: { overview: "Novedades", hp: "Puntos de golpe", subclass: "Subclase", asi: "Mejora", boon: "Don épico", fightingStyle: "Estilo de combate", expertise: "Pericia", mastery: "Maestría con armas", review: "Revisión" } as Record<string, string>,
     reassure: "No se guarda nada hasta el último paso y puedes volver atrás cuando quieras. Si dudas, las opciones marcadas como «Recomendado» son una apuesta segura para quien empieza.",
     newFeatures: "Nuevas habilidades", noFeatures: "Este nivel no trae una habilidad de clase nueva. Aun así ganas más puntos de golpe y tomas las decisiones de los siguientes pasos.",
     proficiency: "Bonificador por competencia", proficiencyHelp: "Se suma a ataques, salvaciones y habilidades en las que eres competente. Sube en los niveles 5, 9, 13 y 17.",
     numbers: "Números que crecen", spellsTitle: "Tu magia crece", cantrips: "Trucos conocidos", prepared: "Conjuros preparados", slots: "Espacios de conjuro", pact: (count: number, level: number) => `${count} espacios de nivel ${level} (se recuperan con un descanso corto)`,
     spellHint: "Elige tus conjuros nuevos con tu Director de Juego o desde la lista de tu clase. Grimoire aún no guarda la lista de conjuros; anótalos en las notas de la ficha.",
     spellbookHint: "Los magos además copian dos conjuros nuevos a su libro de conjuros cada nivel.", subclassFeaturesTitle: "De tu subclase",
-    choicesAhead: "A continuación elegirás:", aheadNames: { subclass: "tu subclase", asi: "una mejora de característica o una dote", boon: "un don épico", fightingStyle: "un estilo de combate", expertise: "habilidades con pericia" } as Record<string, string>,
+    choicesAhead: "A continuación elegirás:", aheadNames: { subclass: "tu subclase", asi: "una mejora de característica o una dote", boon: "un don épico", fightingStyle: "un estilo de combate", expertise: "habilidades con pericia", mastery: "armas que dominar" } as Record<string, string>,
     hpIntro: "Los puntos de golpe (PG) miden cuánto castigo aguantas. Cada nivel suma un poco más, además de tu modificador de Constitución. Puedes tomar el promedio fijo o tirar tu dado de golpe.",
     hpAverage: "Tomar el promedio", hpAverageHelp: "Un número fijo, sin azar.", hpRoll: "Tirar el dado", hpRollHelp: "Puede salir más o menos que el promedio. En la mesa, tira un dado real si prefieres.",
     recommended: "Recomendado", rollFor: "Tirar por mí", rollLabel: (die: number) => `Resultado de tu d${die}`, hpGain: (gain: number) => `Ganas +${gain} PG este nivel (ya incluye tu modificador de Constitución).`,
@@ -83,12 +84,13 @@ const copy = {
     boonIntro: "En el nivel 19 los héroes reciben un don épico: un regalo poderoso que supera los límites normales. También suma +1 a una característica (hasta 30).", boonAbility: "Elige la característica que recibe +1",
     styleIntro: "Un estilo de combate es una especialidad con tus armas o armadura. Es un bonificador permanente, así que elige el que encaje con tu forma de luchar.", styleHint: "¿No sabes cuál? Defensa es sencillo y sirve a cualquiera que lleve armadura.",
     expertiseIntro: (count: number) => `La pericia duplica tu bonificador por competencia en una habilidad que ya conoces. Elige ${count} de tus habilidades.`, expertiseNone: "No te queda ninguna habilidad por mejorar.",
+    masteryIntro: (count: number) => count === 1 ? "Tu entrenamiento te permite usar la propiedad de maestría de un tipo de arma más. Elígelo." : `Elige ${count} tipos de armas cuya propiedad de maestría puedes usar.`,
     reviewIntro: "Esto es todo lo que va a cambiar. Si te parece bien, confirma y tu ficha se actualizará.", rows: {
-      level: "Nivel", hp: "Puntos de golpe", proficiency: "Bonificador por competencia", ac: "Clase de armadura", scores: "Características", subclass: "Subclase", feat: "Dote", style: "Estilo de combate", expertise: "Pericia",
+      level: "Nivel", hp: "Puntos de golpe", proficiency: "Bonificador por competencia", ac: "Clase de armadura", scores: "Características", subclass: "Subclase", feat: "Dote", style: "Estilo de combate", expertise: "Pericia", mastery: "Maestría con armas",
     } as Record<string, string>,
     issues: {
       hp: "Escribe el resultado de tu tirada (de 1 al tamaño de tu dado).", subclass: "Elige una subclase o escribe su nombre.", asi: "Termina tu mejora o tu dote.", boon: "Elige un don épico y la característica que recibe +1.",
-      fightingStyle: "Elige un estilo de combate.", expertise: "Elige las habilidades a mejorar.",
+      fightingStyle: "Elige un estilo de combate.", expertise: "Elige las habilidades a mejorar.", mastery: "Elige las armas que dominar.",
     } as Record<string, string>,
     maxLevel: "Este personaje ya está en el nivel máximo.",
   },
@@ -126,6 +128,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
   const [featList, setFeatList] = useState<MagicInitiateList | null>(null);
   const [style, setStyle] = useState<FightingStyleId | null>(null);
   const [expertise, setExpertise] = useState<SkillKey[]>([]);
+  const [masteries, setMasteries] = useState<WeaponId[]>([]);
 
   const before = useMemo(() => deriveSheet(build, level), [build, level]);
   const scoresBefore = useMemo(() => finalScores(build, level), [build, level]);
@@ -144,8 +147,8 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
     ...(steps.includes("expertise") ? { expertise } : {}),
   };
   const pick: SubclassPick | null = subclass === "srd" ? { kind: "srd" } : subclass === "custom" ? { kind: "custom", name: customName } : null;
-  const issues = levelUpIssues(build, next, choice, pick);
-  const result = issues.length === 0 ? applyLevelUp(build, next, choice, pick) : null;
+  const issues = levelUpIssues(build, next, choice, pick, masteries);
+  const result = issues.length === 0 ? applyLevelUp(build, next, choice, pick, masteries) : null;
   const after = useMemo(() => result ? deriveSheet(result, next) : null, [result, next]);
 
   const srdSubclass = steps.includes("subclass") ? subclass === "srd" : build.useSubclass;
@@ -189,6 +192,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
     if (taken) reviewRows.push([c.rows.feat, say(featInfo(taken.id).name, locale)]);
     if (choice.fightingStyle && steps.includes("fightingStyle")) reviewRows.push([c.rows.style, say(featInfo(choice.fightingStyle).name, locale)]);
     if (steps.includes("expertise") && expertise.length) reviewRows.push([c.rows.expertise, expertise.map((skill) => translate(locale, `skill.${skill}`)).join(" · ")]);
+    if (steps.includes("mastery")) reviewRows.push([c.rows.mastery, (result.weaponMasteries ?? []).map((id) => say(weaponTable[id].name, locale)).join(" · ")]);
   }
 
   return <section className={styles.wizard} aria-labelledby="levelup-title">
@@ -297,6 +301,23 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
         return <>
           <p className={styles.intro}>{c.expertiseIntro(grant?.count ?? 0)}</p>
           {options.length ? <SkillChecks options={options} chosen={expertise} limit={limit} onChange={setExpertise} locale={locale} /> : <p className={styles.note}>{c.expertiseNone}</p>}
+        </>;
+      })()}
+
+      {current === "mastery" && (() => {
+        const owned = new Set(build.weaponMasteries ?? []);
+        const limit = masteriesToAdd(build, next);
+        return <>
+          <p className={styles.intro}>{c.masteryIntro(limit)}</p>
+          <div className={styles.skillGrid}>{masterableWeapons(build.classId).filter((id) => !owned.has(id)).map((id) => {
+            const isChosen = masteries.includes(id);
+            const property = masteryProperties[weaponTable[id].mastery];
+            return <label key={id} className={`${styles.skill} ${isChosen ? styles.skillOn : ""}`} title={say(property.summary, locale)}>
+              <input type="checkbox" checked={isChosen} disabled={!isChosen && masteries.length >= limit}
+                onChange={(event) => setMasteries(event.target.checked ? [...masteries, id] : masteries.filter((item) => item !== id))} />
+              <span>{say(weaponTable[id].name, locale)}<small>{say(property.name, locale)}</small></span>
+            </label>;
+          })}</div>
         </>;
       })()}
 

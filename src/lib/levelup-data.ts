@@ -4,7 +4,7 @@
  * Feature names are official; the one-line tips are our own plain-language summaries, not rules text.
  */
 import type { AbilityKey } from "./rules";
-import { originFeats, type ClassId, type FeatId, type SkillKey, type Text } from "./dnd2024";
+import { originFeats, weaponMasteryCount, type ClassId, type FeatId, type SkillKey, type Text } from "./dnd2024";
 
 const t = (en: string, es: string): Text => ({ en, es });
 
@@ -131,7 +131,7 @@ export const classFeatures: Record<ClassId, Progression> = {
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar."),
       f("Tactical Shift", "Cambio táctico", "Second Wind also lets you move without provoking attacks.", "Tomar aliento también te deja moverte sin provocar ataques.")],
     9: [f("Indomitable", "Indomable", "Reroll a failed saving throw with a bonus.", "Repite una salvación fallida con un bonificador."),
-      f("Tactical Master", "Maestro táctico", "Swap your weapon's mastery property for a different one when you attack.", "Cambia la propiedad de maestría del arma al atacar.")],
+      f("Tactical Master", "Maestro táctico", "When you attack with a weapon whose mastery you use, you can swap its property for Push, Sap or Slow.", "Al atacar con un arma cuya maestría usas, puedes cambiar su propiedad por Empujar, Agotar o Ralentizar.")],
     11: [f("Two Extra Attacks", "Dos ataques adicionales", "Attack three times when you take the Attack action.", "Atacas tres veces al usar la acción de Atacar.")],
     13: [f("Studied Attacks", "Ataques estudiados", "After you miss a creature, you get advantage on your next attack against it.", "Tras fallar a una criatura, tienes ventaja en tu siguiente ataque contra ella."),
       f("Indomitable (two uses)", "Indomable (dos usos)", "You can use Indomitable twice between long rests.", "Puedes usar Indomable dos veces entre descansos largos.")],
@@ -351,12 +351,17 @@ const warlockInvocations = [1, 3, 3, 3, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 1
 const die = (level: number, steps: [number, number][]) => `d${steps.reduce((value, [from, size]) => (level >= from ? size : value), steps[0][1])}`;
 
 /** Class numbers worth pointing out when they change (damage dice, uses, pools). */
+const weaponMasteryScaling = (classId: ClassId, level: number): Scaling =>
+  ({ key: "weaponMastery", label: t("Weapon Mastery weapons", "Armas con maestría"), value: String(weaponMasteryCount(classId, level)) });
+
 export function classScaling(classId: ClassId, level: number): Scaling[] {
   const index = Math.min(20, Math.max(1, level)) - 1;
   switch (classId) {
     case "barbarian": return [
       { key: "rages", label: t("Rages per long rest", "Furias por descanso largo"), value: String(barbarianRages[index]) },
-      { key: "rageDamage", label: t("Rage damage", "Daño de la furia"), value: `+${level >= 16 ? 4 : level >= 9 ? 3 : 2}` }];
+      { key: "rageDamage", label: t("Rage damage", "Daño de la furia"), value: `+${level >= 16 ? 4 : level >= 9 ? 3 : 2}` },
+      weaponMasteryScaling(classId, level)];
+    case "fighter": return [weaponMasteryScaling(classId, level)];
     case "bard": return [{ key: "inspiration", label: t("Bardic Inspiration die", "Dado de Inspiración bárdica"), value: die(level, [[1, 6], [5, 8], [10, 10], [15, 12]]) }];
     case "monk": return [
       { key: "martialArts", label: t("Martial Arts die", "Dado de Artes marciales"), value: die(level, [[1, 6], [5, 8], [11, 10], [17, 12]]) },

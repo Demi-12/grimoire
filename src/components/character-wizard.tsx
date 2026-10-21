@@ -4,8 +4,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { abilities, abilityModifier, type AbilityKey, type AbilityScores } from "@/lib/rules";
 import { translate, type Locale } from "@/lib/i18n";
 import {
-  alignments, backgrounds, classes, findBackground, findClass, findSpecies, magicInitiateLists, originFeats,
-  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, STANDARD_ARRAY, standardLanguages,
+  alignments, backgrounds, classes, findBackground, findClass, findSpecies, magicInitiateLists, masterableWeapons, masteryProperties, originFeats,
+  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, STANDARD_ARRAY, standardLanguages, weaponMasteryCount, weaponTable,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
 } from "@/lib/dnd2024";
 import {
@@ -56,6 +56,7 @@ const copy = {
     base: "Base", bonus: "Bonus", final: "Final", mod: "Mod",
     profIntro: "Pick the skills your class trains. Skills you already have from your background or species are marked.",
     already: "already proficient", skilled: "Skilled feat: choose 3 skills", expertise: (n: number) => `Expertise: choose ${n} proficient skills`,
+    masteryTitle: "Weapon Mastery", masteryPick: (n: number) => `Weapon Mastery: choose ${n} kinds of weapons`, masteryHelp: "You can use the mastery property of these weapons. You may swap one choice after a Long Rest.",
     equipmentIntro: "Take the starting kit or the gold to buy your own gear.", classKit: "Class equipment", backgroundKit: "Background equipment",
     option: (id: string) => `Option ${id}`, totalGold: "Starting gold",
     detailsIntro: "Name your character and decide who they are.", name: "Name", namePlaceholder: "Iria Valen", alignment: "Alignment",
@@ -65,7 +66,7 @@ const copy = {
     issues: {
       lineage: "Choose a lineage or ancestry.", speciesSkills: "Choose the species skill.", speciesFeat: "Choose the Origin feat.",
       scores: "Assign valid scores for the chosen method.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
-      featSkills: "Choose 3 skills for Skilled.", expertise: "Choose your Expertise skills.", languages: "Choose two languages.", name: "Give your character a name.",
+      featSkills: "Choose 3 skills for Skilled.", expertise: "Choose your Expertise skills.", weaponMasteries: "Choose your Weapon Mastery weapons.", languages: "Choose two languages.", name: "Give your character a name.",
     } as Record<string, string>,
     srd: "Rules data from the 2024 Player's Handbook and the System Reference Document 5.2 (CC-BY-4.0).",
   },
@@ -92,6 +93,7 @@ const copy = {
     base: "Base", bonus: "Bono", final: "Final", mod: "Mod",
     profIntro: "Elige las habilidades que entrena tu clase. Las que ya tienes por trasfondo o especie aparecen marcadas.",
     already: "ya competente", skilled: "Dote Habilidoso: elige 3 habilidades", expertise: (n: number) => `Pericia: elige ${n} habilidades en las que seas competente`,
+    masteryTitle: "Maestría con armas", masteryPick: (n: number) => `Maestría con armas: elige ${n} tipos de armas`, masteryHelp: "Puedes usar la propiedad de maestría de estas armas. Tras un descanso largo puedes cambiar una elección.",
     equipmentIntro: "Quédate con el equipo inicial o con el oro para comprar el tuyo.", classKit: "Equipo de clase", backgroundKit: "Equipo de trasfondo",
     option: (id: string) => `Opción ${id}`, totalGold: "Oro inicial",
     detailsIntro: "Dale nombre a tu personaje y decide quién es.", name: "Nombre", namePlaceholder: "Iria Valen", alignment: "Alineamiento",
@@ -101,7 +103,7 @@ const copy = {
     issues: {
       lineage: "Elige un linaje o ascendencia.", speciesSkills: "Elige la habilidad de la especie.", speciesFeat: "Elige la dote de origen.",
       scores: "Asigna puntuaciones válidas para el método elegido.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
-      featSkills: "Elige 3 habilidades para Habilidoso.", expertise: "Elige tus habilidades de Pericia.", languages: "Elige dos idiomas.", name: "Ponle nombre a tu personaje.",
+      featSkills: "Elige 3 habilidades para Habilidoso.", expertise: "Elige tus habilidades de Pericia.", weaponMasteries: "Elige las armas de Maestría con armas.", languages: "Elige dos idiomas.", name: "Ponle nombre a tu personaje.",
     } as Record<string, string>,
     srd: "Datos de reglas del Manual del Jugador 2024 y del System Reference Document 5.2 (CC-BY-4.0).",
   },
@@ -123,7 +125,7 @@ export function newBuild(): CharacterBuild {
     version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
     abilityMethod: "standard", baseScores: suggestedAssignment(STANDARD_ARRAY, "fighter"), bonusMode: "plus2plus1",
     bonusAbilities: ["str", "con"], classSkills: [], speciesSkills: [], featSkills: [], expertise: [], languages: [],
-    classEquipment: "A", backgroundEquipment: "A", alignment: 4, appearance: "",
+    weaponMasteries: [], classEquipment: "A", backgroundEquipment: "A", alignment: 4, appearance: "",
   };
 }
 
@@ -164,8 +166,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const beforeClass = new Set<SkillKey>([...bg.skills, ...build.speciesSkills]);
   const show = (target: number) => quick || step === target;
   const issues = quick
-    ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...(name.trim() ? [] : ["name"])])]
-    : [...stepIssues(build, step), ...(step === 6 && !name.trim() ? ["name"] : [])];
+    ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index, level)), ...(name.trim() ? [] : ["name"])])]
+    : [...stepIssues(build, step, level), ...(step === 6 && !name.trim() ? ["name"] : [])];
   const heading = (target: number) => quick && <h3 className={styles.sectionTitle}>{c.steps[target]}</h3>;
   const selectFor = (items: { id: string; name: { en: string; es: string } }[], value: string, onPick: (id: never) => void) =>
     <label className={styles.field}><select value={value} aria-label={c.steps[0]} onChange={(event) => (onPick as (id: string) => void)(event.target.value)}>
@@ -173,7 +175,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const last = c.steps.length - 1;
 
   function chooseClass(classId: ClassId) {
-    update({ classId, classSkills: [], expertise: [], classEquipment: "A",
+    update({ classId, classSkills: [], expertise: [], weaponMasteries: [], classEquipment: "A",
       ...(build.abilityMethod === "standard" ? { baseScores: suggestedAssignment(STANDARD_ARRAY, classId) } : {}) });
   }
   function chooseBackground(backgroundId: BackgroundId) {
@@ -212,7 +214,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   }
   function finish() {
     // The stepper allows jumping ahead, so check every step before saving.
-    const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === 6 && !name.trim()));
+    const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index, level).length > 0 || (index === 6 && !name.trim()));
     if (incomplete >= 0) { setStep(incomplete); return; }
     // Level-ups above the chosen level no longer apply.
     onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...build, levelUps: build.levelUps?.filter((entry) => entry.level <= level) } });
@@ -222,6 +224,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const bonuses = backgroundBonuses(build);
   const scores = finalScores(build);
   const classOptions = cls.skillOptions.length ? cls.skillOptions : skillKeys;
+  const masteryCount = weaponMasteryCount(build.classId, level);
+  const masteries = build.weaponMasteries ?? [];
   const proficientForExpertise = [...new Set([...bg.skills, ...build.speciesSkills, ...build.classSkills, ...(feats.includes("skilled") ? build.featSkills : [])])];
 
   return <section className={styles.wizard} aria-labelledby="wizard-title">
@@ -382,6 +386,17 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           <SkillPicker locale={locale} lockedLabel="" options={proficientForExpertise} chosen={build.expertise} limit={cls.expertiseAtLevel1}
             locked={new Set()} onChange={(expertise) => update({ expertise })} />
         </fieldset>}
+        {masteryCount > 0 && <fieldset className={styles.group}><legend>{c.masteryPick(masteryCount)}</legend><p className={styles.note}>{c.masteryHelp}</p><div className={styles.skillGrid}>
+          {masterableWeapons(build.classId).map((id) => {
+            const chosen = masteries.includes(id);
+            const property = masteryProperties[weaponTable[id].mastery];
+            return <label key={id} className={`${styles.skill} ${chosen ? styles.skillOn : ""}`} title={say(property.summary, locale)}>
+              <input type="checkbox" checked={chosen} disabled={!chosen && masteries.length >= masteryCount}
+                onChange={(event) => update({ weaponMasteries: event.target.checked ? [...masteries, id] : masteries.filter((item) => item !== id) })} />
+              <span>{say(weaponTable[id].name, locale)}<small>{say(property.name, locale)}</small></span>
+            </label>;
+          })}
+        </div></fieldset>}
       </>}
 
       {show(5) && <>
@@ -439,6 +454,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
               <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature, locale)).join(" · ")}</p>
               <h4>{c.traits}</h4><p>{sp.traits.map((trait) => say(trait, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}</p>
               <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(featInfo(feat).name, locale)).join(" · ")}</p>
+              {masteries.length > 0 && <><h4>{c.masteryTitle}</h4><p>{masteries.map((id) => `${say(weaponTable[id].name, locale)} (${say(masteryProperties[weaponTable[id].mastery].name, locale)})`).join(" · ")}</p></>}
               {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)} · {say(cls.spellcasting.slots, locale)}</p></>}
               <h4>{c.languages}</h4><p>{[locale === "es" ? "Común" : "Common", ...build.languages.map((index) => say(standardLanguages[index], locale))].join(", ")}</p>
               <h4>{c.totalGold}</h4><p>{sheet.gold} {locale === "es" ? "po" : "GP"} · {c.hitDie} {sheet.hitDice}</p>

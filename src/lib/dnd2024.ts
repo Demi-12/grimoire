@@ -30,32 +30,72 @@ export const armorTable: Record<ArmorKey, { base: number; dexCap: number | null;
   chainMail: { base: 16, dexCap: 0, name: { en: "Chain Mail", es: "Cota de mallas" } },
 };
 
-/** Weapons the starting equipment can grant; used for the attack list on the character sheet. */
+/** The 2024 weapon list; used for Weapon Mastery choices and the attack list on the character sheet. */
 export type WeaponId =
-  | "dagger" | "handaxe" | "javelin" | "quarterstaff" | "mace" | "sickle" | "spear" | "lightCrossbow" | "shortbow"
-  | "greataxe" | "greatsword" | "longsword" | "flail" | "scimitar" | "shortsword" | "longbow";
+  | "club" | "dagger" | "greatclub" | "handaxe" | "javelin" | "lightHammer" | "mace" | "quarterstaff" | "sickle" | "spear"
+  | "dart" | "lightCrossbow" | "shortbow" | "sling"
+  | "battleaxe" | "flail" | "glaive" | "greataxe" | "greatsword" | "halberd" | "lance" | "longsword" | "maul" | "morningstar"
+  | "pike" | "rapier" | "scimitar" | "shortsword" | "trident" | "warhammer" | "warPick" | "whip"
+  | "blowgun" | "handCrossbow" | "heavyCrossbow" | "longbow" | "musket" | "pistol";
 export type WeaponProperty = "finesse" | "light";
-export interface WeaponData { name: Text; dice: string; type: Text; martial?: boolean; properties: WeaponProperty[]; ranged?: boolean }
+export type MasteryId = "cleave" | "graze" | "nick" | "push" | "sap" | "slow" | "topple" | "vex";
+export interface WeaponData { name: Text; dice: string; type: Text; martial?: boolean; properties: WeaponProperty[]; ranged?: boolean; mastery: MasteryId }
 const piercing = { en: "piercing", es: "perforante" };
 const slashing = { en: "slashing", es: "cortante" };
 const bludgeoning = { en: "bludgeoning", es: "contundente" };
 export const weaponTable: Record<WeaponId, WeaponData> = {
-  dagger: { name: { en: "Dagger", es: "Daga" }, dice: "1d4", type: piercing, properties: ["finesse", "light"] },
-  handaxe: { name: { en: "Handaxe", es: "Hacha de mano" }, dice: "1d6", type: slashing, properties: ["light"] },
-  javelin: { name: { en: "Javelin", es: "Jabalina" }, dice: "1d6", type: piercing, properties: [] },
-  quarterstaff: { name: { en: "Quarterstaff", es: "Bastón" }, dice: "1d6", type: bludgeoning, properties: [] },
-  mace: { name: { en: "Mace", es: "Maza" }, dice: "1d6", type: bludgeoning, properties: [] },
-  sickle: { name: { en: "Sickle", es: "Hoz" }, dice: "1d4", type: slashing, properties: ["light"] },
-  spear: { name: { en: "Spear", es: "Lanza" }, dice: "1d6", type: piercing, properties: [] },
-  lightCrossbow: { name: { en: "Light Crossbow", es: "Ballesta ligera" }, dice: "1d8", type: piercing, properties: [], ranged: true },
-  shortbow: { name: { en: "Shortbow", es: "Arco corto" }, dice: "1d6", type: piercing, properties: [], ranged: true },
-  greataxe: { name: { en: "Greataxe", es: "Gran hacha" }, dice: "1d12", type: slashing, martial: true, properties: [] },
-  greatsword: { name: { en: "Greatsword", es: "Espadón" }, dice: "2d6", type: slashing, martial: true, properties: [] },
-  longsword: { name: { en: "Longsword", es: "Espada larga" }, dice: "1d8", type: slashing, martial: true, properties: [] },
-  flail: { name: { en: "Flail", es: "Mayal" }, dice: "1d8", type: bludgeoning, martial: true, properties: [] },
-  scimitar: { name: { en: "Scimitar", es: "Cimitarra" }, dice: "1d6", type: slashing, martial: true, properties: ["finesse", "light"] },
-  shortsword: { name: { en: "Shortsword", es: "Espada corta" }, dice: "1d6", type: piercing, martial: true, properties: ["finesse", "light"] },
-  longbow: { name: { en: "Longbow", es: "Arco largo" }, dice: "1d8", type: piercing, martial: true, properties: [], ranged: true },
+  club: { name: { en: "Club", es: "Garrote" }, dice: "1d4", type: bludgeoning, properties: ["light"], mastery: "slow" },
+  dagger: { name: { en: "Dagger", es: "Daga" }, dice: "1d4", type: piercing, properties: ["finesse", "light"], mastery: "nick" },
+  greatclub: { name: { en: "Greatclub", es: "Gran garrote" }, dice: "1d8", type: bludgeoning, properties: [], mastery: "push" },
+  handaxe: { name: { en: "Handaxe", es: "Hacha de mano" }, dice: "1d6", type: slashing, properties: ["light"], mastery: "vex" },
+  javelin: { name: { en: "Javelin", es: "Jabalina" }, dice: "1d6", type: piercing, properties: [], mastery: "slow" },
+  lightHammer: { name: { en: "Light Hammer", es: "Martillo ligero" }, dice: "1d4", type: bludgeoning, properties: ["light"], mastery: "nick" },
+  mace: { name: { en: "Mace", es: "Maza" }, dice: "1d6", type: bludgeoning, properties: [], mastery: "sap" },
+  quarterstaff: { name: { en: "Quarterstaff", es: "Bastón" }, dice: "1d6", type: bludgeoning, properties: [], mastery: "topple" },
+  sickle: { name: { en: "Sickle", es: "Hoz" }, dice: "1d4", type: slashing, properties: ["light"], mastery: "nick" },
+  spear: { name: { en: "Spear", es: "Lanza" }, dice: "1d6", type: piercing, properties: [], mastery: "sap" },
+  dart: { name: { en: "Dart", es: "Dardo" }, dice: "1d4", type: piercing, properties: ["finesse"], ranged: true, mastery: "vex" },
+  lightCrossbow: { name: { en: "Light Crossbow", es: "Ballesta ligera" }, dice: "1d8", type: piercing, properties: [], ranged: true, mastery: "slow" },
+  shortbow: { name: { en: "Shortbow", es: "Arco corto" }, dice: "1d6", type: piercing, properties: [], ranged: true, mastery: "vex" },
+  sling: { name: { en: "Sling", es: "Honda" }, dice: "1d4", type: bludgeoning, properties: [], ranged: true, mastery: "slow" },
+  battleaxe: { name: { en: "Battleaxe", es: "Hacha de guerra" }, dice: "1d8", type: slashing, martial: true, properties: [], mastery: "topple" },
+  flail: { name: { en: "Flail", es: "Mayal" }, dice: "1d8", type: bludgeoning, martial: true, properties: [], mastery: "sap" },
+  glaive: { name: { en: "Glaive", es: "Guja" }, dice: "1d10", type: slashing, martial: true, properties: [], mastery: "graze" },
+  greataxe: { name: { en: "Greataxe", es: "Gran hacha" }, dice: "1d12", type: slashing, martial: true, properties: [], mastery: "cleave" },
+  greatsword: { name: { en: "Greatsword", es: "Espadón" }, dice: "2d6", type: slashing, martial: true, properties: [], mastery: "graze" },
+  halberd: { name: { en: "Halberd", es: "Alabarda" }, dice: "1d10", type: slashing, martial: true, properties: [], mastery: "cleave" },
+  lance: { name: { en: "Lance", es: "Lanza de caballería" }, dice: "1d10", type: piercing, martial: true, properties: [], mastery: "topple" },
+  longsword: { name: { en: "Longsword", es: "Espada larga" }, dice: "1d8", type: slashing, martial: true, properties: [], mastery: "sap" },
+  maul: { name: { en: "Maul", es: "Mazo" }, dice: "2d6", type: bludgeoning, martial: true, properties: [], mastery: "topple" },
+  morningstar: { name: { en: "Morningstar", es: "Lucero del alba" }, dice: "1d8", type: piercing, martial: true, properties: [], mastery: "sap" },
+  pike: { name: { en: "Pike", es: "Pica" }, dice: "1d10", type: piercing, martial: true, properties: [], mastery: "push" },
+  rapier: { name: { en: "Rapier", es: "Estoque" }, dice: "1d8", type: piercing, martial: true, properties: ["finesse"], mastery: "vex" },
+  scimitar: { name: { en: "Scimitar", es: "Cimitarra" }, dice: "1d6", type: slashing, martial: true, properties: ["finesse", "light"], mastery: "nick" },
+  shortsword: { name: { en: "Shortsword", es: "Espada corta" }, dice: "1d6", type: piercing, martial: true, properties: ["finesse", "light"], mastery: "vex" },
+  trident: { name: { en: "Trident", es: "Tridente" }, dice: "1d8", type: piercing, martial: true, properties: [], mastery: "topple" },
+  warhammer: { name: { en: "Warhammer", es: "Martillo de guerra" }, dice: "1d8", type: bludgeoning, martial: true, properties: [], mastery: "push" },
+  warPick: { name: { en: "War Pick", es: "Pico de guerra" }, dice: "1d8", type: piercing, martial: true, properties: [], mastery: "sap" },
+  whip: { name: { en: "Whip", es: "Látigo" }, dice: "1d4", type: slashing, martial: true, properties: ["finesse"], mastery: "slow" },
+  blowgun: { name: { en: "Blowgun", es: "Cerbatana" }, dice: "1", type: piercing, martial: true, properties: [], ranged: true, mastery: "vex" },
+  handCrossbow: { name: { en: "Hand Crossbow", es: "Ballesta de mano" }, dice: "1d6", type: piercing, martial: true, properties: ["light"], ranged: true, mastery: "vex" },
+  heavyCrossbow: { name: { en: "Heavy Crossbow", es: "Ballesta pesada" }, dice: "1d10", type: piercing, martial: true, properties: [], ranged: true, mastery: "push" },
+  longbow: { name: { en: "Longbow", es: "Arco largo" }, dice: "1d8", type: piercing, martial: true, properties: [], ranged: true, mastery: "slow" },
+  musket: { name: { en: "Musket", es: "Mosquete" }, dice: "1d12", type: piercing, martial: true, properties: [], ranged: true, mastery: "slow" },
+  pistol: { name: { en: "Pistol", es: "Pistola" }, dice: "1d10", type: piercing, martial: true, properties: [], ranged: true, mastery: "vex" },
+};
+export const weaponIds = Object.keys(weaponTable) as WeaponId[];
+export const isWeaponId = (value: unknown): value is WeaponId => typeof value === "string" && Object.hasOwn(weaponTable, value);
+
+/** The eight 2024 mastery properties; summaries paraphrase the rules. */
+export const masteryProperties: Record<MasteryId, { name: Text; summary: Text }> = {
+  cleave: { name: { en: "Cleave", es: "Hendedura" }, summary: { en: "On a melee hit, make one more attack against a creature within 5 ft. of the first (once per turn; no ability modifier to its damage).", es: "Al impactar cuerpo a cuerpo, haz otro ataque contra una criatura a 1,5 m de la primera (una vez por turno; sin modificador de característica al daño)." } },
+  graze: { name: { en: "Graze", es: "Rozar" }, summary: { en: "On a miss, deal damage equal to the attack's ability modifier.", es: "Si fallas, infliges daño igual al modificador de característica del ataque." } },
+  nick: { name: { en: "Nick", es: "Mellar" }, summary: { en: "The extra attack of the Light property is part of the Attack action, not a Bonus Action (once per turn).", es: "El ataque adicional de la propiedad Ligera forma parte de la acción de Atacar, no de una acción adicional (una vez por turno)." } },
+  push: { name: { en: "Push", es: "Empujar" }, summary: { en: "On a hit, push a Large or smaller creature up to 10 ft. away.", es: "Al impactar, empujas a una criatura Grande o menor hasta 3 m." } },
+  sap: { name: { en: "Sap", es: "Agotar" }, summary: { en: "On a hit, the target has Disadvantage on its next attack roll before your next turn.", es: "Al impactar, el objetivo tiene desventaja en su siguiente tirada de ataque antes de tu próximo turno." } },
+  slow: { name: { en: "Slow", es: "Ralentizar" }, summary: { en: "On a hit that deals damage, the target's Speed drops by 10 ft. until your next turn (doesn't stack).", es: "Al impactar y hacer daño, la velocidad del objetivo baja 3 m hasta tu próximo turno (no se acumula)." } },
+  topple: { name: { en: "Topple", es: "Derribar" }, summary: { en: "On a hit, the target makes a Constitution save (DC 8 + ability modifier + Proficiency Bonus) or falls Prone.", es: "Al impactar, el objetivo hace una salvación de Constitución (CD 8 + modificador + competencia) o cae derribado." } },
+  vex: { name: { en: "Vex", es: "Hostigar" }, summary: { en: "On a hit that deals damage, you have Advantage on your next attack against that creature before your next turn ends.", es: "Al impactar y hacer daño, tienes ventaja en tu siguiente ataque contra esa criatura antes del final de tu próximo turno." } },
 };
 
 export interface EquipmentOption {
@@ -560,3 +600,21 @@ export const findClass = (id?: string) => classes.find((item) => item.id === id)
 export const findBackground = (id?: string) => backgrounds.find((item) => item.id === id);
 export const findSpecies = (id?: string) => species.find((item) => item.id === id);
 export const say = (text: Text | undefined, locale: "en" | "es") => (text ? text[locale] : "");
+
+/** Weapon Mastery slots at `level`: Barbarians gain more at 4 and 10, Fighters at 4, 10 and 16. */
+export function weaponMasteryCount(classId: string, level: number): number {
+  const base = findClass(classId)?.weaponMasteries ?? 0;
+  const steps = classId === "barbarian" ? [4, 10] : classId === "fighter" ? [4, 10, 16] : [];
+  return base + steps.filter((threshold) => level >= threshold).length;
+}
+
+/** Whether the class can master this kind of weapon: Barbarians pick melee weapons, Rogues weapons they are proficient with. */
+export function canMasterWeapon(classId: string, weaponId: WeaponId): boolean {
+  const weapon = weaponTable[weaponId];
+  if (!weapon || !findClass(classId)?.weaponMasteries) return false;
+  if (classId === "barbarian") return !weapon.ranged;
+  if (classId === "rogue") return !weapon.martial || weapon.properties.some((property) => property === "finesse" || property === "light");
+  return true;
+}
+
+export const masterableWeapons = (classId: string): WeaponId[] => weaponIds.filter((id) => canMasterWeapon(classId, id));
