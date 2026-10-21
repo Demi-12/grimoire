@@ -1,0 +1,16 @@
+import { NextResponse } from "next/server";
+import { dataErrorResponse, jsonError, requireApproved } from "@/lib/access";
+import { revokeCampaignInvite } from "@/lib/data";
+import { isUuid } from "@/lib/permissions";
+
+export const dynamic = "force-dynamic";
+
+/** Revoke an invite link so it stops working immediately. */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; inviteId: string }> }) {
+  const user = await requireApproved();
+  if (user instanceof NextResponse) return user;
+  const { id, inviteId } = await params;
+  if (!isUuid(id) || !isUuid(inviteId)) return jsonError(404, "Not found.");
+  const result = await revokeCampaignInvite(user, id, inviteId);
+  return result.ok ? new NextResponse(null, { status: 204 }) : dataErrorResponse(result.error);
+}

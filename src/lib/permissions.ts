@@ -41,6 +41,12 @@ export function canManageCampaign(
   return user.role === "admin" || campaign.ownerId === user.id || campaign.myRole === "dm";
 }
 
+/** Invite links stay valid for a week. */
+export const INVITE_TTL_DAYS = 7;
+
+/** Invite tokens are 32 random bytes in base64url; reject anything else before touching the database. */
+export const isInviteToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
+
 export type AdminChange = { role?: SiteRole; status?: AccountStatus };
 
 /**
