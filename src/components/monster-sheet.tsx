@@ -9,8 +9,8 @@ type Locale = "en" | "es";
 type Props = { monsterSlug?: string | null; locale?: Locale };
 
 const labels = {
-  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
-  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", retry: "Reintentar", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
+  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
+  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", retry: "Reintentar", noImage: "Sin ilustración disponible", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
 } satisfies Record<Locale, Record<string, string>>;
 
 const abilityNames = { en: ["STR", "DEX", "CON", "INT", "WIS", "CHA"], es: ["FUE", "DES", "CON", "INT", "SAB", "CAR"] };
@@ -21,6 +21,19 @@ const textOf = (description?: string | string[]) => Array.isArray(description) ?
 function traitList(title: string, items: MonsterAction[] | undefined) {
   if (!items?.length) return null;
   return <section className={styles.section}><h3 className={styles.sectionTitle}>{title}</h3>{items.map((item, index) => <article className={styles.trait} key={`${item.name ?? title}-${index}`}><strong>{item.name}</strong>{item.name && ". "}{textOf(item.desc) && <p>{textOf(item.desc)}</p>}</article>)}</section>;
+}
+
+const IMAGE_HOST = "https://www.dnd5eapi.co";
+
+function MonsterPortrait({ monster, label }: { monster: MonsterStatBlock; label: string }) {
+  const [failed, setFailed] = useState(false);
+  if (monster.image && !failed) {
+    return <figure className={styles.portrait}><img src={`${IMAGE_HOST}${monster.image}`} alt={monster.name} loading="lazy" onError={() => setFailed(true)} /></figure>;
+  }
+  return <figure className={styles.portrait}><div className={styles.portraitFallback} role="img" aria-label={label}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3c-4.4 0-7 2.9-7 6.5 0 2 .8 3.4 2 4.4V17h2v-1.5h1V17h2v-1.5h1V17h2v-3.1c1.2-1 2-2.4 2-4.4C19 5.9 16.4 3 12 3z" /><circle cx="9.5" cy="10" r="1.2" /><circle cx="14.5" cy="10" r="1.2" /><path d="M9 20h6" /></svg>
+    <span>{label}</span>
+  </div></figure>;
 }
 
 function formatArmorClass(value: MonsterStatBlock["armor_class"]) {
@@ -62,6 +75,7 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
 
   return <article className={styles.frame} aria-label={`${monster.name} stat block`}>
     <header className={styles.header}><p className={styles.eyebrow}>{t.source} · {srdLabel(monster.edition)}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
+    <MonsterPortrait monster={monster} label={t.noImage} />
     <div className={styles.quickStats}>
       <div><span>{t.ac}</span><strong>{ac}</strong></div>
       <div><span>{t.hp}</span><strong>{monster.hit_points ?? "—"}</strong>{monster.hit_dice && <small>({monster.hit_dice})</small>}</div>

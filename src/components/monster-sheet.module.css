@@ -101,3 +101,8 @@
 :global(:root[data-theme="dark"]) .loading, :global(:root[data-theme="dark"]) .empty, :global(:root[data-theme="dark"]) .error {
   color: #ecdcc0; background: #2a1e16; border-color: #a8782a;
 }
+
+.portrait { margin: 0 0 12px; display: flex; justify-content: center; }
+.portrait img, .portraitFallback { width: 100%; max-width: 280px; aspect-ratio: 1; object-fit: contain; border-radius: 6px; }
+.portraitFallback { display: grid; place-items: center; align-content: center; gap: 6px; border: 1px dashed currentColor; opacity: 0.55; font-size: 0.8rem; text-align: center; }
+.portraitFallback svg { width: 56px; height: 56px; }
