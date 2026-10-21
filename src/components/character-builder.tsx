@@ -206,7 +206,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   }
 
   return <section aria-labelledby="characters-title">
-    <div className="section-heading"><div><p className="eyebrow">{translate(locale, "character.groupKicker")}</p><h2 id="characters-title">{translate(locale, "character.title")}</h2>
+    <div className="section-heading"><div><h2 id="characters-title">{translate(locale, "character.title")}</h2>
       <p>{translate(locale, "character.description")}</p></div>
       {!showEditor && !wizard && !levelingUp && <div className="builder-actions">
         <button className="button button-quiet" onClick={() => setWizard({ quick: true })}>{translate(locale, "character.quickButton")}</button>

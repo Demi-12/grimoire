@@ -262,14 +262,15 @@ body { background-image: var(--grain), var(--mottle),
 .sidebar::after { content: ""; position: absolute; inset: 8px 7px 8px 8px; border: 1px dashed rgba(216, 170, 85, .3); pointer-events: none; }
 :root[data-theme="dark"] .sidebar { background-image: var(--leather-grain), linear-gradient(180deg, #1d130e, #110b08); }
 
-/* Vellum panels: grain, an inner gilt rule and corner brackets. */
+/* Vellum panels: grain, an inner gilt rule and corner brackets. Only the large content panels
+   get the frame; small tiles stay plain so the ornament marks structure instead of repeating. */
 .editor-panel, .catalog-panel, .character-card, .encounter-controls, .encounter-results, .desk-panel, .tool-tile {
   position: relative;
   background-image: var(--grain), linear-gradient(180deg, rgba(255, 252, 242, .5), transparent 40%);
   box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px rgba(181, 138, 58, .35), 0 6px 18px rgba(60, 35, 12, .09);
 }
 .character-card { box-shadow: inset 0 0 0 4px rgba(181, 138, 58, 0), 0 6px 18px rgba(60, 35, 12, .09); }
-.editor-panel::after, .catalog-panel::after, .encounter-controls::after, .encounter-results::after, .desk-panel::after, .tool-tile::after {
+.editor-panel::after, .catalog-panel::after, .encounter-controls::after, .encounter-results::after, .desk-panel::after {
   content: "";
   position: absolute;
   inset: 6px;
@@ -371,3 +372,18 @@ body { background-image: var(--grain), var(--mottle),
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Small tiles: flat vellum, no inner rule. */
+.tool-tile { box-shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, 0 1px 3px rgba(60, 35, 12, .12); }
+:root[data-theme="dark"] .tool-tile { box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+
+/* One soft shadow on panels instead of a wide halo: depth separates levels, not every box. */
+.editor-panel, .catalog-panel, .character-card, .encounter-controls, .encounter-results, .desk-panel {
+  box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px rgba(181, 138, 58, .35), 0 2px 6px rgba(60, 35, 12, .08);
+}
+.character-card { box-shadow: 0 2px 6px rgba(60, 35, 12, .08); }
+:root[data-theme="dark"] .editor-panel, :root[data-theme="dark"] .catalog-panel, :root[data-theme="dark"] .encounter-controls,
+:root[data-theme="dark"] .encounter-results, :root[data-theme="dark"] .desk-panel {
+  box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px rgba(216, 170, 85, .2), 0 2px 6px rgba(0, 0, 0, .35);
+}
+:root[data-theme="dark"] .character-card { box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
