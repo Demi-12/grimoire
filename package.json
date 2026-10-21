@@ -14,7 +14,6 @@
     "@better-auth/passkey": "1.7.10",
     "better-auth": "1.7.10",
     "next": "16.4.1",
-    "nodemailer": "^10.1.1",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -22,7 +21,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.15.0",
-    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

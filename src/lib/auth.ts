@@ -3,7 +3,6 @@ import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { passkey } from "@better-auth/passkey";
 import { twoFactor } from "better-auth/plugins";
-import { sendAuthEmail } from "@/lib/auth-email";
 import { pool } from "@/lib/db";
 import { parseAdminEmails } from "@/lib/permissions";
 
@@ -11,9 +10,6 @@ const baseURL = process.env.BETTER_AUTH_URL?.trim() || "http://localhost:3000";
 /** Extra origins allowed to sign in, e.g. the LAN address alongside a public HTTPS URL. */
 const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
   .split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
-
-/** Without SMTP (e.g. a fresh home server) accounts work but email verification and resets are off. */
-const emailConfigured = Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
 
 export const auth = betterAuth({
   appName: "Grimoire",
@@ -52,30 +48,8 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: emailConfigured,
     minPasswordLength: 12,
     maxPasswordLength: 128,
-    resetPasswordTokenExpiresIn: 30 * 60,
-    revokeSessionsOnPasswordReset: true,
-    sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmail({
-        to: user.email,
-        subject: "Restablece tu contraseña de Grimoire",
-        text: `Has solicitado restablecer la contraseña de tu cuenta de Grimoire. Abre este enlace antes de 30 minutos y úsalo una sola vez:\n\n${url}\n\nSi no lo solicitaste, ignora este correo.`,
-      });
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: emailConfigured,
-    expiresIn: 60 * 60,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendAuthEmail({
-        to: user.email,
-        subject: "Verifica tu correo de Grimoire",
-        text: `Confirma tu correo para activar tu cuenta de Grimoire. Este enlace caduca en una hora:\n\n${url}\n\nSi no creaste la cuenta, ignora este correo.`,
-      });
-    },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 30,
@@ -89,7 +63,6 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 60, max: 5 },
-      "/request-password-reset": { window: 60, max: 3 },
     },
   },
   plugins: [

@@ -16,7 +16,7 @@ describe("secret-handling configuration", () => {
   it("keeps credential values empty in the checked-in environment example", () => {
     const secrets = new Set([
       "POSTGRES_PASSWORD", "DATABASE_URL", "CLOUDFLARE_TUNNEL_TOKEN",
-      "BETTER_AUTH_SECRET", "SMTP_PASSWORD", "LIQUIBASE_DB_PASSWORD",
+      "BETTER_AUTH_SECRET", "LIQUIBASE_DB_PASSWORD",
     ]);
     for (const line of envExample.split(/\r?\n/)) {
       if (!line || line.startsWith("#")) continue;
