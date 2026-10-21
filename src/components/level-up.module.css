@@ -1,28 +1,28 @@
 .progress { display: flex; gap: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto; border-block: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 70%, transparent); }
-.progress li { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border-right: 1px solid var(--line); color: var(--muted); font: 600 11px var(--sans); white-space: nowrap; }
+.progress li { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border-right: 1px solid var(--line); color: var(--muted); font: 600 11px var(--font-body); white-space: nowrap; }
 .progress li:last-child { border-right: 0; }
-.progress li span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--white); font: 600 10px var(--serif); }
-.progress .current { color: var(--ink); background: var(--white); box-shadow: inset 0 -3px var(--green); }
-.progress .current span { background: var(--crimson-fill, var(--green)); border-color: var(--crimson-fill, var(--green)); color: #fff7e6; }
-.progress .done span { background: color-mix(in srgb, var(--lime) 45%, var(--white)); border-color: var(--lime); color: var(--ink); }
+.progress li span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); font: 600 10px var(--font-display); }
+.progress .current { color: var(--ink); background: var(--surface); box-shadow: inset 0 -3px var(--crimson); }
+.progress .current span { background: var(--crimson-fill, var(--crimson)); border-color: var(--crimson-fill, var(--crimson)); color: #fff7e6; }
+.progress .done span { background: color-mix(in srgb, var(--gilt) 45%, var(--surface)); border-color: var(--gilt); color: var(--ink); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
 .card { padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); }
-.card h3 { margin: 0 0 8px; font: 600 15px var(--serif); color: var(--green); }
+.card h3 { margin: 0 0 8px; font: 600 15px var(--font-display); color: var(--crimson); }
 .card p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
-.card .big { margin: 0; font: 600 22px var(--serif); color: var(--ink); }
-.card .big b { color: var(--green); }
+.card .big { margin: 0; font: 600 22px var(--font-display); color: var(--ink); }
+.card .big b { color: var(--crimson); }
 .changes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .changes li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
-.changes b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
+.changes b { font: 600 12px var(--font-label); color: var(--ink); text-align: right; }
 
-.heading { margin: 18px 0 8px; font: 600 15px var(--serif); color: var(--green); }
+.heading { margin: 18px 0 8px; font: 600 15px var(--font-display); color: var(--crimson); }
 .features { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.features li { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: var(--white); }
-.features b { font: 600 13px var(--serif); color: var(--ink); }
+.features li { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid var(--line); border-left: 3px solid var(--crimson); background: var(--surface); }
+.features b { font: 600 13px var(--font-display); color: var(--ink); }
 .features span { font-size: 12px; line-height: 1.5; color: var(--muted); }
 .ahead { margin: 14px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
-.callout { margin: 14px 0 0; padding: 10px 14px; border: 1px dashed var(--green); background: var(--paper); font-size: 13px; color: var(--ink); }
+.callout { margin: 14px 0 0; padding: 10px 14px; border: 1px dashed var(--crimson); background: var(--paper); font-size: 13px; color: var(--ink); }
 .customName { margin-top: 14px; max-width: 360px; }
 
 .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
@@ -30,8 +30,8 @@
 
 .review { margin: 0; display: grid; gap: 6px; }
 .review div { display: grid; grid-template-columns: minmax(130px, .5fr) 1fr; gap: 12px; padding: 9px 12px; border: 1px solid var(--line); background: var(--paper); }
-.review dt { font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); align-self: center; }
-.review dd { margin: 0; font: 600 14px var(--serif); color: var(--ink); }
+.review dt { font: 9px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.review dd { margin: 0; font: 600 14px var(--font-display); color: var(--ink); }
 
 @media (max-width: 560px) {
   .tabs, .review div { grid-template-columns: 1fr; }

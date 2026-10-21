@@ -6,7 +6,7 @@
 .item { padding: 12px; border: 1px solid #d5c5a4; background: rgba(255,255,255,.28); min-width: 0; }
 .played { opacity: .85; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.title { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 18px; overflow-wrap: anywhere; }
+.title { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 18px; overflow-wrap: anywhere; }
 .meta { margin: 4px 0 0; color: var(--j-muted); font: 10px ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .lines { margin: 8px 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 13px; }
 .lines li { display: flex; gap: 8px; overflow-wrap: anywhere; }
