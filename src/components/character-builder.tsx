@@ -209,7 +209,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   return <section aria-labelledby="characters-title">
     {selectedId && onSelect && (viewing
       ? <CharacterSheetView character={viewing} campaignName={campaignName(viewing.campaignId)} locale={locale}
-          onBack={() => onSelect(null)} onExport={() => exportSheet(viewing)}
+          onBack={() => onSelect(null)} onExport={own ? () => exportSheet(own) : undefined}
           onEdit={own?.editable ? () => { onSelect(null); startEdit(own); } : undefined}
           onLevelUp={own?.editable && own.build ? () => { onSelect(null); startLevelUp(own); } : undefined} />
       : <div className="empty-state"><h2>{translate(locale, "character.notFoundTitle")}</h2><p>{translate(locale, "character.notFoundDescription")}</p>

@@ -14,7 +14,8 @@ type Props = {
   campaignName?: string;
   locale: Locale;
   onBack: () => void;
-  onExport: () => void;
+  /** Only passed when the printable sheet exists, which is the case for the viewer's own characters. */
+  onExport?: () => void;
   /** Only passed when the viewer may change the character. */
   onEdit?: () => void;
   onLevelUp?: () => void;
@@ -40,7 +41,7 @@ export default function CharacterSheetView({ character, campaignName, locale, on
     <div className={styles.top}>
       <button type="button" className="button button-quiet" onClick={onBack}>‹ {t("character.backToList")}</button>
       <div className={styles.actions}>
-        <button type="button" className="button button-quiet" onClick={onExport} title={t("character.printHint")}>{t("character.exportPdf")}</button>
+        {onExport && <button type="button" className="button button-quiet" onClick={onExport} title={t("character.printHint")}>{t("character.exportPdf")}</button>}
         {onLevelUp && build && character.level < MAX_LEVEL && <button type="button" className="button button-quiet" onClick={onLevelUp}>{t("character.levelUp")}</button>}
         {onEdit && <button type="button" className="button button-primary" onClick={onEdit}>{t("character.edit")}</button>}
       </div>
