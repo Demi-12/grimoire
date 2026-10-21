@@ -335,7 +335,7 @@ body { background-image: var(--grain), var(--mottle),
   .tool-tile { padding: 12px; column-gap: 10px; }
   .tool-glyph { width: 36px; height: 36px; font-size: 16px; }
   .desk-actions { width: 100%; }
-  .desk-actions .button { flex: 1; }
+  .desk-actions .button { flex: 1 1 100%; justify-content: center; }
   .sidebar::after { display: none; }
 }
 
