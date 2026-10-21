@@ -19,7 +19,7 @@
 
 .header { padding: 0 0 18px; text-align: center; border-bottom: 3px double var(--campaign-rust); }
 .eyebrow { margin: 0 0 7px; color: var(--campaign-rust); font: 700 var(--text-xs)/1.4 var(--font-label); letter-spacing: .16em; }
-.header h2 { margin: 0; color: var(--ink); font-family: var(--font-display); font-weight: 500; font-size: clamp(28px, 5vw, 42px); line-height: 1.1; }
+.header h1 { margin: 0; color: var(--ink); font-family: var(--font-display); font-weight: 500; font-size: clamp(28px, 5vw, 42px); line-height: 1.1; }
 .header > p:last-child { margin: 9px 0 0; color: var(--campaign-muted); font-size: 14px; }
 .createForm { margin: 20px 0; padding: 14px; border: 1px solid #d0bd97; background: rgba(255,255,255,.22); }
 .createForm label, .assign > span { display: block; margin-bottom: 7px; color: var(--campaign-rust); font: 700 var(--text-xs) var(--font-label); letter-spacing: .1em; text-transform: uppercase; }
@@ -36,10 +36,10 @@
 .campaignList { display: grid; gap: 14px; }
 .campaign { padding: 16px; border: 1px solid var(--campaign-edge); background: rgba(255,255,255,.19); box-shadow: inset 0 0 0 3px rgba(255,255,255,.17); }
 .campaignHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 11px; border-bottom: 1px solid #d0bd97; }
-.campaignHead h3 { margin: 0; color: var(--ink); font-family: var(--font-display); font-weight: 500; font-size: 23px; overflow-wrap: anywhere; }
+.campaignHead h2 { margin: 0; color: var(--ink); font-family: var(--font-display); font-weight: 500; font-size: 23px; overflow-wrap: anywhere; }
 .memberCount { display: inline-block; margin-top: 5px; color: var(--campaign-muted); font: 700 var(--text-xs) var(--font-label); letter-spacing: .08em; text-transform: uppercase; }
 .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
-.quietButton, .deleteButton, .removeHero { padding: 6px 8px; color: var(--campaign-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
+.quietButton, .deleteButton, .removeHero { min-height: 28px; min-width: 28px; padding: 6px 8px; color: var(--campaign-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
 .deleteButton { color: #762b23; border-color: #c99b83; }
 .renameForm { width: 100%; display: flex; gap: 7px; flex-wrap: wrap; }
 .renameForm input { flex: 1; }
@@ -57,7 +57,7 @@
 .addMember { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
 .addMember > span { color: var(--campaign-rust); font: 700 var(--text-xs) var(--font-label); letter-spacing: .1em; text-transform: uppercase; }
 .addMember select, .addMember input { min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
-.addMember input { flex: 1 1 160px; min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
+.addMember input { flex: 1 1 220px; min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
 .addMember button { padding: 8px 13px; color: #fff5df; background: #743329; border: 1px solid #57271f; border-radius: 2px; font: 700 12px var(--font-label); cursor: pointer; }
 .manager button:disabled { opacity: .55; cursor: wait; }
 .memberList .quietButton { padding: 3px 7px; font-size: var(--text-xs); }
@@ -72,7 +72,7 @@
   background: radial-gradient(ellipse at 50% -18%, rgba(113,83,42,.2), transparent 56%), #29251f;
   box-shadow: inset 0 0 0 5px #29251f, inset 0 0 0 6px rgba(167,139,87,.4), 0 16px 36px rgba(0,0,0,.3);
 }
-:global(:root[data-theme="dark"]) .header h2, :global(:root[data-theme="dark"]) .campaignHead h3 { color: #f0dfc2; }
+:global(:root[data-theme="dark"]) .header h1, :global(:root[data-theme="dark"]) .campaignHead h2 { color: #f0dfc2; }
 :global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .campaign, :global(:root[data-theme="dark"]) .memberList li { background: rgba(0,0,0,.12); }
 :global(:root[data-theme="dark"]) .createRow input, :global(:root[data-theme="dark"]) .renameForm input, :global(:root[data-theme="dark"]) .assign select, :global(:root[data-theme="dark"]) .descriptionInput, :global(:root[data-theme="dark"]) .addMember select, :global(:root[data-theme="dark"]) .addMember input { color: #eee3cf; background: #332e26; border-color: #66573d; }
 :global(:root[data-theme="dark"]) .campaignHead, :global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .memberList li { border-color: #5d503b; }
@@ -85,6 +85,13 @@
   .createRow button { min-height: 42px; }
   .campaignHead { flex-direction: column; }
   .actions { justify-content: flex-start; }
+  .addMember input { flex-basis: 100%; }
 }
 .journalBox { margin-top: 16px; }
 .journalBox > summary { cursor: pointer; margin: 0; padding: 4px 0; }
+
+/* Touch: every action reaches 40px on phones and touch screens. */
+@media (pointer: coarse), (max-width: 650px) {
+  .quietButton, .deleteButton, .removeHero, .addMember button, .addMember select, .addMember input { min-height: 40px; }
+  .removeHero { min-width: 40px; }
+}

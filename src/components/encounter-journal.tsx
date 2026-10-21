@@ -82,14 +82,14 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
     {error && <p className={styles.error} role="alert">{error}</p>}
     {!items.length && <p className={styles.empty}>{t.empty}</p>}
     {groups.map((group) => <section key={group.key} aria-label={group.label}>
-      <h5 className={styles.group}>{group.label} · {group.list.length}</h5>
+      <h4 className={styles.group}>{group.label} · {group.list.length}</h4>
       <ul className={styles.list}>{group.list.map((item) => {
         const busy = busyId === item.id;
         const draft = drafts[item.id] ?? item.notes;
         return <li key={item.id} className={`${styles.item} ${item.status === "played" ? styles.played : ""}`}>
           <div className={styles.top}>
             <div>
-              <h6 className={styles.title}>{item.title}</h6>
+              <h5 className={styles.title}>{item.title}</h5>
               <p className={styles.meta}>{t.difficulty[item.difficulty]} · {item.totalXp.toLocaleString(numberLocale)} / {item.budget.toLocaleString(numberLocale)} {t.xp} · {t.party(item.partyLevels)} · {t.by(item.createdByName)}</p>
             </div>
           </div>
