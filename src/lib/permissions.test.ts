@@ -103,3 +103,15 @@ describe("isInviteToken", () => {
     expect(isInviteToken(undefined)).toBe(false);
   });
 });
+
+describe("input size limits", () => {
+  it("rejects over-long character and campaign fields and oversized builds", () => {
+    const base = { name: "Aria", level: 3, className: "Wizard", species: "Elf", background: "Sage", notes: "", scores: { str: 8, dex: 14, con: 12, int: 16, wis: 10, cha: 10 } };
+    expect(parseCharacterInput({ ...base, name: "a".repeat(51) })).toBeNull();
+    expect(parseCharacterInput({ ...base, notes: "a".repeat(501) })).toBeNull();
+    expect(parseCharacterInput({ ...base, build: { blob: "a".repeat(16_001) } })).toBeNull();
+    expect(parseCharacterInput({ ...base, build: ["x"] })).toBeNull();
+    expect(parseCampaignInput({ name: "a".repeat(81), description: "" })).toBeNull();
+    expect(parseCampaignInput({ name: "ok", description: "a".repeat(1001) })).toBeNull();
+  });
+});

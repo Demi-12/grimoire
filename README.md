@@ -90,6 +90,14 @@ Si abres el toolkit desde varias URLs (la de la LAN y la pública), pon la princ
 
 El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
+## Cabeceras de seguridad y límites de uso
+
+- **CSP** (`src/proxy.ts`, `src/lib/security-headers.ts`): se genera por petición con un nonce para los scripts de Next y el hash del script del tema; no se usa `'unsafe-inline'` en scripts. Los estilos sí lo permiten porque la UI usa atributos `style`. Las imágenes de monstruos se permiten desde `www.dnd5eapi.co`. No se activa `upgrade-insecure-requests` porque la app también se abre por `http://` en la LAN.
+- **Resto de cabeceras** (`next.config.ts`): `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y `X-Frame-Options` (más `frame-ancestors 'none'` en la CSP).
+- **HSTS**: solo se envía si `BETTER_AUTH_URL` empieza por `https://`, y se lee al arrancar el servidor (la imagen se construye sin `.env`). Sin `includeSubDomains` ni `preload`.
+- **Rate limiting**: better-auth ya limita inicio de sesión, registro y restablecimiento (`auth.ts`). Las rutas de datos tienen un limitador propio en memoria (`src/lib/rate-limit.ts`), por usuario: 60 escrituras/min, 10 invitaciones/min, 20 altas de miembros/min y 5 importaciones cada 10 min. Los contadores viven en el proceso: con varias réplicas el límite efectivo se multiplica y un reinicio los pone a cero. Hoy `compose.yaml` ejecuta una sola instancia `app`.
+- **Tamaño de cuerpo**: las rutas JSON rechazan cuerpos de más de 64 KB (4 MB en `/api/import`).
+
 ## Deploy con runner self-hosted
 
 El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano desde Actions → Deploy → Run workflow (eligiendo rama). Corre en el propio servidor con un runner self-hosted:

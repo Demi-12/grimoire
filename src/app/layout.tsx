@@ -16,6 +16,8 @@ export const metadata: Metadata = {
   description: "Tools for building Dungeons & Dragons characters and encounters.",
 };
 
+export const dynamic = "force-dynamic"; // the CSP nonce is per request, so even /_not-found must render on demand
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={fontVars} suppressHydrationWarning>

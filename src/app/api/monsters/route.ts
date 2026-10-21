@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const search = (params.get("search") ?? "").trim().toLocaleLowerCase("en-US");
   const page = Number(params.get("page") ?? "1");
   const limit = Number(params.get("limit") ?? "12");
+  if (search.length > 100) return NextResponse.json({ error: "Search text is too long." }, { status: 400 });
   if (requestedRating && !CHALLENGE_RATINGS.has(requestedRating)) {
     return NextResponse.json({ error: "Invalid challenge rating filter." }, { status: 400 });
   }

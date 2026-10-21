@@ -3,7 +3,7 @@ import { fetchMonsterDetail, upstreamErrorResponse } from "@/lib/monster-upstrea
 
 export async function GET(_request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
-  if (!/^[a-z0-9][a-z0-9-]*$/i.test(slug)) {
+  if (slug.length > 100 || !/^[a-z0-9][a-z0-9-]*$/i.test(slug)) {
     return NextResponse.json({ error: "Invalid monster identifier." }, { status: 400 });
   }
 
