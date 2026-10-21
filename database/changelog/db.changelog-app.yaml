@@ -194,3 +194,44 @@ databaseChangeLog:
                 ALTER COLUMN "status" SET DEFAULT 'pending',
                 ADD CONSTRAINT "user_role_check" CHECK ("role" IN ('admin', 'dm', 'player')),
                 ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('pending', 'approved', 'blocked'));
+
+  - changeSet:
+      id: data-005-homebrew-monsters
+      author: grimoire
+      comment: >-
+        Homebrew monster stat blocks. Private to the owner by default; the owner can share one with chosen
+        campaigns or publish it to every approved account on the instance. An admin can lock a monster,
+        which forces it back to private and stops the owner from publishing it again.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "homebrew_monster" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "ownerId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "name" TEXT NOT NULL CHECK (char_length(btrim("name")) BETWEEN 1 AND 80),
+                "cr" NUMERIC NOT NULL CHECK ("cr" BETWEEN 0 AND 30),
+                "xp" INTEGER NOT NULL CHECK ("xp" BETWEEN 0 AND 200000),
+                "type" TEXT NOT NULL DEFAULT '' CHECK (char_length("type") <= 40),
+                "roleTags" JSONB NOT NULL DEFAULT '[]'::jsonb,
+                "statBlock" JSONB NOT NULL CHECK (octet_length("statBlock"::text) <= 40000),
+                "visibility" TEXT NOT NULL DEFAULT 'private' CHECK ("visibility" IN ('private', 'campaign', 'instance')),
+                "locked" BOOLEAN NOT NULL DEFAULT false,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+              CREATE INDEX "homebrew_monster_ownerId_idx" ON "homebrew_monster" ("ownerId");
+              CREATE INDEX "homebrew_monster_instance_idx" ON "homebrew_monster" ("updatedAt") WHERE "visibility" = 'instance';
+
+              CREATE TABLE "homebrew_monster_campaign" (
+                "monsterId" UUID NOT NULL REFERENCES "homebrew_monster" ("id") ON DELETE CASCADE,
+                "campaignId" UUID NOT NULL REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                PRIMARY KEY ("monsterId", "campaignId")
+              );
+              CREATE INDEX "homebrew_monster_campaign_campaignId_idx" ON "homebrew_monster_campaign" ("campaignId");
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              DROP TABLE IF EXISTS "homebrew_monster_campaign";
+              DROP TABLE IF EXISTS "homebrew_monster";
