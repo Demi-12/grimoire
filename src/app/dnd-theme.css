@@ -395,3 +395,6 @@ body { background-image: var(--grain), var(--mottle),
   .small-action, .text-button { min-height: 44px; min-width: 44px; }
   .icon-button { width: 44px; height: 44px; }
 }
+
+/* Kept in the DOM for printing (the PDF sheet lives in the character cards) but not shown on screen. */
+@media screen { .screen-hidden { display: none !important; } }

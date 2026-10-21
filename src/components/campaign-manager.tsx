@@ -16,6 +16,8 @@ type Props = {
   locale: Locale;
   /** Reload campaigns and characters after a change. */
   onChanged: () => Promise<void>;
+  /** Open a character's full sheet. */
+  onOpenCharacter?: (id: string) => void;
 };
 
 const text = {
@@ -34,7 +36,7 @@ const text = {
     addMember: "Add by email or name", addAs: "as", add: "Add", added: (name: string) => `${name} joined the table.`,
     noHeroes: "No heroes have joined this campaign yet.", addHero: "Bring one of your characters",
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
-    removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
+    viewSheet: "View sheet", removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
     invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone who opens the link and signs in joins as a player. Links expire after 7 days.",
     journal: "Encounter journal",
@@ -56,7 +58,7 @@ const text = {
     addMember: "Añadir por correo o nombre", addAs: "como", add: "Añadir", added: (name: string) => `${name} se ha unido a la mesa.`,
     noHeroes: "Todavía no se han unido héroes a esta campaña.", addHero: "Trae uno de tus personajes",
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
-    removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    viewSheet: "Ver ficha", removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
     invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien abra el enlace e inicie sesión se une como jugador. Los enlaces caducan a los 7 días.",
     journal: "Diario de encuentros",
@@ -65,7 +67,7 @@ const text = {
   },
 };
 
-export default function CampaignManager({ me, campaigns, characters, locale, onChanged }: Props) {
+export default function CampaignManager({ me, campaigns, characters, locale, onChanged, onOpenCharacter }: Props) {
   const t = text[locale];
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -184,6 +186,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
           {heroes.length ? <ul className={styles.memberList}>{heroes.map((character) => <li key={character.id}>
             <span className={styles.sigle}>✦</span>
             <span className={styles.heroName}>{character.name}<small>{t.level(character.level)}{character.className ? ` · ${character.className}` : ""} · {t.by(character.ownerName)}</small></span>
+            {onOpenCharacter && <button type="button" className={styles.quietButton} onClick={() => onOpenCharacter(character.id)} aria-label={`${t.viewSheet}: ${character.name}`}>{t.viewSheet}</button>}
             {(campaign.canManage || character.editable) && <button type="button" className={styles.removeHero} disabled={busy} aria-label={`${t.removeHero}: ${character.name}`}
               onClick={() => void run(() => api(`/api/campaigns/${campaign.id}/characters/${character.id}`, { method: "DELETE" }))}>×</button>}
           </li>)}</ul> : <p className={styles.noMembers}>{t.noHeroes}</p>}
