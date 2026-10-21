@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backgrounds, species } from "./dnd2024";
+import { backgrounds, classes, species, weaponTable } from "./dnd2024";
 import { attackList, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
 
 const fighter: CharacterBuild = {
@@ -97,6 +97,18 @@ describe("attack list", () => {
     const barbarian = { ...fighter, classId: "barbarian" as const, classEquipment: "A" as const };
     const greataxe = attackList(barbarian, deriveSheet(barbarian, 1)!).find((attack) => attack.name.en === "Greataxe");
     expect(greataxe).toMatchObject({ dice: "1d12", modifier: 3, bonus: 5 }); // STR 17, proficient (+2)
-    expect(attackList({ ...barbarian, classEquipment: "B" }, deriveSheet(barbarian, 1)!)).toEqual([]);
+    // Taking the gold instead of the class gear leaves only the background's weapons (Soldier: Spear, Shortbow).
+    const goldOnly = { ...barbarian, classEquipment: "B" as const };
+    expect(attackList(goldOnly, deriveSheet(goldOnly, 1)!).map((attack) => attack.name.en).sort()).toEqual(["Shortbow", "Spear"]);
+  });
+});
+
+describe("weapon data", () => {
+  it("lists every weapon named in the starting equipment by id", () => {
+    const byName = new Map(Object.entries(weaponTable).map(([id, weapon]) => [weapon.name.en, id]));
+    for (const option of [...classes, ...backgrounds].flatMap((entry) => entry.equipment)) {
+      const named = option.items.map((item) => byName.get(item.en.replace(/^\d+ /, "").replace(/s$/, "").replace(/^.*Focus \((.*)\)$/, "$1")) ?? byName.get(item.en.replace(/^\d+ /, ""))).filter(Boolean);
+      expect(option.weapons ?? []).toEqual(expect.arrayContaining(named as string[]));
+    }
   });
 });
