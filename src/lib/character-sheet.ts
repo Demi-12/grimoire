@@ -1,8 +1,9 @@
 /** Derived character sheet values for characters built with the 2024 step-by-step creator. */
 import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "./rules";
 import {
-  armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
-  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId, type Text, type WeaponProperty, weaponTable,
+  armorTable, canMasterWeapon, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY, weaponMasteryCount,
+  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type MasteryId, type SkillKey, type SpeciesId, type Text, type WeaponId,
+  type WeaponProperty, weaponTable,
 } from "./dnd2024";
 import { featInfo, type FightingStyleId, type LevelFeatId } from "./levelup-data";
 
@@ -64,6 +65,8 @@ export interface CharacterBuild {
   languages: number[];
   classEquipment: "A" | "B" | "C";
   backgroundEquipment: "A" | "B";
+  /** Kinds of weapons whose mastery property the character can use; builds saved before this field have none. */
+  weaponMasteries?: WeaponId[];
   alignment: number;
   appearance: string;
 }
@@ -242,9 +245,23 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
   };
 }
 
-export interface SheetAttack { name: Text; bonus: number; dice: string; modifier: number; type: Text }
+/** Whether the chosen masteries are distinct, allowed for the class and exactly as many as it has at `level`. */
+export function validWeaponMasteries(build: Pick<CharacterBuild, "classId" | "weaponMasteries">, level: number): boolean {
+  const chosen = build.weaponMasteries ?? [];
+  return chosen.length === weaponMasteryCount(build.classId, level) && new Set(chosen).size === chosen.length
+    && chosen.every((id) => canMasterWeapon(build.classId, id));
+}
 
-/** Weapons in the chosen class and background gear with their attack bonus and damage. */
+export interface SheetAttack {
+  name: Text; bonus: number; dice: string; modifier: number; type: Text;
+  mastery?: MasteryId;
+  /** Tactical Master (Fighter 9): properties that can replace the weapon's own on an attack. */
+  masteryAlternatives?: MasteryId[];
+}
+
+const tacticalMasterOptions: MasteryId[] = ["push", "sap", "slow"];
+
+/** Weapons in the chosen class and background gear, then any other mastered weapon, with attack bonus, damage and mastery. */
 export function attackList(build: CharacterBuild, sheet: DerivedSheet): SheetAttack[] {
   const cls = findClass(build.classId);
   if (!cls) return [];
@@ -254,18 +271,23 @@ export function attackList(build: CharacterBuild, sheet: DerivedSheet): SheetAtt
   const restriction = /with the (Light|Finesse)(?: or (Light|Finesse))? property/.exec(training)?.slice(1).filter(Boolean).map((word) => word.toLowerCase()) ?? [];
   const str = abilityModifier(sheet.scores.str);
   const dex = abilityModifier(sheet.scores.dex);
-  return [...new Set([...(classGear.weapons ?? []), ...(backgroundGear?.weapons ?? [])])].map((id) => {
+  const mastered = new Set((build.weaponMasteries ?? []).filter((id) => canMasterWeapon(build.classId, id)));
+  const tacticalMaster = build.classId === "fighter" && sheet.level >= 9;
+  return [...new Set([...(classGear.weapons ?? []), ...(backgroundGear?.weapons ?? []), ...mastered])].map((id) => {
     const weapon = weaponTable[id];
     const modifier = weapon.ranged ? dex : weapon.properties.includes("finesse") ? Math.max(str, dex) : str;
     const trained = weapon.martial
       ? /Martial/.test(training) && (restriction.length === 0 || restriction.some((property) => weapon.properties.includes(property as WeaponProperty)))
       : /Simple/.test(training);
-    return { name: weapon.name, bonus: modifier + (trained ? sheet.proficiency : 0), dice: weapon.dice, modifier, type: weapon.type };
+    const attack: SheetAttack = { name: weapon.name, bonus: modifier + (trained ? sheet.proficiency : 0), dice: weapon.dice, modifier, type: weapon.type };
+    if (!mastered.has(id)) return attack;
+    const alternatives = tacticalMaster ? tacticalMasterOptions.filter((option) => option !== weapon.mastery) : [];
+    return { ...attack, mastery: weapon.mastery, ...(alternatives.length ? { masteryAlternatives: alternatives } : {}) };
   });
 }
 
 /** Problems that block finishing each step; an empty list means the step is complete. */
-export function stepIssues(build: CharacterBuild, step: number): string[] {
+export function stepIssues(build: CharacterBuild, step: number, level = 1): string[] {
   const issues: string[] = [];
   const cls = findClass(build.classId);
   const sp = findSpecies(build.speciesId);
@@ -277,6 +299,7 @@ export function stepIssues(build: CharacterBuild, step: number): string[] {
   if (step === 4 && cls && build.classSkills.length !== cls.skillCount) issues.push("classSkills");
   if (step === 4 && characterFeats(build).includes("skilled") && build.featSkills.length !== 3) issues.push("featSkills");
   if (step === 4 && cls?.expertiseAtLevel1 && build.expertise.length !== cls.expertiseAtLevel1) issues.push("expertise");
+  if (step === 4 && !validWeaponMasteries(build, level)) issues.push("weaponMasteries");
   if (step === 6 && build.languages.length !== 2) issues.push("languages");
   return issues;
 }

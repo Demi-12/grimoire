@@ -2,6 +2,7 @@
  * Pure access rules and input validation shared by route handlers and tests.
  * Nothing here touches the database, so every rule can be unit tested.
  */
+import { canMasterWeapon, findClass, isWeaponId, weaponMasteryCount } from "./dnd2024";
 
 // Site-wide: admins manage accounts. DM/player is not an account property but a per-campaign role.
 export const siteRoles = ["admin", "user"] as const;
@@ -86,6 +87,20 @@ export interface CharacterInput {
 }
 
 const MAX_BUILD_JSON = 16_000;
+const MAX_WEAPON_MASTERIES = 6;
+
+/**
+ * Weapon Mastery picks must be distinct known weapons the build's class can master, no more than it has at `level`.
+ * Builds saved before the field existed have none and are still accepted.
+ */
+function validBuildMasteries(build: Record<string, unknown>, level: number): boolean {
+  const picks = build.weaponMasteries;
+  if (picks === undefined) return true;
+  if (!Array.isArray(picks) || picks.length > MAX_WEAPON_MASTERIES || new Set(picks).size !== picks.length || !picks.every(isWeaponId)) return false;
+  const classId = build.classId as string;
+  if (!findClass(classId)) return true;
+  return picks.length <= weaponMasteryCount(classId, level) && picks.every((id) => canMasterWeapon(classId, id));
+}
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: unknown): value is string => typeof value === "string" && uuidPattern.test(value);
@@ -123,6 +138,7 @@ export function parseCharacterInput(body: unknown): CharacterInput | null {
     if (typeof value.build !== "object" || Array.isArray(value.build)) return null;
     if (JSON.stringify(value.build).length > MAX_BUILD_JSON) return null;
     build = value.build as Record<string, unknown>;
+    if (!validBuildMasteries(build, value.level as number)) return null;
   }
   return { name, level: value.level as number, className, species, background, scores, notes, campaignId, ...(build ? { build } : {}) };
 }

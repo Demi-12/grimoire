@@ -79,6 +79,19 @@ describe("parseCharacterInput", () => {
     expect(parseCharacterInput({ name: "A", level: 1, scores, build: { notes: "x".repeat(16_001) } })).toBeNull();
   });
 
+  it("checks Weapon Mastery picks against the class and level, accepting builds without them", () => {
+    const parse = (weaponMasteries: unknown, level = 1, classId = "fighter") => parseCharacterInput({ name: "A", level, scores, build: { version: 1, classId, weaponMasteries } });
+    expect(parse(undefined)?.build).toEqual({ version: 1, classId: "fighter" });
+    expect(parse(["greatsword", "flail", "javelin"])?.build?.weaponMasteries).toEqual(["greatsword", "flail", "javelin"]);
+    expect(parse(["greatsword", "flail", "javelin", "maul"])).toBeNull();
+    expect(parse(["greatsword", "flail", "javelin", "maul"], 4)).not.toBeNull();
+    expect(parse(["greatsword", "greatsword"])).toBeNull();
+    expect(parse(["lightsaber"])).toBeNull();
+    expect(parse("greatsword")).toBeNull();
+    expect(parse(["longbow"], 1, "barbarian")).toBeNull();
+    expect(parse(["dagger"], 1, "wizard")).toBeNull();
+  });
+
   it("keeps a valid campaign id", () => {
     const campaignId = "3f1c2b8e-6d4a-4c1e-9a2b-1234567890ab";
     expect(parseCharacterInput({ name: "A", level: 1, scores, campaignId })?.campaignId).toBe(campaignId);

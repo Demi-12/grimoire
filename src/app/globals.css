@@ -118,7 +118,7 @@
   body[data-printing-sheet] .sheet-writing-area.short{height:20mm}
   body[data-printing-sheet] .sheet-equipment-table>div{display:grid;grid-template-columns:1.5fr .4fr .5fr 1.3fr;min-height:6.5mm;border:1px solid #c3b28d;border-bottom:0;background:#fffaf0!important}
   body[data-printing-sheet] .sheet-equipment-table>div:last-child{border-bottom:1px solid #c3b28d}
-  body[data-printing-sheet] .sheet-attack-table>div{grid-template-columns:1.5fr .4fr 1.8fr}
+  body[data-printing-sheet] .sheet-attack-table>div{grid-template-columns:1.3fr .4fr 1.4fr 1.9fr}
   body[data-printing-sheet] .sheet-equipment-table>div>*{padding:1mm 1.5mm;border-right:1px solid #c3b28d;font:7px var(--font-body)}
   body[data-printing-sheet] .sheet-equipment-table>div>*:last-child{border-right:0}
   body[data-printing-sheet] .sheet-equipment-table>div>b{font:7px var(--font-label);color:#6c6047;text-transform:uppercase}

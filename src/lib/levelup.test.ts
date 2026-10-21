@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveSheet, finalScores, type CharacterBuild } from "./character-sheet";
-import { applyLevelUp, levelGains, levelUpIssues, levelUpSteps, subclassLabel } from "./levelup";
+import { applyLevelUp, levelGains, levelUpIssues, levelUpSteps, masteriesToAdd, subclassLabel } from "./levelup";
 import { classFeatures, spellProgress, subclassFeatures } from "./levelup-data";
 import { classes } from "./dnd2024";
 
@@ -9,7 +9,7 @@ const fighter: CharacterBuild = {
   abilityMethod: "standard", baseScores: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
   bonusMode: "plus2plus1", bonusAbilities: ["str", "con"], classSkills: ["perception", "survival"],
   speciesSkills: ["insight"], speciesFeat: "alert", featSkills: [], expertise: [], languages: [1, 4],
-  classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "",
+  weaponMasteries: ["greatsword", "flail", "javelin", "longsword", "longbow", "battleaxe"], classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "",
 };
 
 describe("which choices each level offers", () => {
@@ -21,8 +21,9 @@ describe("which choices each level offers", () => {
     expect(levelUpSteps(fighter, 7)).toEqual(["hp", "fightingStyle"]);
     expect(levelUpSteps({ ...fighter, useSubclass: false }, 7)).toEqual(["hp"]);
     expect(levelUpSteps(fighter, 19)).toEqual(["hp", "boon"]);
-    expect(levelUpSteps({ ...fighter, classId: "rogue" }, 10)).toEqual(["hp", "asi"]);
-    expect(levelUpSteps({ ...fighter, classId: "rogue" }, 6)).toEqual(["hp", "expertise"]);
+    const rogue: CharacterBuild = { ...fighter, classId: "rogue", weaponMasteries: ["dagger", "shortbow"] };
+    expect(levelUpSteps(rogue, 10)).toEqual(["hp", "asi"]);
+    expect(levelUpSteps(rogue, 6)).toEqual(["hp", "expertise"]);
     expect(levelUpSteps({ ...fighter, classId: "paladin" }, 2)).toEqual(["hp", "fightingStyle"]);
     expect(levelUpSteps({ ...fighter, classId: "bard" }, 2)).toEqual(["hp", "expertise"]);
   });
@@ -124,7 +125,7 @@ describe("other choices", () => {
   });
 
   it("Expertise needs proficient skills without Expertise", () => {
-    const rogue: CharacterBuild = { ...fighter, classId: "rogue", expertise: ["perception", "survival"] };
+    const rogue: CharacterBuild = { ...fighter, classId: "rogue", weaponMasteries: ["dagger", "shortbow"], expertise: ["perception", "survival"] };
     expect(levelUpIssues(rogue, 6, { level: 6, expertise: ["insight", "perception"] }, null)).toContain("expertise");
     expect(levelUpIssues(rogue, 6, { level: 6, expertise: ["insight", "athletics"] }, null)).toEqual([]);
     expect(levelUpIssues(rogue, 6, { level: 6, expertise: ["insight", "arcana"] }, null)).toContain("expertise");
@@ -167,3 +168,31 @@ describe("what a level gives", () => {
   });
 });
 
+
+describe("weapon mastery", () => {
+  const starter: CharacterBuild = { ...fighter, weaponMasteries: ["greatsword", "flail", "javelin"] };
+
+  it("asks for a new weapon when the class gains a mastery", () => {
+    expect(levelUpSteps(starter, 3)).not.toContain("mastery");
+    expect(levelUpSteps(starter, 4)).toEqual(["hp", "asi", "mastery"]);
+    expect(levelUpSteps({ ...starter, classId: "barbarian", weaponMasteries: ["greataxe", "handaxe"] }, 4)).toContain("mastery");
+    expect(levelUpSteps({ ...starter, classId: "paladin", weaponMasteries: ["longsword", "javelin"] }, 4)).not.toContain("mastery");
+    expect(levelGains("fighter", 4, true).scaling).toContainEqual(expect.objectContaining({ from: "3", to: "4" }));
+  });
+
+  it("fills every slot for builds saved before masteries were tracked", () => {
+    const legacy = { ...starter, weaponMasteries: undefined };
+    expect(masteriesToAdd(legacy, 2)).toBe(3);
+    expect(levelUpSteps(legacy, 2)).toEqual(["hp", "mastery"]);
+  });
+
+  it("validates new picks and adds them to the build", () => {
+    const choice = { level: 4, asi: { str: 2 } };
+    expect(levelUpIssues(starter, 4, choice, null)).toContain("mastery");
+    expect(levelUpIssues(starter, 4, choice, null, ["flail"])).toContain("mastery");
+    expect(levelUpIssues(starter, 4, choice, null, ["maul", "rapier"])).toContain("mastery");
+    expect(levelUpIssues(starter, 4, choice, null, ["maul"])).toEqual([]);
+    expect(applyLevelUp(starter, 4, choice, null, ["maul"]).weaponMasteries).toEqual(["greatsword", "flail", "javelin", "maul"]);
+    expect(applyLevelUp(starter, 3, { level: 3 }, { kind: "srd" }, ["maul"]).weaponMasteries).toEqual(starter.weaponMasteries);
+  });
+});
