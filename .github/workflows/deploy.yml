@@ -63,19 +63,26 @@ jobs:
 
       - name: Update production checkout
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # El repo es privado: autentica cada clone/fetch con el GITHUB_TOKEN
+          # del job sin guardarlo en el remote ni en la config del servidor.
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git_auth() { git -c "http.extraheader=AUTHORIZATION: basic $auth" "$@"; }
           repo="${GRIMOIRE_DIR:-$HOME/grimoire}"
           if [ ! -d "$repo/.git" ]; then
             echo "No existe $repo; clonando el repositorio..."
-            git clone --quiet "$REPO_URL" "$repo"
+            git_auth clone --quiet "$REPO_URL" "$repo"
           fi
           git -C "$repo" remote set-url origin "$REPO_URL"
           if [ -n "$DEPLOY_SHA" ]; then
-            git -C "$repo" fetch --quiet origin main
+            git_auth -C "$repo" fetch --quiet origin main
             git -C "$repo" checkout --quiet --detach "$DEPLOY_SHA"
           else
-            git -C "$repo" fetch --quiet origin "refs/heads/$DEPLOY_BRANCH"
+            git_auth -C "$repo" fetch --quiet origin "refs/heads/$DEPLOY_BRANCH"
             git -C "$repo" checkout --quiet --detach FETCH_HEAD
           fi
           echo "Desplegando $(git -C "$repo" log -1 --format='%h %s')"
