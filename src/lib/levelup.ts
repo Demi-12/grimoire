@@ -10,9 +10,10 @@ import {
   spellProgress, SUBCLASS_LEVEL, subclassFeatures, type ExpertiseGrant, type Feature, type LevelFeatId, type Scaling,
   type SpellProgress,
 } from "./levelup-data";
+import { findBookSubclass } from "./subclasses";
 
 export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "expertise";
-export type SubclassPick = { kind: "srd" } | { kind: "custom"; name: string };
+export type SubclassPick = { kind: "srd" } | { kind: "book"; id: string } | { kind: "custom"; name: string };
 
 export const MAX_LEVEL = 20;
 export const MAX_CUSTOM_SUBCLASS = 60;
@@ -79,13 +80,19 @@ function asiValid(build: CharacterBuild, level: number, asi: LevelUpChoice["asi"
   return shape && entries.every(([key, amount]) => scores[key as AbilityKey] + amount <= 20);
 }
 
+function subclassPickValid(build: CharacterBuild, pick: SubclassPick | null): boolean {
+  if (pick?.kind === "srd") return true;
+  if (pick?.kind === "book") return !!findBookSubclass(build.classId, pick.id);
+  return pick?.kind === "custom" && !!pick.name.trim();
+}
+
 /** Problems that block this level-up, as keys the guide turns into messages. Empty means ready to save. */
 export function levelUpIssues(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): string[] {
   const steps = levelUpSteps(build, level);
   const issues: string[] = [];
   const cls = findClass(build.classId);
   if (choice.hp !== undefined && (!Number.isInteger(choice.hp) || choice.hp < 1 || choice.hp > (cls?.hitDie ?? 12))) issues.push("hp");
-  if (steps.includes("subclass") && !(subclass?.kind === "srd" || (subclass?.kind === "custom" && subclass.name.trim()))) issues.push("subclass");
+  if (steps.includes("subclass") && !subclassPickValid(build, subclass)) issues.push("subclass");
   if (steps.includes("asi")) {
     const usesAsi = Object.values(choice.asi ?? {}).some(Boolean);
     const valid = usesAsi ? !choice.feat && asiValid(build, level, choice.asi) : !!choice.feat && !featPickIssue(build, level, choice.feat, asiFeats);
@@ -112,8 +119,13 @@ export function applyLevelUp(build: CharacterBuild, level: number, choice: Level
   if (steps.includes("fightingStyle")) clean.fightingStyle = choice.fightingStyle;
   if (steps.includes("expertise")) clean.expertise = choice.expertise;
   const next: CharacterBuild = { ...build, levelUps: [...(build.levelUps ?? []).filter((entry) => entry.level < level), clean] };
-  if (steps.includes("subclass") && subclass?.kind === "srd") { next.useSubclass = true; delete next.customSubclass; }
-  if (steps.includes("subclass") && subclass?.kind === "custom") { next.useSubclass = false; next.customSubclass = subclass.name.trim().slice(0, MAX_CUSTOM_SUBCLASS); }
+  if (steps.includes("subclass") && subclass) {
+    delete next.subclassId;
+    delete next.customSubclass;
+    next.useSubclass = subclass.kind === "srd";
+    if (subclass.kind === "book") next.subclassId = subclass.id;
+    if (subclass.kind === "custom") next.customSubclass = subclass.name.trim().slice(0, MAX_CUSTOM_SUBCLASS);
+  }
   return next;
 }
 
@@ -153,6 +165,8 @@ export function levelGains(classId: ClassId, level: number, srdSubclass: boolean
 export function subclassLabel(build: CharacterBuild, level: number, locale: "en" | "es"): string {
   if (level < SUBCLASS_LEVEL) return "";
   if (build.useSubclass) return say(findClass(build.classId)?.subclass, locale);
+  const book = findBookSubclass(build.classId, build.subclassId);
+  if (book) return say(book.name, locale);
   return build.customSubclass?.trim() ?? "";
 }
 

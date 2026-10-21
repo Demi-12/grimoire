@@ -3,6 +3,7 @@ import { deriveSheet, finalScores, type CharacterBuild } from "./character-sheet
 import { applyLevelUp, levelGains, levelUpIssues, levelUpSteps, subclassLabel } from "./levelup";
 import { classFeatures, spellProgress, subclassFeatures } from "./levelup-data";
 import { classes } from "./dnd2024";
+import { srdSubclassMatches, subclassesFor } from "./subclasses";
 
 const fighter: CharacterBuild = {
   version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
@@ -62,6 +63,28 @@ describe("subclass", () => {
     const srd = applyLevelUp(custom, 3, { level: 3 }, { kind: "srd" });
     expect(srd.customSubclass).toBeUndefined();
     expect(subclassLabel(srd, 3, "en")).toBe("Champion");
+  });
+
+  it("accepts any Player's Handbook subclass of the class, but not another class's", () => {
+    expect(levelUpIssues(fighter, 3, { level: 3 }, { kind: "book", id: "psiWarrior" })).not.toContain("subclass");
+    expect(levelUpIssues(fighter, 3, { level: 3 }, { kind: "book", id: "gloomStalker" })).toContain("subclass");
+    expect(levelUpIssues(fighter, 3, { level: 3 }, { kind: "book", id: "champion" })).toContain("subclass");
+    const book = applyLevelUp({ ...fighter, customSubclass: "Old" }, 3, { level: 3 }, { kind: "book", id: "battleMaster" });
+    expect(book.useSubclass).toBe(false);
+    expect(book.customSubclass).toBeUndefined();
+    expect(subclassLabel(book, 3, "es")).toBe("Maestro del Combate");
+    expect(levelGains("fighter", 3, book.useSubclass).subclassFeatures).toEqual([]);
+    expect(subclassLabel(applyLevelUp(book, 3, { level: 3 }, { kind: "srd" }), 3, "en")).toBe("Champion");
+  });
+
+  it("lists the 48 Player's Handbook subclasses, four per class with the SRD one first", () => {
+    for (const cls of classes) {
+      const list = subclassesFor(cls.id);
+      expect(list, cls.id).toHaveLength(4);
+      expect(list[0].srd, cls.id).toBe(true);
+      expect(list.filter((entry) => entry.srd), cls.id).toHaveLength(1);
+      expect(srdSubclassMatches(cls.id), cls.id).toBe(true);
+    }
   });
 });
 

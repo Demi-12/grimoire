@@ -11,6 +11,7 @@ import {
 } from "@/lib/levelup";
 import { epicBoons, featInfo, fightingStyles, subclassFeatures, type Feature, type LevelFeatId, type FightingStyleId } from "@/lib/levelup-data";
 import styles from "./character-wizard.module.css";
+import { subclassesFor } from "@/lib/subclasses";
 import own from "./level-up.module.css";
 
 export interface LevelUpResult { level: number; build: CharacterBuild }
@@ -41,8 +42,9 @@ const copy = {
     hpAverage: "Take the average", hpAverageHelp: "A fixed number, no luck involved.", hpRoll: "Roll the die", hpRollHelp: "Could be higher or lower than average. At the table, roll a real die if you prefer.",
     recommended: "Recommended", rollFor: "Roll for me", rollLabel: (die: number) => `Result of your d${die}`, hpGain: (gain: number) => `You gain +${gain} HP this level (your Constitution modifier is included).`,
     subclassIntro: "At level 3 every class picks a subclass: a specialty that gives your character a unique style and extra abilities as they level. You can't change it later, so read the options.",
-    subclassSrd: "Use the SRD subclass", subclassOther: "Another subclass (from a book you own)", subclassOtherHelp: "Type its name; Grimoire will show it on your sheet but won't track its abilities.", subclassName: "Subclass name",
+    subclassSrd: "Free SRD · abilities tracked", subclassOther: "Another subclass (homebrew or another book)", subclassOtherHelp: "Type its name; Grimoire will show it on your sheet but won't track its abilities.", subclassName: "Subclass name",
     subclassSrdNote: "This is the subclass in the free System Reference Document.", level: "level",
+    subclassBook: "Player's Handbook", subclassBookNote: "Grimoire shows it on your sheet; look up its abilities in your book.",
     asiIntro: "Your hero improves! Choose one: raise your ability scores, or take a feat (a special talent). Scores can't go above 20.",
     asiScores: "Raise ability scores", asiScoresHelp: "Simple and always useful.", asiFeat: "Take a feat", asiFeatHelp: "A special talent instead of a score increase.",
     plus2: "+2 to one score", plus1: "+1 to two scores", pickOne: "Pick one ability.", pickTwo: "Pick two different abilities.", recommendedAbility: "★ Good for your class", capped: "Already at the maximum",
@@ -74,8 +76,9 @@ const copy = {
     hpAverage: "Tomar el promedio", hpAverageHelp: "Un número fijo, sin azar.", hpRoll: "Tirar el dado", hpRollHelp: "Puede salir más o menos que el promedio. En la mesa, tira un dado real si prefieres.",
     recommended: "Recomendado", rollFor: "Tirar por mí", rollLabel: (die: number) => `Resultado de tu d${die}`, hpGain: (gain: number) => `Ganas +${gain} PG este nivel (ya incluye tu modificador de Constitución).`,
     subclassIntro: "En el nivel 3 toda clase elige una subclase: una especialidad que da a tu personaje un estilo único y habilidades extra al subir. No se puede cambiar después, así que lee las opciones.",
-    subclassSrd: "Usar la subclase del SRD", subclassOther: "Otra subclase (de un libro que tengas)", subclassOtherHelp: "Escribe su nombre; Grimoire la mostrará en tu ficha pero no seguirá sus habilidades.", subclassName: "Nombre de la subclase",
+    subclassSrd: "SRD gratuito · rasgos incluidos", subclassOther: "Otra subclase (casera o de otro libro)", subclassOtherHelp: "Escribe su nombre; Grimoire la mostrará en tu ficha pero no seguirá sus habilidades.", subclassName: "Nombre de la subclase",
     subclassSrdNote: "Es la subclase del System Reference Document gratuito.", level: "nivel",
+    subclassBook: "Manual del Jugador", subclassBookNote: "Grimoire la muestra en tu ficha; consulta sus rasgos en tu libro.",
     asiIntro: "¡Tu héroe mejora! Elige una opción: subir tus características o tomar una dote (un talento especial). Las características no pueden pasar de 20.",
     asiScores: "Subir características", asiScoresHelp: "Sencillo y siempre útil.", asiFeat: "Tomar una dote", asiFeatHelp: "Un talento especial en vez de subir características.",
     plus2: "+2 a una característica", plus1: "+1 a dos características", pickOne: "Elige una característica.", pickTwo: "Elige dos características distintas.", recommendedAbility: "★ Buena para tu clase", capped: "Ya está al máximo",
@@ -115,7 +118,8 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
 
   const [hpMode, setHpMode] = useState<"average" | "roll">("average");
   const [rollText, setRollText] = useState("");
-  const [subclass, setSubclass] = useState<"srd" | "custom" | "">("");
+  /** "srd", "custom" or the id of a Player's Handbook subclass. */
+  const [subclass, setSubclass] = useState("");
   const [customName, setCustomName] = useState("");
   const [asiKind, setAsiKind] = useState<"scores" | "feat">("scores");
   const [spread, setSpread] = useState<"plus2" | "plus1">("plus2");
@@ -143,7 +147,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
     ...(style ? { fightingStyle: style } : {}),
     ...(steps.includes("expertise") ? { expertise } : {}),
   };
-  const pick: SubclassPick | null = subclass === "srd" ? { kind: "srd" } : subclass === "custom" ? { kind: "custom", name: customName } : null;
+  const pick: SubclassPick | null = subclass === "srd" ? { kind: "srd" } : subclass === "custom" ? { kind: "custom", name: customName } : subclass ? { kind: "book", id: subclass } : null;
   const issues = levelUpIssues(build, next, choice, pick);
   const result = issues.length === 0 ? applyLevelUp(build, next, choice, pick) : null;
   const after = useMemo(() => result ? deriveSheet(result, next) : null, [result, next]);
@@ -237,10 +241,15 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
       {current === "subclass" && <>
         <p className={styles.intro}>{c.subclassIntro}</p>
         <div className={styles.cardGrid}>
-          <Choice selected={subclass === "srd"} onClick={() => setSubclass("srd")}><strong>{say(cls.subclass, locale)}</strong><small>{c.subclassSrd.toUpperCase()}</small><em>{c.subclassSrdNote}</em></Choice>
+          {subclassesFor(build.classId).map((entry) => {
+            const key = entry.srd ? "srd" : entry.id;
+            return <Choice key={key} selected={subclass === key} onClick={() => setSubclass(key)}><strong>{say(entry.name, locale)}</strong>
+              <small>{(entry.srd ? c.subclassSrd : c.subclassBook).toUpperCase()}</small><em>{say(entry.pitch, locale)}</em></Choice>;
+          })}
           <Choice selected={subclass === "custom"} onClick={() => setSubclass("custom")}><strong>{c.subclassOther}</strong><em>{c.subclassOtherHelp}</em></Choice>
         </div>
-        {subclass === "srd" && <div className={styles.detail}><h3>{say(cls.subclass, locale)}</h3><FeatureList items={subclassFeatures[build.classId][next] ?? []} locale={locale} /></div>}
+        {subclass === "srd" && <div className={styles.detail}><h3>{say(cls.subclass, locale)}</h3><p className={styles.note}>{c.subclassSrdNote}</p><FeatureList items={subclassFeatures[build.classId][next] ?? []} locale={locale} /></div>}
+        {pick?.kind === "book" && <p className={styles.note}>{c.subclassBookNote}</p>}
         {subclass === "custom" && <label className={`${styles.field} ${own.customName}`}>{c.subclassName}<input maxLength={MAX_CUSTOM_SUBCLASS} value={customName} onChange={(event) => setCustomName(event.target.value)} /></label>}
       </>}
 

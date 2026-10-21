@@ -146,7 +146,7 @@ Personajes (incluidas las elecciones del creador paso a paso) y campañas viven 
 ## Primera versión
 
 - El creador de personajes guía paso a paso con las reglas de 2024 (SRD 5.2): clase, trasfondo (aumentos de característica, dote de origen, habilidades), especie, características (matriz estándar, compra por 27 puntos o 4d6), competencias, equipo inicial y detalles. La ficha calcula PG, CA, iniciativa, salvaciones, habilidades con pericia, percepción pasiva, CD de conjuros y oro, y se imprime con esos valores. Los personajes antiguos siguen editándose con la edición rápida.
-- El creador incluye los 16 trasfondos del Manual del Jugador 2024, sus 10 dotes de origen y las 10 especies; solo hay una subclase por clase (la del SRD), para otras usa las notas o la edición rápida.
+- El creador incluye los 16 trasfondos del Manual del Jugador 2024, sus 10 dotes de origen y las 10 especies; se puede elegir cualquiera de las 48 subclases del Manual del Jugador 2024, pero solo la del SRD (una por clase) tiene sus rasgos en la ficha; las demás se muestran por nombre y sus rasgos se consultan en el libro.
 - El generador usa presupuestos por personaje de dificultad baja, moderada y alta; suma el presupuesto según el nivel de cada aventurero y propone combinaciones que no exceden el total.
 - El generador puede usar todos los monstruos del SRD desde la API pública de D&D 5e (dnd5eapi.co), filtrar por tipo de criatura y limitar cada encuentro a 1-3 tipos de criatura. El servidor descarga el catálogo la primera vez (unos segundos) y lo guarda en memoria un día; necesita salida a Internet.
 - El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP; el catálogo queda en el almacenamiento local del navegador.
