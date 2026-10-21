@@ -31,7 +31,6 @@ function MonsterPortrait({ monster, label }: { monster: MonsterStatBlock; label:
     return <figure className={styles.portrait}><img src={`${IMAGE_HOST}${monster.image}`} alt={monster.name} loading="lazy" onError={() => setFailed(true)} /></figure>;
   }
   return <figure className={styles.portrait}><div className={styles.portraitFallback} role="img" aria-label={label}>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3c-4.4 0-7 2.9-7 6.5 0 2 .8 3.4 2 4.4V17h2v-1.5h1V17h2v-1.5h1V17h2v-3.1c1.2-1 2-2.4 2-4.4C19 5.9 16.4 3 12 3z" /><circle cx="9.5" cy="10" r="1.2" /><circle cx="14.5" cy="10" r="1.2" /><path d="M9 20h6" /></svg>
     <span>{label}</span>
   </div></figure>;
 }
