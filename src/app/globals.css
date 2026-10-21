@@ -495,3 +495,11 @@ body { font-variant-emoji: text; }
   .workspace-header .header-control,.workspace-header .header-admin,.workspace-header .header-signout{box-sizing:border-box;height:32px;min-height:32px;min-width:32px;padding:0 8px;justify-content:center;border-radius:6px;display:inline-flex;align-items:center;margin:0}
   .workspace-header select.header-control{max-width:none;padding:0 6px;font-size:11px}
 }
+
+/* Desktop: most type is set in small px values, so scale the whole UI up on wide screens. */
+@media screen and (min-width: 1024px) {
+  :root { --ui-zoom: 1.25; }
+  html { zoom: var(--ui-zoom); }
+  .app-shell { min-height: calc(100vh / var(--ui-zoom)); }
+  .sidebar { height: calc(100vh / var(--ui-zoom)); }
+}
