@@ -177,7 +177,7 @@ export function AuthPanel({ initialMode = "sign-in", locale, googleEnabled = fal
   return (
     <section aria-labelledby="auth-title" style={panelStyle}>
       <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--serif)", margin: "8px 0 22px", color: "var(--ink)" }}>{title}</h1>
+      <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--font-display)", margin: "8px 0 22px", color: "var(--ink)" }}>{title}</h1>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 15 }}>
         {mode === "sign-up" && <Field label={t.name}><input style={inputStyle} autoComplete="name" maxLength={100} required value={name} onChange={event => setName(event.target.value)} /></Field>}
         {(["sign-in", "sign-up", "forgot-password"].includes(mode)) && <Field label={t.email}><input style={inputStyle} type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></Field>}
@@ -312,12 +312,12 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
   return (
     <section aria-labelledby="auth-security-title" style={panelStyle}>
       <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-security-title" style={{ font: "500 27px/1.2 var(--serif)", margin: "8px 0 5px", color: "var(--ink)" }}>{t.settings}</h1>
+      <h1 id="auth-security-title" style={{ font: "500 27px/1.2 var(--font-display)", margin: "8px 0 5px", color: "var(--ink)" }}>{t.settings}</h1>
       <p style={{ color: "var(--muted)", marginTop: 0 }}>{t.signedIn} <strong>{email}</strong></p>
 
       <div style={{ display: "grid", gap: 18, marginTop: 24 }}>
         <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>{t.passkeys}</h2>
+          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>{t.passkeys}</h2>
           {passkeys.length === 0 ? <p style={{ color: "var(--muted)" }}>{t.noPasskeys}</p> : <ul style={{ paddingLeft: 20, display: "grid", gap: 8 }}>
             {passkeys.map(key => <li key={key.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
               <span>{key.name || (locale === "es" ? "Clave de acceso" : "Passkey")}</span>
@@ -328,7 +328,7 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
         </section>
 
         <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>2FA · TOTP</h2>
+          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>2FA · TOTP</h2>
           {twoFactorEnabled ? <>
             <p style={{ color: "var(--auth-ok)" }}>{t.twoFactorOn}</p>
             <Field label={t.enterPassword}><input style={inputStyle} type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} /></Field>
@@ -351,7 +351,7 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
         </section>
 
         <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>{t.changePassword}</h2>
+          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>{t.changePassword}</h2>
           <form onSubmit={event => void changePassword(event)} style={{ display: "grid", gap: 12 }}>
             <Field label={t.currentPassword}><input style={inputStyle} type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} /></Field>
             <Field label={t.newPassword}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={event => setNewPassword(event.target.value)} /></Field>
