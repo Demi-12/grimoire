@@ -5,6 +5,7 @@
  * Names are given in English and Spanish; rules text is summarized, not reproduced.
  */
 import type { AbilityKey } from "./rules";
+import type { Effect } from "./effects";
 
 export type Text = { en: string; es: string };
 
@@ -84,8 +85,8 @@ export interface ClassData {
   armor: Text;
   weapons: Text;
   tools?: Text;
-  /** Special unarmored Armor Class formula. */
-  unarmored?: "barbarian" | "monk";
+  /** Mechanics of the level 1 features (see effects.ts). */
+  effects?: Effect[];
   spellcasting?: { ability: AbilityKey; cantrips: number; prepared: number; slots: Text };
   weaponMasteries?: number;
   /** Rogues gain Expertise in two skills at level 1. */
@@ -105,7 +106,8 @@ export const classes: ClassData[] = [
     id: "barbarian", name: t("Barbarian", "Bárbaro"), hitDie: 12, primary: ["str"], saves: ["str", "con"],
     skillCount: 2, skillOptions: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"],
     armor: t("Light and Medium armor, Shields", "Armadura ligera y media, escudos"),
-    weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), unarmored: "barbarian", weaponMasteries: 2,
+    weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 2,
+    effects: [{ kind: "unarmoredDefense", add: ["con"] }],
     features: [t("Rage", "Furia"), t("Unarmored Defense", "Defensa sin armadura"), t("Weapon Mastery", "Maestría con armas")],
     subclass: t("Path of the Berserker", "Senda del berserker"),
     summary: t("A fierce warrior fueled by primal rage.", "Un guerrero feroz impulsado por una furia primigenia."),
@@ -173,7 +175,8 @@ export const classes: ClassData[] = [
     id: "monk", name: t("Monk", "Monje"), hitDie: 8, primary: ["dex", "wis"], saves: ["str", "dex"],
     skillCount: 2, skillOptions: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"],
     armor: t("None", "Ninguna"), weapons: t("Simple weapons and Martial weapons with the Light property", "Armas sencillas y marciales con la propiedad Ligera"),
-    tools: t("One Artisan's Tools or Musical Instrument", "Unas herramientas de artesano o un instrumento musical"), unarmored: "monk",
+    tools: t("One Artisan's Tools or Musical Instrument", "Unas herramientas de artesano o un instrumento musical"),
+    effects: [{ kind: "unarmoredDefense", add: ["wis"] }],
     features: [t("Martial Arts", "Artes marciales"), t("Unarmored Defense", "Defensa sin armadura")],
     subclass: t("Warrior of the Open Hand", "Guerrero de la Mano Abierta"),
     summary: t("A martial artist who channels inner power through body and mind.", "Un artista marcial que canaliza su poder interior."),
@@ -267,8 +270,9 @@ export const classes: ClassData[] = [
 
 export type FeatId =
   | "alert" | "crafter" | "healer" | "lucky" | "magicInitiate" | "musician" | "savageAttacker" | "skilled" | "tavernBrawler" | "tough";
-export const originFeats: Record<FeatId, { name: Text; summary: Text }> = {
-  alert: { name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado.") },
+export const originFeats: Record<FeatId, { name: Text; summary: Text; effects?: Effect[] }> = {
+  alert: { name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado."),
+    effects: [{ kind: "initiativeBonus", add: "proficiency" }] },
   crafter: { name: t("Crafter", "Artesano"), summary: t("Proficiency with three Artisan's Tools, a discount on nonmagical items and fast crafting.", "Competencia con tres herramientas de artesano, descuento en objetos no mágicos y fabricación rápida.") },
   healer: { name: t("Healer", "Sanador"), summary: t("Use a Healer's Kit to restore Hit Points to an ally and reroll low healing dice.", "Usa un botiquín de sanador para curar a un aliado y repite los dados de curación bajos.") },
   lucky: { name: t("Lucky", "Afortunado"), summary: t("Luck Points equal to your Proficiency Bonus to gain Advantage or turn an attack against you into a Disadvantage.", "Puntos de suerte igual a tu bonificador por competencia para obtener ventaja o imponer desventaja a un ataque contra ti.") },
@@ -277,7 +281,8 @@ export const originFeats: Record<FeatId, { name: Text; summary: Text }> = {
   savageAttacker: { name: t("Savage Attacker", "Atacante salvaje"), summary: t("Once per turn, roll weapon damage dice twice and use either roll.", "Una vez por turno, tira dos veces los dados de daño de un arma y elige el resultado.") },
   skilled: { name: t("Skilled", "Habilidoso"), summary: t("Gain proficiency in any combination of three skills or tools.", "Obtienes competencia en tres habilidades o herramientas a tu elección.") },
   tavernBrawler: { name: t("Tavern Brawler", "Pendenciero"), summary: t("Stronger Unarmed Strikes, reroll 1s on their damage and shove after a hit.", "Golpes sin armas más fuertes, repites los 1 en su daño y empujas tras un impacto.") },
-  tough: { name: t("Tough", "Duro"), summary: t("Your Hit Point maximum increases by twice your level.", "Tus puntos de golpe máximos aumentan el doble de tu nivel.") },
+  tough: { name: t("Tough", "Duro"), summary: t("Your Hit Point maximum increases by twice your level.", "Tus puntos de golpe máximos aumentan el doble de tu nivel."),
+    effects: [{ kind: "hpPerLevel", amount: 2 }] },
 };
 export const magicInitiateLists = { cleric: t("Cleric", "Clérigo"), druid: t("Druid", "Druida"), wizard: t("Wizard", "Mago") } as const;
 export type MagicInitiateList = keyof typeof magicInitiateLists;
@@ -464,8 +469,8 @@ export interface SpeciesData {
   skillChoice?: { count: number; options: SkillKey[] };
   /** Human Versatile: choose an origin feat. */
   originFeat?: boolean;
-  /** Dwarven Toughness: +1 HP per level. */
-  hpPerLevel?: number;
+  /** Mechanics of the species traits (see effects.ts). */
+  effects?: Effect[];
 }
 
 export const species: SpeciesData[] = [
@@ -484,7 +489,7 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
   },
   {
-    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120, hpPerLevel: 1,
+    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120, effects: [{ kind: "hpPerLevel", amount: 1 }],
     traits: [t("Dwarven Resilience", "Resistencia enana"), t("Dwarven Toughness", "Dureza enana"), t("Stonecunning", "Afinidad con la piedra")],
   },
   {

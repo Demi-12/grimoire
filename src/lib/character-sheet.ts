@@ -4,7 +4,9 @@ import {
   armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId, type Text, type WeaponProperty, weaponTable,
 } from "./dnd2024";
-import { featInfo, type FightingStyleId, type LevelFeatId } from "./levelup-data";
+import { effectsOf, type Effect } from "./effects";
+import { classFeatures, featInfo, SUBCLASS_LEVEL, subclassFeatures, type Feature, type FightingStyleId, type LevelFeatId, type Progression } from "./levelup-data";
+import { findBookSubclass } from "./subclasses";
 
 export type AbilityMethod = "standard" | "pointBuy" | "rolled";
 export type BonusMode = "plus2plus1" | "plus1x3";
@@ -31,6 +33,8 @@ export interface LevelUpChoice {
   feat?: FeatPick;
   fightingStyle?: FightingStyleId;
   expertise?: SkillKey[];
+  /** New skill proficiencies a feature lets the player choose (Primal Knowledge, Bonus Proficiencies). */
+  skills?: SkillKey[];
 }
 
 /** Choices made in the creator. Everything on the sheet is derived from these. */
@@ -38,7 +42,7 @@ export interface CharacterBuild {
   version: 1;
   classId: ClassId;
   useSubclass: boolean;
-  /** Player's Handbook subclass picked from the list (an id in subclasses.ts); its features aren't tracked. */
+  /** Player's Handbook subclass picked from the list (an id in subclasses.ts); its features are tracked once subclasses.ts lists them. */
   subclassId?: string;
   /** Name of a subclass from outside the SRD, typed by the player. */
   customSubclass?: string;
@@ -146,8 +150,49 @@ export function proficientSkills(build: CharacterBuild, level = 20): SkillKey[] 
   const background = findBackground(build.backgroundId);
   return [...new Set([...(background?.skills ?? []), ...build.speciesSkills, ...build.classSkills,
     ...(characterFeats(build).includes("skilled") ? build.featSkills : []),
-    ...levelChoices(build, level).flatMap((choice) => choice.feat?.id === "skilled" ? choice.feat.skills ?? [] : [])])];
+    ...levelChoices(build, level).flatMap((choice) => [...(choice.feat?.id === "skilled" ? choice.feat.skills ?? [] : []), ...(choice.skills ?? [])])])];
 }
+
+// --- Features and their effects ------------------------------------------------------------------------------------
+
+/** Features of the character's subclass by level: the SRD one, a Player's Handbook one whose features are listed, or none. */
+export function subclassProgression(build: Pick<CharacterBuild, "classId" | "useSubclass" | "subclassId">): Progression | undefined {
+  if (build.useSubclass) return subclassFeatures[build.classId];
+  return findBookSubclass(build.classId, build.subclassId)?.features;
+}
+
+/** Class and subclass features gained exactly at `level` (2-20). */
+export function featuresAt(build: CharacterBuild, level: number): { class: Feature[]; subclass: Feature[] } {
+  return {
+    class: level >= 2 ? classFeatures[build.classId][level] ?? [] : [],
+    subclass: level >= SUBCLASS_LEVEL ? subclassProgression(build)?.[level] ?? [] : [],
+  };
+}
+
+/** A mechanical effect together with the name of the feature, feat or species that grants it. */
+export interface GrantedEffect { source: Text; effect: Effect }
+
+/** Every effect the character has at `level`: class, subclass, species and feats. */
+export function grantedEffects(build: CharacterBuild, level: number): GrantedEffect[] {
+  const cls = findClass(build.classId);
+  const sp = findSpecies(build.speciesId);
+  const granted: GrantedEffect[] = [];
+  const add = (source: Text, effects: Effect[] | undefined) => { for (const effect of effects ?? []) granted.push({ source, effect }); };
+  if (cls) add(cls.name, cls.effects);
+  if (sp) add(sp.name, sp.effects);
+  for (let current = 2; current <= level; current += 1) {
+    const gained = featuresAt(build, current);
+    for (const feature of [...gained.class, ...gained.subclass]) add(feature.name, feature.effects);
+  }
+  for (const id of allFeats(build, level)) add(featInfo(id).name, featInfo(id).effects);
+  return granted;
+}
+
+const hpPerLevel = (effects: Effect[]) => effectsOf(effects, "hpPerLevel").reduce((sum, effect) => sum + effect.amount, 0);
+
+/** Hit Points added per character level on top of the Hit Die (Dwarven Toughness, Tough, Draconic Resilience). */
+export const hpPerLevelBonus = (build: CharacterBuild, level: number): number =>
+  hpPerLevel(grantedEffects(build, level).map((granted) => granted.effect));
 
 export interface DerivedSheet {
   level: number;
@@ -180,15 +225,17 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
   const pb = proficiencyBonus(safeLevel);
   const feats = allFeats(build, safeLevel);
   const choices = levelChoices(build, safeLevel);
+  const granted = grantedEffects(build, safeLevel);
+  const effects = granted.map((entry) => entry.effect);
 
   // Level 1: maximum Hit Die; later levels use what was rolled, or the fixed average (half the die + 1).
   const perLevel = cls.hitDie / 2 + 1;
-  const hpPerLevelBonus = (sp.hpPerLevel ?? 0) + (feats.includes("tough") ? 2 : 0);
-  let hitPoints = Math.max(1, cls.hitDie + mod("con")) + hpPerLevelBonus;
+  let hitPoints = Math.max(1, cls.hitDie + mod("con"));
   for (let current = 2; current <= safeLevel; current += 1) {
     const gained = choices.find((choice) => choice.level === current)?.hp ?? perLevel;
-    hitPoints += Math.max(1, gained + mod("con")) + hpPerLevelBonus;
+    hitPoints += Math.max(1, gained + mod("con"));
   }
+  hitPoints += hpPerLevel(effects) * safeLevel;
 
   const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
   let armorClass = 10 + mod("dex");
@@ -198,15 +245,16 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     const dex = armor.dexCap === null ? mod("dex") : Math.min(mod("dex"), armor.dexCap);
     armorClass = armor.base + dex;
     armorNote = armor.name.en;
-  } else if (cls.unarmored === "barbarian") {
-    armorClass = 10 + mod("dex") + mod("con");
-    armorNote = "Unarmored Defense";
-  } else if (cls.unarmored === "monk") {
-    armorClass = 10 + mod("dex") + mod("wis");
-    armorNote = "Unarmored Defense";
+  } else {
+    // Unarmored Defense, Draconic Resilience…: the best formula wins.
+    for (const { source, effect } of granted) {
+      if (effect.kind !== "unarmoredDefense") continue;
+      const value = 10 + mod("dex") + effect.add.reduce((sum, key) => sum + mod(key), 0);
+      if (value > armorClass) { armorClass = value; armorNote = source.en; }
+    }
   }
   if (equipment.shield) armorClass += 2;
-  if (equipment.armor && feats.includes("defense")) armorClass += 1;
+  for (const effect of effectsOf(effects, "acBonus")) if (!effect.whileArmored || equipment.armor) armorClass += effect.amount;
 
   const lineage = sp.lineages?.find((item) => item.id === build.lineageId);
   const proficient = new Set(proficientSkills(build, safeLevel));
@@ -216,8 +264,9 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     const isExpert = expertise.has(skill);
     return [skill, { proficient: isProficient, expertise: isExpert, bonus: mod(skills[skill]) + (isExpert ? pb * 2 : isProficient ? pb : 0) }];
   })) as DerivedSheet["skills"];
+  const saveProficiencies = new Set<AbilityKey>([...cls.saves, ...effectsOf(effects, "saveProficiency").flatMap((effect) => effect.abilities)]);
   const saves = Object.fromEntries(abilities.map(({ key }) => {
-    const isProficient = cls.saves.includes(key);
+    const isProficient = saveProficiencies.has(key);
     return [key, { proficient: isProficient, bonus: mod(key) + (isProficient ? pb : 0) }];
   })) as DerivedSheet["saves"];
 
@@ -231,7 +280,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     hitDice: `${safeLevel}d${cls.hitDie}`,
     armorClass,
     armorNote,
-    initiative: mod("dex") + (feats.includes("alert") ? pb : 0),
+    initiative: mod("dex") + effectsOf(effects, "initiativeBonus").length * pb,
     speed: lineage?.speed ?? sp.speed,
     darkvision: lineage?.darkvision ?? sp.darkvision,
     passivePerception: 10 + skillValues.perception.bonus,

@@ -1,9 +1,12 @@
 /**
  * Every subclass in the 2024 Player's Handbook, four per class, so players can pick theirs from a list.
- * Only the SRD subclass (CC-BY-4.0) has its features tracked in levelup-data.ts; the others are names
- * plus a one-line pitch written in our own words, since their rules text isn't openly licensed.
+ * The SRD subclass (CC-BY-4.0) has its features in levelup-data.ts; the others are names plus a one-line
+ * pitch written in our own words, and `features` once their mechanics are added (summaries, never book text).
  */
 import { findClass, type ClassId, type Text } from "./dnd2024";
+import type { Progression } from "./levelup-data";
+
+// Features of tracked Player's Handbook subclasses are written with `feature` from levelup-data.ts (see docs/subclass-features.md).
 
 const t = (en: string, es: string): Text => ({ en, es });
 
@@ -13,10 +16,15 @@ export interface SubclassInfo {
   pitch: Text;
   /** Published in the free SRD 5.2, with features tracked by Grimoire. */
   srd?: boolean;
+  /** Features by level (3-20) with their effects, for Player's Handbook subclasses Grimoire tracks. */
+  features?: Progression;
 }
 
-const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false): SubclassInfo =>
-  ({ id, name: t(en, es), pitch: t(pitchEn, pitchEs), ...(srd ? { srd } : {}) });
+/** Whether Grimoire knows the subclass's features (and applies their effects). */
+export const subclassTracked = (entry: SubclassInfo): boolean => !!entry.srd || !!entry.features;
+
+const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false, features?: Progression): SubclassInfo =>
+  ({ id, name: t(en, es), pitch: t(pitchEn, pitchEs), ...(srd ? { srd } : {}), ...(features ? { features } : {}) });
 
 export const subclassCatalog: Record<ClassId, SubclassInfo[]> = {
   barbarian: [
