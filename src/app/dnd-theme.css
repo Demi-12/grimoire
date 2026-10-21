@@ -374,3 +374,25 @@ body { background-image: var(--grain), var(--mottle),
   .desk-actions .button { flex: 1; }
   .sidebar::after { display: none; }
 }
+
+/* Characters header: breathing room between title, description, actions and the panel below. */
+.section-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 20px; margin-bottom: 22px; }
+.section-heading h2 { margin: 0 0 6px; }
+.section-heading p:not(.eyebrow) { margin: 0; color: var(--muted); }
+.builder-actions { gap: 10px; }
+.editor-panel label { gap: 8px; }
+.editor-panel .form-grid { gap: 16px; }
+
+/* Mobile bottom bar: five equal tabs that never clip their labels (admin lives in the header). */
+@media (max-width: 650px) {
+  .sidebar { height: auto; min-height: 64px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
+  .side-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; height: auto; }
+  .side-nav button { flex-direction: column; justify-content: center; gap: 3px; min-height: 50px; padding: 6px 2px; font-size: 10px; line-height: 1.1; letter-spacing: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side-nav button > span { font-size: 16px; line-height: 1; }
+  .side-nav button.active { box-shadow: inset 0 3px #e2b45c; }
+  .page-content { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .app-footer { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .section-heading { flex-direction: column; align-items: stretch; }
+  .builder-actions .button { flex: 1 1 140px; }
+  .editor-panel .form-grid, .three-columns { grid-template-columns: 1fr; }
+}
