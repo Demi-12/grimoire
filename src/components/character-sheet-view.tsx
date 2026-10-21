@@ -1,6 +1,7 @@
 "use client";
 
 import { type Character } from "@/lib/api-client";
+import { attackList } from "@/lib/character-sheet";
 import { sheetFor, signed, startingItems } from "@/lib/character-view";
 import { findClass, findSpecies, say, skillKeys, standardLanguages } from "@/lib/dnd2024";
 import { translate, type Locale } from "@/lib/i18n";
@@ -33,6 +34,7 @@ export default function CharacterSheetView({ character, campaignName, locale, on
   const feats = (sheet?.feats ?? []).map((feat) => say(featInfo(feat).name, locale));
   const traits = species?.traits.map((trait) => say(trait, locale)) ?? [];
   const gear = build ? startingItems(build, locale) : [];
+  const attacks = build && sheet ? attackList(build, sheet) : [];
   const languages = build ? [t("character.common"), ...build.languages.map((index) => standardLanguages[index]).filter(Boolean).map((language) => say(language, locale))] : [];
   const subtitle = [character.species, character.className, character.background].filter(Boolean).join(" · ") || t("character.adventurer");
   const initial = character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US");
@@ -114,6 +116,14 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <div className={styles.vital}><span>{t("character.proficiencyLabel")}</span><b>{signed(bonus)}</b></div>
           </div>}
         </section>
+
+        {attacks.length > 0 && <section className={styles.panel} aria-labelledby="sheet-attacks">
+          <h3 id="sheet-attacks">{t("character.sheetAttacks")}</h3>
+          <ul className={styles.attacks}>{attacks.map((attack, index) => <li key={`${attack.dice}-${index}`}>
+            <span>{say(attack.name, locale)}</span>
+            <b title={t("character.sheetAttackBonus")}>{signed(attack.bonus)}</b>
+            <span className={styles.muted}>{`${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}`}</span></li>)}</ul>
+        </section>}
 
         {(features.length > 0 || feats.length > 0) && <section className={styles.panel} aria-labelledby="sheet-features">
           <h3 id="sheet-features">{t("character.sheetFeatures")}</h3>

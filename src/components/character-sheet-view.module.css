@@ -25,6 +25,10 @@
 .lines li { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dotted var(--line); font-size: 15px; color: var(--ink); }
 .lines li:last-child { border-bottom: 0; }
 .lines b { font: 700 15px var(--font-display); }
+.attacks { display: grid; margin: 0; padding: 0; list-style: none; }
+.attacks li { display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr); align-items: baseline; gap: 4px 12px; padding: 7px 0; border-bottom: 1px dotted var(--line); font-size: 15px; color: var(--ink); }
+.attacks li:last-child { border-bottom: 0; }
+.attacks b { font: 700 15px var(--font-display); }
 .dot { width: 10px; height: 10px; border: 1px solid var(--control-line); border-radius: 50%; }
 .dotOn { background: var(--crimson); border-color: var(--crimson); }
 .dotExpert { background: var(--gilt); border-color: var(--gilt-text); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--gilt-text); }
@@ -41,6 +45,8 @@
 
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) {
+  .attacks li { grid-template-columns: 1fr auto; }
+  .attacks li span:last-child { grid-column: 1 / -1; }
   .banner { grid-template-columns: 1fr; justify-items: start; }
   .avatar { width: 52px; height: 52px; font-size: 24px; }
 }
