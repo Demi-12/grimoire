@@ -38,6 +38,8 @@ export interface CharacterBuild {
   version: 1;
   classId: ClassId;
   useSubclass: boolean;
+  /** Player's Handbook subclass picked from the list (an id in subclasses.ts); its features aren't tracked. */
+  subclassId?: string;
   /** Name of a subclass from outside the SRD, typed by the player. */
   customSubclass?: string;
   /** One entry per level gained after level 1, added by the level-up guide. */
