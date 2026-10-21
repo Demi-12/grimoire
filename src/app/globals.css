@@ -483,3 +483,12 @@ body { font-variant-emoji: text; }
   .workspace-header .theme-label{display:none}
   .workspace-header select.header-control{max-width:84px;padding:0 4px}
 }
+/* Phone header: one row of equal 32px icon buttons */
+.theme-glyph{display:inline-flex;align-items:center}
+@media (max-width: 650px) {
+  .workspace-header{justify-content:flex-start}
+  .workspace-header .mobile-brand{white-space:nowrap;font-size:12px;letter-spacing:.12em;margin-right:auto}
+  .workspace-header .header-controls{margin-left:0}
+  .workspace-header .header-control,.workspace-header .header-admin,.workspace-header .header-signout{box-sizing:border-box;height:32px;min-height:32px;min-width:32px;padding:0 8px;justify-content:center;border-radius:6px;display:inline-flex;align-items:center;margin:0}
+  .workspace-header select.header-control{max-width:none;padding:0 6px;font-size:11px}
+}
