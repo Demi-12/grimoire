@@ -87,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f .env ]; then
-            echo "::error::Falta $PWD/.env en el servidor. Cópialo de .env.example y rellena PostgreSQL y Better Auth."
+            echo "::error::Falta $PWD/.env en el servidor. Cópialo de .env.example y rellena PostgreSQL y Better Auth (SMTP es opcional)."
             exit 1
           fi
           # Si el .env tiene token del túnel, levanta también cloudflared.

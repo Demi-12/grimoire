@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 
-type AuthMode = "sign-in" | "sign-up" | "two-factor";
+type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "two-factor";
 type Locale = "en" | "es";
 
 const copy = {
   en: {
     title: "Enter the Grimoire", kicker: "YOUR CAMPAIGN BOOK", name: "Adventurer name", email: "Email",
     password: "Password", confirm: "Confirm password", signIn: "Sign in", signUp: "Create account",
-    createAccount: "Create an account", already: "Already have an account? Sign in",
+    createAccount: "Create an account", already: "Already have an account? Sign in", forgot: "Forgot password?",
+    sendReset: "Send recovery link", resetTitle: "Choose a new password", updatePassword: "Set new password",
+    checkEmail: "If an account can receive mail at that address, we’ve sent the next step. Check your inbox.",
     created: "Account created. An admin has to approve it before you can enter.", twoFactor: "Authenticator code",
     verify: "Verify code", backup: "Use a backup code", useTotp: "Use an authenticator code", passkey: "Sign in with a passkey",
     processing: "Working…", passwordMismatch: "The passwords do not match.", genericError: "We could not complete that request. Check the details and try again.",
@@ -24,7 +26,9 @@ const copy = {
   es: {
     title: "Abre el grimorio", kicker: "TU CUADERNO DE CAMPAÑA", name: "Nombre de aventurero", email: "Correo electrónico",
     password: "Contraseña", confirm: "Confirmar contraseña", signIn: "Iniciar sesión", signUp: "Crear cuenta",
-    createAccount: "Crear una cuenta", already: "¿Ya tienes cuenta? Inicia sesión",
+    createAccount: "Crear una cuenta", already: "¿Ya tienes cuenta? Inicia sesión", forgot: "¿Has olvidado la contraseña?",
+    sendReset: "Enviar enlace de recuperación", resetTitle: "Elige una contraseña nueva", updatePassword: "Guardar contraseña",
+    checkEmail: "Si existe una cuenta que pueda recibir correo en esa dirección, hemos enviado el siguiente paso. Revisa tu bandeja.",
     created: "Cuenta creada. Un admin tendrá que aprobarla para que puedas entrar.", twoFactor: "Código de la app autenticadora",
     verify: "Verificar código", backup: "Usar un código de recuperación", useTotp: "Usar código de autenticación", passkey: "Iniciar con una clave de acceso",
     processing: "Procesando…", passwordMismatch: "Las contraseñas no coinciden.", genericError: "No se pudo completar la solicitud. Revisa los datos e inténtalo de nuevo.",
@@ -65,6 +69,7 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [code, setCode] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [backupMode, setBackupMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,6 +80,12 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
 
   useEffect(() => {
     if (!locale) setLanguage(navigator.language.toLowerCase().startsWith("es") ? "es" : "en");
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      setResetToken(token);
+      setMode("reset-password");
+    }
     const showTwoFactor = () => setMode("two-factor");
     window.addEventListener("grimoire:two-factor-required", showTwoFactor);
     return () => window.removeEventListener("grimoire:two-factor-required", showTwoFactor);
@@ -103,6 +114,17 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         if (result.error) throw result.error;
         if (result.data && "twoFactorRedirect" in result.data && (result.data as { twoFactorRedirect?: boolean }).twoFactorRedirect) setMode("two-factor");
         else window.location.assign("/");
+      } else if (mode === "forgot-password") {
+        const result = await authClient.requestPasswordReset({ email: email.trim(), redirectTo: `${window.location.origin}/?auth=reset-password` });
+        if (result.error) throw result.error;
+        notice(t.checkEmail);
+      } else if (mode === "reset-password") {
+        if (!resetToken) throw new Error(t.genericError);
+        if (password !== confirmation) throw new Error(t.passwordMismatch);
+        const result = await authClient.resetPassword({ newPassword: password, token: resetToken });
+        if (result.error) throw result.error;
+        notice(language === "es" ? "Contraseña actualizada. Ya puedes iniciar sesión." : "Password updated. You can sign in now.");
+        setMode("sign-in");
       } else if (mode === "two-factor") {
         const result = backupMode
           ? await authClient.twoFactor.verifyBackupCode({ code: code.trim() })
@@ -136,8 +158,8 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
     return <AccountSecurity locale={language} email={session.user.email} onSignOut={async () => { await authClient.signOut(); window.location.assign("/"); }} />;
   }
 
-  const title = mode === "two-factor" ? t.twoFactor : mode === "sign-up" ? t.createAccount : t.title;
-  const needsPassword = mode === "sign-in" || mode === "sign-up";
+  const title = mode === "reset-password" ? t.resetTitle : mode === "two-factor" ? t.twoFactor : mode === "sign-up" ? t.createAccount : t.title;
+  const needsPassword = mode === "sign-in" || mode === "sign-up" || mode === "reset-password";
 
   return (
     <section aria-labelledby="auth-title" style={panelStyle}>
@@ -145,9 +167,9 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
       <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--serif)", margin: "8px 0 22px", color: "#30261d" }}>{title}</h1>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 15 }}>
         {mode === "sign-up" && <Field label={t.name}><input style={inputStyle} autoComplete="name" maxLength={100} required value={name} onChange={event => setName(event.target.value)} /></Field>}
-        {(["sign-in", "sign-up"].includes(mode)) && <Field label={t.email}><input style={inputStyle} type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></Field>}
+        {(["sign-in", "sign-up", "forgot-password"].includes(mode)) && <Field label={t.email}><input style={inputStyle} type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></Field>}
         {needsPassword && <Field label={t.password}><input style={inputStyle} type="password" autoComplete={mode === "sign-in" ? "current-password webauthn" : "new-password"} minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} /></Field>}
-        {mode === "sign-up" && <Field label={t.confirm}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} /></Field>}
+        {(mode === "sign-up" || mode === "reset-password") && <Field label={t.confirm}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} /></Field>}
         {(mode === "two-factor") && <>
           <Field label={backupMode ? t.backup : t.twoFactor}><input style={inputStyle} inputMode={backupMode ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} /></Field>
           <button type="button" className="button button-quiet" onClick={() => { setBackupMode(value => !value); setCode(""); }}>{backupMode ? t.useTotp : t.backup}</button>
@@ -155,15 +177,16 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         {message && <p role="status" style={{ margin: 0, color: "#526245", lineHeight: 1.5 }}>{message}</p>}
         {error && <p role="alert" style={{ margin: 0, color: "#9b3a29", lineHeight: 1.5 }}>{error}</p>}
         <button className="button button-primary" type="submit" disabled={busy}>
-          {busy ? t.processing : mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : t.verify}
+          {busy ? t.processing : mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : mode === "forgot-password" ? t.sendReset : mode === "reset-password" ? t.updatePassword : t.verify}
         </button>
       </form>
       {mode === "sign-in" && <div style={{ display: "grid", gap: 12, marginTop: 15 }}>
         <button type="button" className="button button-quiet" onClick={signInWithPasskey} disabled={busy}>{t.passkey}</button>
+        <button type="button" className="button button-quiet" onClick={() => { setMessage(""); setError(""); setMode("forgot-password"); }}>{t.forgot}</button>
         <button type="button" className="button button-quiet" onClick={() => { setMessage(""); setError(""); setMode("sign-up"); }}>{t.createAccount}</button>
       </div>}
       {mode === "sign-up" && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={() => setMode("sign-in")}>{t.already}</button>}
-      {mode === "two-factor" && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={() => { setMessage(""); setError(""); setMode("sign-in"); }}>{t.signIn}</button>}
+      {(mode === "forgot-password" || mode === "reset-password" || mode === "two-factor") && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={() => { setMessage(""); setError(""); setMode("sign-in"); }}>{t.signIn}</button>}
     </section>
   );
 }
