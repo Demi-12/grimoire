@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, requireApproved } from "@/lib/access";
+import { dataErrorResponse, jsonError, requireUser } from "@/lib/access";
 import { deleteCreature } from "@/lib/data";
 import { isUuid } from "@/lib/permissions";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
 
 export async function DELETE(_request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");

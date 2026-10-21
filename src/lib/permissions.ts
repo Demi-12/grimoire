@@ -3,8 +3,9 @@
  * Nothing here touches the database, so every rule can be unit tested.
  */
 
-export const siteRoles = ["admin", "dm", "player"] as const;
-export const accountStatuses = ["pending", "approved", "blocked"] as const;
+// Site-wide: admins manage accounts. DM/player is not an account property but a per-campaign role.
+export const siteRoles = ["admin", "user"] as const;
+export const accountStatuses = ["approved", "blocked"] as const;
 export const campaignRoles = ["dm", "player"] as const;
 
 export type SiteRole = (typeof siteRoles)[number];
@@ -23,14 +24,14 @@ export const isSiteRole = (value: unknown): value is SiteRole => siteRoles.inclu
 export const isAccountStatus = (value: unknown): value is AccountStatus => accountStatuses.includes(value as AccountStatus);
 export const isCampaignRole = (value: unknown): value is CampaignRole => campaignRoles.includes(value as CampaignRole);
 
-/** Comma/space separated list of emails that are always approved admins (from GRIMOIRE_ADMIN_EMAILS). */
+/** Comma/space separated list of emails that are always admins (from GRIMOIRE_ADMIN_EMAILS). */
 export function parseAdminEmails(raw: string | undefined): Set<string> {
   return new Set((raw ?? "").split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
 
-/** DMs and admins can open new campaigns; players join the ones they are invited to. */
-export function canCreateCampaign(user: Pick<AppUser, "role" | "status">): boolean {
-  return user.status === "approved" && (user.role === "admin" || user.role === "dm");
+/** Anyone can open a campaign (becoming its DM) or join someone else's as a player. */
+export function canCreateCampaign(user: Pick<AppUser, "status">): boolean {
+  return user.status === "approved";
 }
 
 /** Who may rename/delete a campaign or manage its roster: its owner, a co-DM, or a site admin. */

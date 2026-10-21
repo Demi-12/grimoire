@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireApproved } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
 import { addCampaignMember } from "@/lib/data";
 import { isCampaignRole, isUuid } from "@/lib/permissions";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Add an approved account to the campaign, or change the role of an existing member. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");

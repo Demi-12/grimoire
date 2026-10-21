@@ -15,6 +15,9 @@ const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
 /** Without SMTP (e.g. a fresh home server) accounts work but password reset by email is off. */
 const emailConfigured = Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
 
+/** "Continue with Google" is offered only when both credentials are set. */
+export const googleConfigured = Boolean(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim());
+
 export const auth = betterAuth({
   appName: "Grimoire",
   secret: process.env.BETTER_AUTH_SECRET,
@@ -25,16 +28,16 @@ export const auth = betterAuth({
     // Managed only by the server (sign-up hook and admin panel); clients can't set them.
     additionalFields: {
       role: { type: "string", required: false, defaultValue: "player", input: false },
-      status: { type: "string", required: false, defaultValue: "pending", input: false },
+      status: { type: "string", required: false, defaultValue: "approved", input: false },
     },
   },
   databaseHooks: {
     user: {
       create: {
         before: async (user) => {
-          // New accounts wait for an admin, except the owners listed in GRIMOIRE_ADMIN_EMAILS.
+          // Anyone can join; only the owners listed in GRIMOIRE_ADMIN_EMAILS start as site admins.
           const isOwner = parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase());
-          return { data: { ...user, role: isOwner ? "admin" : "player", status: isOwner ? "approved" : "pending" } };
+          return { data: { ...user, role: isOwner ? "admin" : "user", status: "approved" } };
         },
       },
     },
@@ -64,6 +67,13 @@ export const auth = betterAuth({
       });
     },
   },
+  ...(googleConfigured ? {
+    socialProviders: {
+      google: { clientId: process.env.GOOGLE_CLIENT_ID!.trim(), clientSecret: process.env.GOOGLE_CLIENT_SECRET!.trim() },
+    },
+    // Google verifies the email, so signing in with it joins an existing password account of the same address.
+    account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
+  } : {}),
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,

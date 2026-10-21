@@ -349,7 +349,7 @@ export async function listUsersForAdmin(): Promise<AdminUserView[]> {
             (SELECT count(*)::int FROM "campaign_member" m WHERE m."userId" = u."id") AS "campaignCount",
             (SELECT count(*)::int FROM "character" c WHERE c."ownerId" = u."id") AS "characterCount"
        FROM "user" u
-      ORDER BY CASE u."status" WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, u."createdAt" DESC`,
+      ORDER BY CASE u."status" WHEN 'approved' THEN 0 ELSE 1 END, u."createdAt" DESC`,
   );
   return result.rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt).toISOString() }));
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireApproved } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
 import { deleteEncounter, updateEncounter } from "@/lib/data";
 import { encounterStatuses, isUuid, type EncounterStatus } from "@/lib/permissions";
 
@@ -9,7 +9,7 @@ type Context = { params: Promise<{ id: string; encounterId: string }> };
 
 /** Edit title, notes or status (planned/played) of a saved encounter. */
 export async function PATCH(request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { encounterId } = await params;
   if (!isUuid(encounterId)) return jsonError(404, "Not found.");
@@ -25,7 +25,7 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(_request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { encounterId } = await params;
   if (!isUuid(encounterId)) return jsonError(404, "Not found.");

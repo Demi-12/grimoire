@@ -23,7 +23,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   if (!isSiteRole(role) || !isAccountStatus(status)) return null;
   const user: AppUser = { id: row.id, name: row.name, email: row.email, role, status };
 
-  // Accounts that existed before roles were added get promoted once their email is listed.
+  // Accounts that existed before the email was listed get promoted on their next request.
   if (user.status !== "blocked" && (user.role !== "admin" || user.status !== "approved")
     && parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())) {
     await pool.query('UPDATE "user" SET "role" = \'admin\', "status" = \'approved\', "updatedAt" = now() WHERE "id" = $1', [user.id]);
@@ -33,13 +33,13 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 }
 
 /**
- * Require an approved account (optionally with one of `roles`) for a route handler. Returns the
+ * Require an unblocked account (optionally with one of `roles`) for a route handler. Returns the
  * user, or an error response to return as-is: `if (user instanceof NextResponse) return user;`
  */
-export async function requireApproved(roles?: SiteRole[]): Promise<AppUser | NextResponse> {
+export async function requireUser(roles?: SiteRole[]): Promise<AppUser | NextResponse> {
   const user = await getCurrentUser();
   if (!user) return jsonError(401, "Sign in to continue.");
-  if (user.status !== "approved") return jsonError(403, "Your account is waiting for approval.");
+  if (user.status !== "approved") return jsonError(403, "Your account has been blocked.");
   if (roles && !roles.includes(user.role)) return jsonError(403, "You don't have permission for that.");
   return user;
 }

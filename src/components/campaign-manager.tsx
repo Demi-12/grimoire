@@ -20,9 +20,8 @@ type Props = {
 const text = {
   en: {
     eyebrow: "✦  THE CHRONICLE", title: "Campaigns",
-    subtitle: "Gather your table beneath one banner: players, Dungeon Masters and their heroes.",
+    subtitle: "Gather your table beneath one banner. You are the DM of the campaigns you create and a player in the ones you join.",
     newCampaign: "New campaign", placeholder: "Name your campaign", create: "Create campaign",
-    playerHint: "Only Dungeon Masters can open campaigns. Ask yours to add you to the table.",
     rename: "Edit", save: "Save", cancel: "Cancel", remove: "Delete campaign", leave: "Leave campaign",
     description: "Description", descriptionPlaceholder: "Setting, schedule, house rules…",
     deleteConfirm: (name: string) => `Delete “${name}”? Characters stay with their owners.`,
@@ -36,16 +35,15 @@ const text = {
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
     removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
-    invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone with an approved account who opens the link can join as a player. Links expire after 7 days.",
+    invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone who opens the link and signs in joins as a player. Links expire after 7 days.",
     journal: "Encounter journal",
     copyLink: "Copy link", copied: "Copied", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ${owner} is calling you to the table! Join the campaign "${c}" on Grimoire, build your hero and roll initiative.\n\n🎲 Your invitation (valid 7 days):`, revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
     eyebrow: "✦  LA CRÓNICA", title: "Campañas",
-    subtitle: "Reúne a tu mesa bajo un mismo estandarte: jugadores, DMs y sus héroes.",
+    subtitle: "Reúne a tu mesa bajo un mismo estandarte. Eres el DM de las campañas que creas y jugador en las que te unes.",
     newCampaign: "Nueva campaña", placeholder: "Nombre de la campaña", create: "Crear campaña",
-    playerHint: "Solo los DMs pueden abrir campañas. Pide al tuyo que te añada a la mesa.",
     rename: "Editar", save: "Guardar", cancel: "Cancelar", remove: "Eliminar campaña", leave: "Salir de la campaña",
     description: "Descripción", descriptionPlaceholder: "Ambientación, horario, reglas de la casa…",
     deleteConfirm: (name: string) => `¿Eliminar «${name}»? Los personajes se quedan con sus dueños.`,
@@ -59,7 +57,7 @@ const text = {
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
     removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
-    invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien tenga una cuenta aprobada y abra el enlace se une como jugador. Los enlaces caducan a los 7 días.",
+    invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien abra el enlace e inicie sesión se une como jugador. Los enlaces caducan a los 7 días.",
     journal: "Diario de encuentros",
     copyLink: "Copiar enlace", copied: "Copiado", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ¡${owner} te convoca a la mesa! Únete a la campaña «${c}» en Grimoire, crea a tu héroe y prepárate para tirar iniciativa.\n\n🎲 Tu invitación (válida 7 días):`, revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
@@ -68,7 +66,6 @@ const text = {
 
 export default function CampaignManager({ me, campaigns, characters, locale, onChanged }: Props) {
   const t = text[locale];
-  const canCreate = me.role === "admin" || me.role === "dm";
   const managesAny = campaigns.some((campaign) => campaign.canManage);
   const [directory, setDirectory] = useState<DirectoryUser[]>([]);
   const [newName, setNewName] = useState("");
@@ -127,13 +124,13 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       <p>{t.subtitle}</p>
     </header>
 
-    {canCreate ? <form className={styles.createForm} onSubmit={(event) => void createCampaign(event)}>
+    <form className={styles.createForm} onSubmit={(event) => void createCampaign(event)}>
       <label htmlFor="campaign-name">{t.newCampaign}</label>
       <div className={styles.createRow}>
         <input id="campaign-name" value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} placeholder={t.placeholder} />
         <button type="submit" disabled={busy}>✧ {t.create}</button>
       </div>
-    </form> : <p className={styles.noMembers}>{t.playerHint}</p>}
+    </form>
 
     {error && <p className={styles.error} role="alert">{error}</p>}
     {!campaigns.length ? <p className={styles.empty}>{t.empty}</p> : <div className={styles.campaignList}>
