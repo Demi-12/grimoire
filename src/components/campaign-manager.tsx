@@ -116,7 +116,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
   return <section className={styles.manager} aria-labelledby="campaign-manager-heading">
     <header className={styles.header}>
       <p className={styles.eyebrow}>{t.eyebrow}</p>
-      <h2 id="campaign-manager-heading">{t.title}</h2>
+      <h1 id="campaign-manager-heading">{t.title}</h1>
       <p>{t.subtitle}</p>
     </header>
 
@@ -144,7 +144,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
               <button type="button" className={styles.quietButton} onClick={() => { setEditingId(null); setError(""); }}>{t.cancel}</button>
             </form> : <>
               <div>
-                <h3>{campaign.name}</h3>
+                <h2>{campaign.name}</h2>
                 <span className={styles.memberCount}>{t.owner(campaign.ownerName)} · {t.yourRole}: {campaign.myRole ? t.roles[campaign.myRole] : "—"}</span>
                 {campaign.description && <p className={styles.description}>{campaign.description}</p>}
               </div>
@@ -156,7 +156,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
             </>}
           </div>
 
-          <h4 className={styles.subheading}>{t.table}</h4>
+          <h3 className={styles.subheading}>{t.table}</h3>
           <ul className={styles.memberList}>{campaign.members.map((member) => {
             const isOwner = member.userId === campaign.ownerId;
             return <li key={member.userId}>
@@ -182,7 +182,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
             <EncounterJournal campaign={campaign} locale={locale} />
           </details>}
 
-          <h4 className={styles.subheading}>{t.heroes}</h4>
+          <h3 className={styles.subheading}>{t.heroes}</h3>
           {heroes.length ? <ul className={styles.memberList}>{heroes.map((character) => <li key={character.id}>
             <span className={styles.sigle}>✦</span>
             <span className={styles.heroName}>{character.name}<small>{t.level(character.level)}{character.className ? ` · ${character.className}` : ""} · {t.by(character.ownerName)}</small></span>
@@ -312,7 +312,7 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
   }
 
   return <>
-    <h4 className={styles.subheading}>{t.invites}</h4>
+    <h3 className={styles.subheading}>{t.invites}</h3>
     <p className={styles.noMembers}>{t.inviteHint}</p>
     {failed && <p className={styles.error} role="alert">{t.error}</p>}
     {invites.length ? <ul className={styles.memberList}>{invites.map((invite) => <li key={invite.id}>
