@@ -398,3 +398,14 @@ body {
 :root[data-theme="dark"] .editor-panel select,:root[data-theme="dark"] .party-campaign-select select{background:#2b2b25;border-color:#4a4334;color:var(--ink)}
 :root[data-theme="dark"] .gate-shell{background:var(--paper)}
 :root[data-theme="dark"] .admin-error{color:#ffc1a7;border-color:#8d5141;background:rgba(131,56,45,.18)}
+
+/* Sign out + scrollable mobile nav so the admin tab is always reachable */
+.sidebar-signout,.header-signout{border:1px solid var(--line);background:transparent;border-radius:3px;cursor:pointer;color:inherit;font-size:11px;padding:6px 10px}
+.sidebar-signout{margin-top:10px;width:100%}
+.header-signout{margin-left:10px}
+@media (max-width: 650px) {
+  .side-nav{display:flex;overflow-x:auto;gap:2px}
+  .side-nav button{flex:1 0 64px}
+  .sidebar-bottom{display:none}
+}
+@media (min-width: 651px) { .header-signout{display:none} }

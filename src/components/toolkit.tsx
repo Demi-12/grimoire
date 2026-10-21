@@ -200,6 +200,8 @@ export default function Toolkit() {
   }
   if (dataLoadedFor !== creatureStorageKey) return loading;
 
+  const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
+
   const currentUser = me;
   const ownCharacters = characters.filter((character) => character.editable);
   const title = t(`nav.${view}`);
@@ -253,12 +255,13 @@ export default function Toolkit() {
         <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
         {me.role === "admin" && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
       </nav>
-      <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.signedInAs", { name: me.name, role: t(`role.${me.role}`) })}</p></div>
+      <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.signedInAs", { name: me.name, role: t(`role.${me.role}`) })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
 
     <section className="workspace">
       <header className="workspace-header"><div className="mobile-brand">✳ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
+        <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         <span className="edition-badge">{t("common.edition")}</span></header>
       {view === "home" && <div className="page-content">
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length })}</p>
