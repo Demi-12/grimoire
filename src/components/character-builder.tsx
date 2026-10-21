@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "./skeleton";
 import { useEffect, useState, type FormEvent } from "react";
 import { abilities, abilityModifier, type AbilityKey, type AbilityScores, proficiencyBonus } from "@/lib/rules";
 import { translate, type Locale } from "@/lib/i18n";
@@ -113,7 +114,7 @@ function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
     <label className="full-label">{translate(locale, "character.notes")}<textarea rows={3} maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={translate(locale, "character.notesPlaceholder")} /></label>
     {error && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
     <div className="form-actions"><button className="button button-quiet" type="button" onClick={onCancel}>{translate(locale, "character.cancel")}</button>
-      <button className="button button-primary" type="submit" disabled={saving || !name.trim() || !validLevel || !validScores}>{translate(locale, saving ? "common.saving" : "character.save")}</button></div>
+      <button className="button button-primary" type="submit" disabled={saving || !name.trim() || !validLevel || !validScores}>{saving && <Spinner />}{translate(locale, saving ? "common.saving" : "character.save")}</button></div>
   </form>;
 }
 

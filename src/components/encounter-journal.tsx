@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, SkeletonText } from "./skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Campaign, type SavedEncounter } from "@/lib/api-client";
 import { creatureTypeKey, creatureTypeLabel, formatChallenge } from "@/lib/monster-api";
@@ -67,7 +68,7 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
     (await api<{ encounter: SavedEncounter }>(`/api/campaigns/${campaignId}/encounters/${id}`, { method: "PATCH", body })).encounter);
 
   if (loadFailed) return <div className={styles.journal}><p className={styles.error} role="alert">{t.loadError} <button type="button" className={styles.btn} onClick={load}>{t.retry}</button></p></div>;
-  if (!items) return <div className={styles.journal}><p className={styles.note} role="status">{t.loading}</p></div>;
+  if (!items) return <div className={styles.journal}><SkeletonRegion label={t.loading} className="skeleton-grid">{[0, 1].map((item) => <div key={item} className="skeleton-card"><Skeleton width="40%" height={16} /><SkeletonText lines={2} /></div>)}</SkeletonRegion></div>;
 
   const byDate = (a: SavedEncounter, b: SavedEncounter) => (a.status === "played" ? (b.playedAt ?? b.createdAt).localeCompare(a.playedAt ?? a.createdAt) : b.createdAt.localeCompare(a.createdAt));
   const groups = [

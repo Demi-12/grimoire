@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 import { useEffect, useState } from "react";
 import { fetchMonster, fetchMonsterCatalog, inferMonsterRoles, srdLabel, type MonsterEdition, type MonsterListEntry } from "@/lib/monster-api";
 import MonsterSheet from "@/components/monster-sheet";
@@ -92,7 +93,7 @@ export default function BestiaryBrowser({ locale = "en", onAddCreature }: Props)
       </label>
     </div>
 
-    {loading ? <div className={styles.status} role="status">{t.loading}</div>
+    {loading ? <SkeletonRegion label={t.loading as string}><div className={styles.list}>{Array.from({ length: 8 }, (_, index) => <div key={index} className="skeleton-row"><Skeleton width={24} height={24} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="65%" height={14} /><Skeleton width="35%" height={9} style={{ marginTop: 6 }} /></div></div>)}</div></SkeletonRegion>
       : error ? <div className={styles.error} role="alert"><strong>{t.errorTitle}</strong><p>{error}</p><button type="button" onClick={() => setRetryCount((count) => count + 1)}>{t.retry}</button></div>
       : <>
         <div className={styles.resultsHeader}><span>{countText(catalogCount)}{rating ? ` · CR ${ratingText(rating)}` : ""}</span><small>{srdLabel(edition)} · API</small></div>
@@ -122,7 +123,7 @@ export default function BestiaryBrowser({ locale = "en", onAddCreature }: Props)
             setAddedSlug(selectedSlug);
           }
         } finally { setAdding(false); }
-      }}>{adding ? (locale === "es" ? "Añadiendo…" : "Adding…") : addedSlug === selectedSlug ? t.added : t.add}</button>}
+      }}>{adding ? <><Spinner />{locale === "es" ? "Añadiendo…" : "Adding…"}</> : addedSlug === selectedSlug ? t.added : t.add}</button>}
     </div>}
   </section>;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion } from "./skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type AdminUser, type Me } from "@/lib/api-client";
 import type { AccountStatus, SiteRole } from "@/lib/permissions";
@@ -64,7 +65,7 @@ export default function AdminUsers({ me, locale }: { me: Me; locale: Locale }) {
     }
   }
 
-  if (!users) return <p role="status" className="admin-loading">{error || t.loading}</p>;
+  if (!users) return error ? <p role="alert" className="admin-error">{error}</p> : <SkeletonRegion label={t.loading} className="skeleton-grid">{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="35%" height={14} /><Skeleton width="55%" height={10} style={{ marginTop: 8 }} /></div><Skeleton width={90} height={32} /></div>)}</SkeletonRegion>;
 
   const dateFormat = new Intl.DateTimeFormat(locale === "es" ? "es-ES" : "en-US", { dateStyle: "medium" });
   const groups: { status: AccountStatus; title: string }[] = [

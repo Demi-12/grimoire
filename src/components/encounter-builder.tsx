@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { translate, type Locale } from "@/lib/i18n";
 import {
@@ -328,7 +329,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
               </button>
             ))}
           </div>
-          {usesSrd && !srd && !srdError && <p className="encounter-footnote" role="status">{translate(locale, "encounter.monsters.loading")}</p>}
+          {usesSrd && !srd && !srdError && <SkeletonRegion label={translate(locale, "encounter.monsters.loading")}><p className="encounter-footnote" aria-hidden="true"><Spinner />{translate(locale, "encounter.monsters.loading")}</p><div className="type-chips">{[64, 88, 72, 96, 80].map((width) => <Skeleton key={width} width={width} height={30} style={{ borderRadius: 999 }} />)}</div></SkeletonRegion>}
           {usesSrd && srdError && <p className="encounter-footnote monster-error" role="alert">{translate(locale, "encounter.monsters.error")} {srdError} <button type="button" className="small-action" onClick={() => setSrdAttempt((attempt) => attempt + 1)}>{translate(locale, "encounter.monsters.retry")}</button></p>}
           {usesSrd && srd && <>
             <p className="filter-label">{translate(locale, "encounter.monsters.types")}</p>

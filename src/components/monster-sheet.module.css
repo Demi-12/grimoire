@@ -78,7 +78,7 @@
 .legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 .loading, .error, .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--sb-edge, #c9952e); color: #4b3a2b; background: #fbf1dc; font: italic 14px "Alegreya", Georgia, serif; }
-.loading { animation: pulse 1.6s ease-in-out infinite; }
+.loading { text-align: left; }
 @keyframes pulse { 50% { opacity: .6; } }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
 .error { color: #7c2014; }
