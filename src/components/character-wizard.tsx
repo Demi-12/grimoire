@@ -308,14 +308,14 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
           <Choice key={method} selected={build.abilityMethod === method} onClick={() => setMethod(method)}><strong>{c.methods[method]}</strong><small>{c.methodHelp[method]}</small></Choice>)}</div>
         <div className={styles.toolbar}>
           {build.abilityMethod !== "pointBuy" && pool.length === 6 && <button type="button" className={styles.link} onClick={() => update({ baseScores: suggestedAssignment(pool, build.classId) })}>✧ {c.suggest}</button>}
-          {build.abilityMethod === "rolled" && <button type="button" className={styles.link} onClick={rollScores}>🎲 {c.reroll}</button>}
+          {build.abilityMethod === "rolled" && <button type="button" className={styles.link} onClick={rollScores}>⚄︎ {c.reroll}</button>}
           {build.abilityMethod === "rolled" && pool.length === 6 && <span className={styles.pool}>{pool.join(" · ")}</span>}
           {build.abilityMethod === "pointBuy" && <span className={`${styles.pool} ${pointBuySpent(build.baseScores) > POINT_BUY_BUDGET ? styles.bad : ""}`}>{c.points(pointBuySpent(build.baseScores))}</span>}
         </div>
         <div className={styles.abilityTable}>
           <div className={styles.abilityHead}><span /><span>{c.base}</span><span>{c.bonus}</span><span>{c.final}</span><span>{c.mod}</span></div>
           {abilities.map(({ key }) => <div className={styles.abilityRow} key={key}>
-            <b>{translate(locale, `ability.${key}`)}{cls.primary.includes(key) && <i title={c.primary}> ★</i>}</b>
+            <b>{translate(locale, `ability.${key}`)}{cls.primary.includes(key) && <i title={c.primary}> ★︎</i>}</b>
             <span>{build.abilityMethod === "pointBuy"
               ? <span className={styles.stepper}>
                 <button type="button" onClick={() => update({ baseScores: { ...build.baseScores, [key]: build.baseScores[key] - 1 } })} disabled={build.baseScores[key] <= 8} aria-label="−">−</button>

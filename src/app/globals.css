@@ -432,3 +432,6 @@ body {
   .sidebar-bottom{display:none}
 }
 @media (min-width: 651px) { .header-signout{display:none} }
+
+/* iOS draws some symbols (⚔ ✳ ☀) as colour emoji; force the text glyph so they follow the theme colours. */
+body { font-variant-emoji: text; }

@@ -213,7 +213,7 @@ export default function Toolkit() {
   if (authSession.isPending || (accountId && meLoadedFor !== accountId)) return loading;
 
   const controls = <>
-    <button type="button" className="theme-toggle ml-auto rounded-md border border-line px-2 py-1.5 text-xs text-ink" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "☾"}<span>{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
+    <button type="button" className="theme-toggle ml-auto rounded-md border border-line px-2 py-1.5 text-xs text-ink" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀︎" : "☾"}<span>{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
     <label className="inline-flex items-center gap-2 text-xs text-muted"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="rounded-md border border-line bg-parchment px-2 py-1.5 text-ink focus-visible:ring-2 focus-visible:ring-forest" value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
   </>;
 
@@ -221,7 +221,7 @@ export default function Toolkit() {
   if (!accountId || !me || me.status !== "approved") {
     const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
     return <main className="gate-shell min-h-screen bg-paper text-ink">
-      <header className="gate-header"><span className="gate-brand">✳ GRIMOIRE</span>{controls}</header>
+      <header className="gate-header"><span className="gate-brand">✳︎ GRIMOIRE</span>{controls}</header>
       {loadError ? <section className="gate-card" role="alert"><h1>{t("gate.errorTitle")}</h1><p>{t("gate.errorDescription")}</p>
         <button className="button button-primary" onClick={() => window.location.reload()}>{t("gate.retry")}</button></section>
       : !accountId || !me ? <><p className="gate-intro">{t("gate.intro")}</p><AuthPanel locale={locale} /></>
@@ -307,13 +307,13 @@ export default function Toolkit() {
 
   return <main className="app-shell min-h-screen bg-paper text-ink">
     <aside className="sidebar">
-      <button className="brand" onClick={() => setView("home")}><span>✳</span><b>GRIMOIRE</b></button>
+      <button className="brand" onClick={() => setView("home")}><span>✳︎</span><b>GRIMOIRE</b></button>
       <div className="sidebar-caption">{t("nav.workspace")}</div>
       <nav className="side-nav" aria-label={t("nav.aria")}>
         <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><span aria-hidden="true">⌂</span>{t("nav.home")}</button>
         <button className={view === "characters" ? "active" : ""} onClick={() => setView("characters")}><span aria-hidden="true">♙</span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
         <button className={view === "campaigns" ? "active" : ""} onClick={() => setView("campaigns")}><span aria-hidden="true">⚑</span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
-        <button className={view === "encounters" ? "active" : ""} onClick={() => setView("encounters")}><span aria-hidden="true">⚔</span>{t("nav.encounters")}</button>
+        <button className={view === "encounters" ? "active" : ""} onClick={() => setView("encounters")}><span aria-hidden="true">⚔︎</span>{t("nav.encounters")}</button>
         <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
         {me.role === "admin" && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
       </nav>
@@ -321,7 +321,7 @@ export default function Toolkit() {
     </aside>
 
     <section className="workspace">
-      <header className="workspace-header"><div className="mobile-brand">✳ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+      <header className="workspace-header"><div className="mobile-brand">✳︎ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
         <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         <span className="edition-badge">{t("common.edition")}</span></header>
@@ -337,14 +337,14 @@ export default function Toolkit() {
         <header className="desk-head">
           <div><h1>{t("home.title")}</h1><p>{t("home.signedIn", { name: me.name })}</p></div>
           <div className="desk-actions">
-            <button className="button button-quiet" onClick={() => setView("encounters")}>⚔ {t("home.generateEncounter")}</button>
+            <button className="button button-quiet" onClick={() => setView("encounters")}>⚔︎ {t("home.generateEncounter")}</button>
             <button className="button button-primary" onClick={() => setView("characters")}>✦ {t("home.createCharacter")}</button>
           </div>
         </header>
         <section className="tool-grid" aria-label={t("home.toolbox")}>
           <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true">♙</span><strong>{t("nav.characters")}</strong><b>{ownCharacters.length}</b><small>{t("home.tool.characters")}</small></button>
           <button className="tool-tile" onClick={() => setView("campaigns")}><span className="tool-glyph" aria-hidden="true">⚑</span><strong>{t("home.campaigns")}</strong><b>{campaigns.length}</b><small>{t("home.tool.campaigns")}</small></button>
-          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true">⚔</span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true">⚔︎</span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
           <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true">⚿</span><strong>{t("nav.account")}</strong><b className="tool-status">✓</b><small>{t("home.tool.accountOn")}</small></button>
         </section>
         <section className="desk-panel">
