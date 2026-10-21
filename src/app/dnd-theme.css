@@ -387,3 +387,11 @@ body { background-image: var(--grain), var(--mottle),
   box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px rgba(216, 170, 85, .2), 0 2px 6px rgba(0, 0, 0, .35);
 }
 :root[data-theme="dark"] .character-card { box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+
+/* Touch targets: header controls stay at 40px so the bar still fits at 390px; everything else gets 44px. */
+@media (pointer: coarse), (max-width: 650px) {
+  .theme-toggle, .header-signout, .header-admin, .workspace-header label select { min-height: 40px; }
+  .theme-toggle, .header-admin { min-width: 40px; }
+  .small-action, .text-button { min-height: 44px; min-width: 44px; }
+  .icon-button { width: 44px; height: 44px; }
+}
