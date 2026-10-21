@@ -3,6 +3,8 @@
 import type { AccountStatus, CampaignRole, SiteRole } from "@/lib/permissions";
 import type { AbilityScores } from "@/lib/rules";
 import type { CharacterBuild } from "@/lib/character-sheet";
+import type { HomebrewVisibility } from "@/lib/homebrew";
+import type { MonsterRole, MonsterStatBlock } from "@/lib/monster-api";
 
 /** Shapes returned by the app's API routes (mirrors src/lib/data.ts). */
 export interface Character {
@@ -48,6 +50,14 @@ export interface CatalogCreature {
   monsterSlug?: string; cr?: number; type?: string; roleTags?: string[];
 }
 
+/** A homebrew monster as returned by /api/homebrew (mirrors HomebrewView in src/lib/data.ts). */
+export interface HomebrewMonster {
+  id: string; ownerId: string; ownerName: string; mine: boolean;
+  name: string; cr: number; xp: number; type: string; roleTags: MonsterRole[];
+  visibility: HomebrewVisibility; locked: boolean; campaignIds: string[];
+  statBlock: MonsterStatBlock; updatedAt: string;
+}
+
 export type EncounterStatus = "planned" | "played";
 export interface EncounterLine { name: string; xp: number; count: number; monsterSlug?: string; cr?: number; type?: string; source?: string }
 /** A saved encounter in a campaign's journal (DM-only). */
@@ -63,7 +73,7 @@ export interface AdminUser {
 }
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string, readonly path?: string) {
     super(message);
   }
 }
@@ -79,13 +89,17 @@ export async function api<T = void>(path: string, init: { method?: string; body?
   });
   if (!response.ok) {
     let message = response.statusText;
+    let code: string | undefined;
+    let path: string | undefined;
     try {
-      const data = await response.json() as { error?: string };
+      const data = await response.json() as { error?: string; code?: string; path?: string };
       if (data.error) message = data.error;
+      code = data.code;
+      path = data.path;
     } catch {
       // Keep the status text when the body isn't JSON.
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, code, path);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }

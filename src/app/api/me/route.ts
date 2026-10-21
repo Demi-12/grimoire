@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, jsonError, readJson } from "@/lib/access";
+import { getCurrentUser, jsonError, rateLimit, readJson } from "@/lib/access";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { readPreferences, updatePreferences } from "@/lib/data";
 import { parsePreferencesInput } from "@/lib/permissions";
 
@@ -16,6 +17,8 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const user = await getCurrentUser();
   if (!user) return jsonError(401, "Sign in to continue.");
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const body = await readJson(request);
   if (body && typeof body === "object" && (body as { legacyImported?: unknown }).legacyImported === true) {
     await updatePreferences(user.id, { legacyImported: true });

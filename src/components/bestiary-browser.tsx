@@ -3,8 +3,11 @@
 import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 import { useEffect, useState } from "react";
 import { fetchMonster, fetchMonsterCatalog, inferMonsterRoles, srdLabel, type MonsterEdition, type MonsterListEntry } from "@/lib/monster-api";
+import HomebrewPanel from "@/components/homebrew-panel";
 import MonsterSheet from "@/components/monster-sheet";
+import type { Campaign, CatalogCreature, Me } from "@/lib/api-client";
 import styles from "./bestiary-browser.module.css";
+import homebrewStyles from "./homebrew.module.css";
 
 type Locale = "en" | "es";
 type Props = { locale?: Locale; onAddCreature?: (creature: { id: string; name: string; xp: number; source: string; roleTags: ReturnType<typeof inferMonsterRoles>; monsterSlug: string }) => void };
@@ -36,7 +39,7 @@ const copy = {
   },
 } satisfies Record<Locale, BrowserCopy>;
 
-export default function BestiaryBrowser({ locale = "en", onAddCreature }: Props) {
+function SrdBestiary({ locale = "en", onAddCreature }: Props) {
   const t = copy[locale];
   const [rating, setRating] = useState("");
   const [query, setQuery] = useState("");
@@ -126,4 +129,27 @@ export default function BestiaryBrowser({ locale = "en", onAddCreature }: Props)
       }}>{adding ? <><Spinner />{locale === "es" ? "Añadiendo…" : "Adding…"}</> : addedSlug === selectedSlug ? t.added : t.add}</button>}
     </div>}
   </section>;
+}
+
+type HomebrewProps = {
+  me: Pick<Me, "id" | "name" | "role">;
+  campaigns: Campaign[];
+  onAddCreature: (creature: Omit<CatalogCreature, "id">) => void;
+};
+
+const tabLabels = { en: { srd: "SRD bestiary", homebrew: "Homebrew", label: "Bestiary source" }, es: { srd: "Bestiario SRD", homebrew: "Homebrew", label: "Origen del bestiario" } };
+
+/** The SRD bestiary, plus a Homebrew tab when the caller can supply the signed-in user. */
+export default function BestiaryBrowser(props: Props & { homebrew?: HomebrewProps }) {
+  const { homebrew, ...srdProps } = props;
+  const [tab, setTab] = useState<"srd" | "homebrew">("srd");
+  const labels = tabLabels[props.locale ?? "en"];
+  if (!homebrew) return <SrdBestiary {...srdProps} />;
+  return <>
+    <div className={homebrewStyles.scopes} role="group" aria-label={labels.label} style={{ marginTop: 24 }}>
+      <button type="button" aria-pressed={tab === "srd"} onClick={() => setTab("srd")}>{labels.srd}</button>
+      <button type="button" aria-pressed={tab === "homebrew"} onClick={() => setTab("homebrew")}>{labels.homebrew}</button>
+    </div>
+    {tab === "srd" ? <SrdBestiary {...srdProps} /> : <HomebrewPanel locale={props.locale ?? "en"} me={homebrew.me} campaigns={homebrew.campaigns} onAddCreature={homebrew.onAddCreature} />}
+  </>;
 }

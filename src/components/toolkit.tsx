@@ -6,6 +6,7 @@ import EncounterBuilder from "@/components/encounter-builder";
 import CampaignManager from "@/components/campaign-manager";
 import BestiaryBrowser from "@/components/bestiary-browser";
 import AdminUsers from "@/components/admin-users";
+import DataBackup from "@/components/data-backup";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
 import { api, ApiError, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
@@ -151,6 +152,12 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     setCharacters(characterData.characters);
     setCampaigns(campaignData.campaigns);
   }, []);
+
+  const reloadAfterRestore = useCallback(async () => {
+    await reloadData();
+    const data = await api<{ creatures: CatalogCreature[] }>("/api/creatures");
+    setOwnCreatures(data.creatures.map(toCreature));
+  }, [reloadData]);
 
   useEffect(() => {
     if (authSession.isPending) return;
@@ -439,7 +446,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: creatures.length })}</button></div>
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
-        <BestiaryBrowser locale={locale} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
+        <BestiaryBrowser locale={locale} homebrew={{ me, campaigns, onAddCreature: (creature) => { void saveCreature(creature); } }} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
         {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
@@ -450,6 +457,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       {view === "account" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
         <AuthPanel locale={locale} googleEnabled={googleEnabled} />
+        <DataBackup locale={locale} onRestored={reloadAfterRestore} />
       </main>}
 
       {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>

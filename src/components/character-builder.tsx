@@ -8,7 +8,7 @@ import type { Campaign, Character, CharacterDraft } from "@/lib/api-client";
 import CharacterWizard, { describeBuild, type WizardResult } from "@/components/character-wizard";
 import LevelUp, { type LevelUpResult } from "@/components/level-up";
 import { deriveSheet, type CharacterBuild, type DerivedSheet } from "@/lib/character-sheet";
-import { backgrounds, classes, findBackground, findClass, findSpecies, say, skillKeys, species as speciesList, type Text } from "@/lib/dnd2024";
+import { alignments, backgrounds, classes, findBackground, findClass, findSpecies, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
 import { featInfo } from "@/lib/levelup-data";
 import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
 
@@ -233,6 +233,8 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
               <div><small>{translate(locale, "character.classLabel")}</small><b>{character.className || "—"} · {character.level}</b></div>
               <div><small>{translate(locale, "character.backgroundLabel")}</small><b>{character.background || "—"}</b></div>
               <div><small>{translate(locale, "character.proficiencyLabel")}</small><b>+{proficiencyBonus(character.level)}</b></div>
+              <div><small>{translate(locale, "character.sheetAlignment")}</small><b>{character.build ? say(alignments[character.build.alignment] ?? alignments[4], locale) : "—"}</b></div>
+              <div><small>{translate(locale, "character.sheetPassivePerception")}</small><b>{sheet?.passivePerception ?? "—"}</b></div>
             </div>
             <section className="sheet-section"><h4>{translate(locale, "character.scoresTitle")}</h4><p className="export-legend">{translate(locale, "character.abilityScoreLabel")} · {translate(locale, "character.abilityModifierLabel")}</p>
               <div className="export-abilities">{abilities.map(({ key }) => { const score = character.scores[key]; const modifier = abilityModifier(score); return <div key={key}><span>{translate(locale, `ability.${key}`)}</span><b>{score}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
@@ -255,7 +257,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
             ].join(" · ")}{sheet?.spellSaveDc ? ` · ${translate(locale, "character.spellDc")} ${sheet.spellSaveDc}, ${translate(locale, "character.spellAttack")} ${signed(sheet.spellAttack ?? 0)}` : ""}</p>}</div></section>
             <div className="sheet-columns">
               <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><div className="sheet-writing-area medium">{character.build && <p className="sheet-filled">{(findSpecies(character.build.speciesId)?.traits ?? []).map((trait) => say(trait, locale)).join(" · ")}{sheet?.darkvision ? ` · ${translate(locale, "character.darkvision")} ${sheet.darkvision}` : ""}</p>}</div></section>
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetProficiencies")}</h4><div className="sheet-writing-area medium">{character.build && (() => { const cls = findClass(character.build.classId); return cls ? <p className="sheet-filled">{say(cls.armor, locale)} · {say(cls.weapons, locale)}{cls.tools ? ` · ${say(cls.tools, locale)}` : ""}</p> : null; })()}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetProficiencies")}</h4><div className="sheet-writing-area medium">{character.build && (() => { const cls = findClass(character.build.classId); return cls ? <p className="sheet-filled">{say(cls.armor, locale)} · {say(cls.weapons, locale)}{cls.tools ? ` · ${say(cls.tools, locale)}` : ""}<br />{translate(locale, "character.sheetLanguages")}: {[locale === "es" ? "Común" : "Common", ...character.build.languages.map((index) => standardLanguages[index] ? say(standardLanguages[index], locale) : "")].filter(Boolean).join(", ")}</p> : null; })()}</div></section>
             </div>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetEquipment")}</h4><div className="sheet-equipment-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetQuantity")}</b><b>{translate(locale, "character.sheetWeight")}</b><b>{translate(locale, "character.sheetNotes")}</b></div>{(() => { const items = character.build ? startingItems(character.build, locale) : []; return Array.from({ length: Math.max(7, items.length) }, (_, index) => <div key={index}><span>{items[index] ?? ""}</span><span /><span /><span /></div>); })()}</div></section>
             <div className="sheet-columns">

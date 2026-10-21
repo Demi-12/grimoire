@@ -4,7 +4,39 @@ Toolkit autohospedado para preparar partidas de Dungeons & Dragons 5e (2024). In
 
 ## Desarrollo local
 
-Requisitos: Node.js 22+ y pnpm 11. Copia `.env.example` a `.env` solo si vas a configurar servicios locales. Los archivos `.env*` están ignorados por Git y excluidos del contexto Docker salvo `.env.example`.
+La app necesita PostgreSQL (cuentas, personajes y campañas viven allí), así que para verla funcionando en tu máquina hacen falta tres cosas: una base de datos, un `.env` y `pnpm dev`.
+
+**Requisitos:** Node.js 22+, pnpm 11 (`corepack enable`) y Docker (Docker Desktop en Windows o macOS) para la base de datos.
+
+### 1. Variables de entorno
+
+Crea un `.env` en la raíz (está ignorado por Git; `.env.example` lista todas las variables posibles, pero en local solo hacen falta estas):
+
+```sh
+POSTGRES_PASSWORD=pon-aqui-una-contrasena-solo-con-letras-y-numeros
+DATABASE_URL=postgres://grimoire:pon-aqui-una-contrasena-solo-con-letras-y-numeros@localhost:5432/grimoire
+BETTER_AUTH_SECRET=genera-uno-aleatorio-como-se-indica-abajo
+BETTER_AUTH_URL=http://localhost:3000
+GRIMOIRE_ADMIN_EMAILS=tu@correo.com
+```
+
+- La contraseña de `POSTGRES_PASSWORD` tiene que ser la misma que la de `DATABASE_URL`. Usa solo letras y números: en la URL, los símbolos habría que codificarlos.
+- `BETTER_AUTH_SECRET`: en Linux, macOS o Git Bash, `openssl rand -base64 32`; en PowerShell, `[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))`.
+- `BETTER_AUTH_URL` debe ser exactamente la dirección con la que abres la app: las cookies de sesión y las passkeys dependen de ella.
+- `GRIMOIRE_ADMIN_EMAILS` es tu correo: al registrarte con él, tu cuenta es admin del sitio.
+
+### 2. Base de datos
+
+`compose.dev.yaml` levanta PostgreSQL 17 solo en `127.0.0.1:5432` y aplica las migraciones de Liquibase (`database/changelog/`). No es el `compose.yaml` de producción, que no publica puertos.
+
+```sh
+docker compose -f compose.dev.yaml up -d db
+docker compose -f compose.dev.yaml run --rm migrate
+```
+
+Repite el segundo comando cada vez que cambie `database/changelog/` (por ejemplo, tras hacer `git pull`): solo aplica lo que falte. Para borrar todos los datos locales: `docker compose -f compose.dev.yaml down -v`.
+
+### 3. La aplicación
 
 ```sh
 corepack enable
@@ -12,7 +44,24 @@ pnpm install
 pnpm dev
 ```
 
-Si Windows indica que `npm` no se reconoce, instala o repara Node.js 22 desde el instalador oficial; npm viene incluido. Comprueba `node -v` y `npm -v` en una terminal nueva. Este proyecto usa pnpm, que puedes habilitar con `corepack enable` si Corepack está disponible. En el entorno de Codex no hay npm en PATH, pero sí pnpm, así que no fue necesario bloquear la implementación.
+Abre http://localhost:3000, crea una cuenta con el correo de `GRIMOIRE_ADMIN_EMAILS` y entrarás como admin. El registro no pide verificar el correo y la recuperación de contraseña por correo no funciona sin SMTP (ver `.env.example`).
+
+### 4. Comprobaciones antes de abrir un PR
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Son las mismas que ejecuta el CI.
+
+### Problemas habituales
+
+- **`npm` o `pnpm` no se reconocen en Windows:** instala o repara Node.js 22 desde el instalador oficial (npm viene incluido), abre una terminal nueva y comprueba `node -v`. Después `corepack enable` habilita pnpm.
+- **`Could not validate the database schema` en la consola:** la base de datos no está levantada o falta el paso `migrate`.
+- **`port is already allocated` al levantar la base de datos:** ya hay un PostgreSQL usando el puerto 5432. Páralo o cambia el puerto publicado en `compose.dev.yaml`, y usa ese mismo puerto en `DATABASE_URL`.
+- **No puedo iniciar sesión tras cambiar de puerto o de dirección:** actualiza `BETTER_AUTH_URL` y reinicia `pnpm dev`; si abres la app desde otra URL (por ejemplo, la IP de tu LAN), añádela a `BETTER_AUTH_TRUSTED_ORIGINS`.
 
 ## Lint y pruebas
 
@@ -63,6 +112,14 @@ Si abres el toolkit desde varias URLs (la de la LAN y la pública), pon la princ
 
 El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
+## Cabeceras de seguridad y límites de uso
+
+- **CSP** (`src/proxy.ts`, `src/lib/security-headers.ts`): se genera por petición con un nonce para los scripts de Next y el hash del script del tema; no se usa `'unsafe-inline'` en scripts. Los estilos sí lo permiten porque la UI usa atributos `style`. Las imágenes de monstruos se permiten desde `www.dnd5eapi.co`. No se activa `upgrade-insecure-requests` porque la app también se abre por `http://` en la LAN.
+- **Resto de cabeceras** (`next.config.ts`): `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y `X-Frame-Options` (más `frame-ancestors 'none'` en la CSP).
+- **HSTS**: solo se envía si `BETTER_AUTH_URL` empieza por `https://`, y se lee al arrancar el servidor (la imagen se construye sin `.env`). Sin `includeSubDomains` ni `preload`.
+- **Rate limiting**: better-auth ya limita inicio de sesión, registro y restablecimiento (`auth.ts`). Las rutas de datos tienen un limitador propio en memoria (`src/lib/rate-limit.ts`), por usuario: 60 escrituras/min, 10 invitaciones/min, 20 altas de miembros/min y 5 importaciones cada 10 min. Los contadores viven en el proceso: con varias réplicas el límite efectivo se multiplica y un reinicio los pone a cero. Hoy `compose.yaml` ejecuta una sola instancia `app`.
+- **Tamaño de cuerpo**: las rutas JSON rechazan cuerpos de más de 64 KB (4 MB en `/api/import`).
+
 ## Deploy con runner self-hosted
 
 El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano desde Actions → Deploy → Run workflow (eligiendo rama). Corre en el propio servidor con un runner self-hosted:
@@ -84,7 +141,7 @@ Grimoire es privado: hay que iniciar sesión para usarlo, pero cualquiera puede 
 - **Campañas compartidas:** el DM crea la campaña y suma gente con enlaces de invitación o escribiendo el correo o nombre exacto de la cuenta desde su campaña (no hay lista de cuentas: solo el admin del sitio las ve, en **Usuarios**; si un nombre se repite, hay que usar el correo). Cada jugador pone sus personajes en la campaña; todos los miembros ven el grupo y el generador de encuentros puede cargar el grupo de una campaña de un clic. Solo el dueño edita su personaje; el DM puede sacarlo de la campaña. Al borrar una campaña los personajes vuelven a sus dueños.
 - **Datos anteriores:** si el navegador tenía personajes o campañas de la versión local, el resumen ofrece importarlos a la cuenta una vez.
 
-Personajes (incluidas las elecciones del creador paso a paso) y campañas viven en PostgreSQL (migración `database/changelog/db.changelog-app.yaml`). El catálogo de criaturas propio sigue guardándose en el navegador de cada cuenta.
+Personajes (incluidas las elecciones del creador paso a paso) y campañas viven en PostgreSQL (migración `database/changelog/db.changelog-app.yaml`). El catálogo de criaturas de cada cuenta y los monstruos homebrew también viven en PostgreSQL.
 
 ## Primera versión
 
@@ -95,6 +152,7 @@ Personajes (incluidas las elecciones del creador paso a paso) y campañas viven 
 - El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP; el catálogo queda en el almacenamiento local del navegador.
 - Las cuentas incluyen registro e inicio de sesión, recuperación de contraseña por correo, 2FA TOTP con códigos de respaldo y passkeys. No se verifica el correo al registrarse. La recuperación usa SMTP de cualquier proveedor (p. ej. Brevo) y es opcional: sin SMTP no se puede recuperar la contraseña por correo. El TOTP protege el acceso con contraseña; el acceso con passkey es passwordless y no pide un segundo código por defecto.
 - El bestiario consulta la API pública del SRD de D&D 5e (dnd5eapi.co) desde rutas del servidor, usando el SRD 2024 y, si no tiene monstruos, el SRD 2014, muestra fichas de monstruos y permite añadirlos al generador. Las etiquetas tácticas se infieren de sus estadísticas y no sustituyen el juicio del DM.
+- **Monstruos homebrew:** en el bestiario, la pestaña *Homebrew* permite crear monstruos con una ficha completa (características, defensas, velocidades, sentidos, rasgos, acciones, reacciones y acciones legendarias) con vista previa en vivo. El XP y la competencia se calculan a partir del valor de desafío. Cada monstruo es **privado** por defecto; su autor puede compartirlo con campañas de las que es miembro o publicarlo para **todas las cuentas del servidor**. Los monstruos homebrew se añaden al generador de encuentros igual que los del SRD y su ficha se abre desde allí. Un admin puede retirar y **bloquear** un monstruo publicado (vuelve a privado y su autor no puede volver a publicarlo hasta que se desbloquee), pero nunca ve el trabajo privado de otras cuentas. Aún no hay copiar un monstruo público a tu cuenta, tiradas de salvación ni habilidades con pericia en el editor.
 - Las propuestas son orientativas. Revisa capacidades especiales, composición y contexto antes de usar un encuentro.
 
 ## Atribución de reglas

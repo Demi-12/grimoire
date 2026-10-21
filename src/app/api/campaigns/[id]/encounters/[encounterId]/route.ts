@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { deleteEncounter, updateEncounter } from "@/lib/data";
 import { encounterStatuses, isUuid, type EncounterStatus } from "@/lib/permissions";
 
@@ -11,6 +12,8 @@ type Context = { params: Promise<{ id: string; encounterId: string }> };
 export async function PATCH(request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { encounterId } = await params;
   if (!isUuid(encounterId)) return jsonError(404, "Not found.");
   const body = await readJson(request) as { title?: unknown; notes?: unknown; status?: unknown } | null;
@@ -27,6 +30,8 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { encounterId } = await params;
   if (!isUuid(encounterId)) return jsonError(404, "Not found.");
   const result = await deleteEncounter(user, encounterId);
