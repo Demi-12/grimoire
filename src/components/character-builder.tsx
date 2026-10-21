@@ -129,7 +129,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
 }) {
   const [editing, setEditing] = useState<Character | undefined>();
   const [showEditor, setShowEditor] = useState(false);
-  const [wizard, setWizard] = useState<{ record?: Character } | null>(null);
+  const [wizard, setWizard] = useState<{ record?: Character; quick?: boolean } | null>(null);
   const [levelingUp, setLevelingUp] = useState<Character | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -208,11 +208,11 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     <div className="section-heading"><div><p className="eyebrow">{translate(locale, "character.groupKicker")}</p><h2 id="characters-title">{translate(locale, "character.title")}</h2>
       <p>{translate(locale, "character.description")}</p></div>
       {!showEditor && !wizard && !levelingUp && <div className="builder-actions">
-        <button className="button button-quiet" onClick={() => { setEditing(undefined); setShowEditor(true); }}>{translate(locale, "character.quickButton")}</button>
+        <button className="button button-quiet" onClick={() => setWizard({ quick: true })}>{translate(locale, "character.quickButton")}</button>
         <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.newButton")}</button>
       </div>}
     </div>
-    {wizard && <CharacterWizard locale={locale} onCancel={() => setWizard(null)} onSave={(result) => void saveFromWizard(result)}
+    {wizard && <CharacterWizard locale={locale} quick={wizard.quick} onCancel={() => setWizard(null)} onSave={(result) => void saveFromWizard(result)}
       initial={wizard.record?.build ? { name: wizard.record.name, level: wizard.record.level, notes: wizard.record.notes, build: wizard.record.build } : undefined} />}
     {levelingUp?.build && <LevelUp key={levelingUp.id} locale={locale} name={levelingUp.name} level={levelingUp.level} build={levelingUp.build}
       onCancel={() => setLevelingUp(null)} onSave={(result) => void saveLevelUp(levelingUp, result)} />}
