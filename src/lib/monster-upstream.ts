@@ -58,9 +58,25 @@ export async function fetchMonsterDetail(slug: string) {
     if (!body || typeof body !== "object" || typeof (body as { name?: unknown }).name !== "string") {
       throw new UpstreamError("The creature API returned an unexpected response.", 502);
     }
-    return { ...(body as Record<string, unknown>), edition };
+    const detail: Record<string, unknown> = { ...(body as Record<string, unknown>), edition };
+    if (typeof detail.image !== "string" && edition !== "2014") {
+      const image = await legacyImage(slug);
+      if (image) detail.image = image;
+    }
+    return detail;
   }
   return null;
+}
+
+/** The 2014 entry often has an illustration when the 2024 one does not; best effort only. */
+async function legacyImage(slug: string): Promise<string | undefined> {
+  try {
+    const { body } = await getJson(`/monsters/${encodeURIComponent(slug)}`, "2014");
+    const image = (body as { image?: unknown } | null)?.image;
+    return typeof image === "string" ? image : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function upstreamErrorResponse(cause: unknown) {
