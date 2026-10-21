@@ -4,7 +4,7 @@
  * Feature names are official; the one-line tips are our own plain-language summaries, not rules text.
  */
 import type { AbilityKey } from "./rules";
-import type { ClassId, FeatId, SkillKey, Text } from "./dnd2024";
+import { originFeats, type ClassId, type FeatId, type SkillKey, type Text } from "./dnd2024";
 
 const t = (en: string, es: string): Text => ({ en, es });
 
@@ -27,11 +27,12 @@ export interface FeatInfo {
 
 const allAbilities: AbilityKey[] = ["str", "dex", "con", "int", "wis", "cha"];
 
+const originFeatInfo = Object.fromEntries(
+  Object.entries(originFeats).map(([id, feat]) => [id, { category: "origin", ...feat }]),
+) as Record<FeatId, FeatInfo>;
+
 export const featCatalog: Record<LevelFeatId, FeatInfo> = {
-  alert: { category: "origin", name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado.") },
-  magicInitiate: { category: "origin", name: t("Magic Initiate", "Iniciado en la magia"), summary: t("Learn two cantrips and one level 1 spell from the Cleric, Druid or Wizard list.", "Aprende dos trucos y un conjuro de nivel 1 de la lista de clérigo, druida o mago.") },
-  savageAttacker: { category: "origin", name: t("Savage Attacker", "Atacante salvaje"), summary: t("Once per turn, roll weapon damage dice twice and use either roll.", "Una vez por turno, tira dos veces los dados de daño de un arma y elige el resultado.") },
-  skilled: { category: "origin", name: t("Skilled", "Habilidoso"), summary: t("Gain proficiency in any combination of three skills or tools.", "Obtienes competencia en tres habilidades o herramientas a tu elección.") },
+  ...originFeatInfo,
   grappler: { category: "general", name: t("Grappler", "Luchador"), abilities: ["str", "dex"], requires: ["str", "dex"], summary: t("+1 Strength or Dexterity, and you get much better at grabbing and pinning enemies.", "+1 a Fuerza o Destreza, y te vuelves mucho mejor agarrando e inmovilizando enemigos.") },
   archery: { category: "fightingStyle", name: t("Archery", "Arquería"), summary: t("+2 to attack rolls with ranged weapons.", "+2 a las tiradas de ataque con armas a distancia.") },
   defense: { category: "fightingStyle", name: t("Defense", "Defensa"), summary: t("+1 Armor Class while you wear armor.", "+1 a la Clase de Armadura mientras llevas armadura.") },
