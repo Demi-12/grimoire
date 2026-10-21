@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { IMPORT_LIMIT } from "@/lib/rate-limit";
+import { MAX_IMPORT_BYTES } from "@/lib/request-body";
 import { importLocalData } from "@/lib/data";
 import { parseCampaignInput, parseCharacterInput, parseCreatureInput, type CharacterInput, type CreatureInput } from "@/lib/permissions";
 
@@ -14,9 +15,9 @@ export async function POST(request: Request) {
   if (user instanceof NextResponse) return user;
   const limited = rateLimit(user, IMPORT_LIMIT);
   if (limited) return limited;
-  const body = await readJson(request) as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
+  const body = await readJson(request, MAX_IMPORT_BYTES) as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
   if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns)) || (body.creatures !== undefined && !Array.isArray(body.creatures))) {
-    return jsonError(400, "Invalid import.");
+    return jsonError(400, "Invalid import, or the data is too large.");
   }
   if (body.characters.length > MAX_ITEMS || (Array.isArray(body.campaigns) && body.campaigns.length > MAX_ITEMS) || (Array.isArray(body.creatures) && body.creatures.length > 500)) {
     return jsonError(413, "Too many items to import at once.");
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   for (const raw of (body.campaigns ?? []) as unknown[]) {
     const input = parseCampaignInput(raw);
     const ids = raw && typeof raw === "object" ? (raw as { characterIds?: unknown }).characterIds : undefined;
-    if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [] });
+    if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.slice(0, MAX_ITEMS).filter((id): id is string => typeof id === "string") : [] });
   }
 
   const creatures: CreatureInput[] = [];

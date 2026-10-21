@@ -13,7 +13,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const limited = rateLimit(user, WRITE_LIMIT);
   if (limited) return limited;
   const { id, userId } = await params;
-  if (!isUuid(id)) return jsonError(404, "Not found.");
+  if (!isUuid(id) || userId.length > 128) return jsonError(404, "Not found.");
   const result = await removeCampaignMember(user, id, userId);
   return result.ok ? new NextResponse(null, { status: 204 }) : dataErrorResponse(result.error);
 }

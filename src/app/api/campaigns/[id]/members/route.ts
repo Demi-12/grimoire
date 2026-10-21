@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return dataErrorResponse(added.error as "not-found" | "forbidden" | "invalid");
   }
 
-  if (typeof body.userId !== "string" || !body.userId) return jsonError(400, "Invalid member.");
+  if (typeof body.userId !== "string" || !body.userId || body.userId.length > 128) return jsonError(400, "Invalid member.");
   const result = await setCampaignMemberRole(user, id, body.userId, body.role);
   return result.ok ? new NextResponse(null, { status: 204 }) : dataErrorResponse(result.error);
 }
