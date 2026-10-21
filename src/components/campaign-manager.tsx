@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Campaign, type Character, type DirectoryUser, type Invite, type Me } from "@/lib/api-client";
+import { api, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
 import EncounterJournal from "@/components/encounter-journal";
 import styles from "./campaign-manager.module.css";
@@ -29,7 +29,6 @@ const text = {
     empty: "No campaigns yet.", owner: (name: string) => `Run by ${name}`,
     roles: { dm: "DM", player: "Player" } as Record<CampaignRole, string>,
     yourRole: "Your role", table: "The table", heroes: "Heroes",
-    addMember: "Add someone", addAs: "as", add: "Add", noOneToAdd: "Every approved account is already here.",
     makeDm: "Make DM", makePlayer: "Make player", removeMember: "Remove",
     noHeroes: "No heroes have joined this campaign yet.", addHero: "Bring one of your characters",
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
@@ -51,7 +50,6 @@ const text = {
     empty: "Aún no hay campañas.", owner: (name: string) => `Dirigida por ${name}`,
     roles: { dm: "DM", player: "Jugador" } as Record<CampaignRole, string>,
     yourRole: "Tu papel", table: "La mesa", heroes: "Héroes",
-    addMember: "Añadir a alguien", addAs: "como", add: "Añadir", noOneToAdd: "Todas las cuentas aprobadas ya están aquí.",
     makeDm: "Hacer DM", makePlayer: "Hacer jugador", removeMember: "Quitar",
     noHeroes: "Todavía no se han unido héroes a esta campaña.", addHero: "Trae uno de tus personajes",
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
@@ -66,19 +64,12 @@ const text = {
 
 export default function CampaignManager({ me, campaigns, characters, locale, onChanged }: Props) {
   const t = text[locale];
-  const managesAny = campaigns.some((campaign) => campaign.canManage);
-  const [directory, setDirectory] = useState<DirectoryUser[]>([]);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!managesAny) return;
-    api<{ users: DirectoryUser[] }>("/api/directory").then((data) => setDirectory(data.users)).catch(() => setDirectory([]));
-  }, [managesAny]);
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -137,8 +128,6 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       {campaigns.map((campaign) => {
         const heroes = characters.filter((character) => character.campaignId === campaign.id);
         const myLooseCharacters = characters.filter((character) => character.editable && character.campaignId !== campaign.id);
-        const memberIds = new Set(campaign.members.map((member) => member.userId));
-        const candidates = directory.filter((user) => !memberIds.has(user.id));
         const canDelete = campaign.isOwner || me.role === "admin";
         return <article className={styles.campaign} key={campaign.id}>
           <div className={styles.campaignHead}>
@@ -178,8 +167,6 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
               </>}
             </li>;
           })}</ul>
-          {campaign.canManage && (candidates.length ? <AddMember key={candidates.length} locale={locale} candidates={candidates} disabled={busy}
-            onAdd={(userId, role) => run(() => api(`/api/campaigns/${campaign.id}/members`, { method: "POST", body: { userId, role } }))} /> : <p className={styles.noMembers}>{t.noOneToAdd}</p>)}
 
           {campaign.canManage && <InvitePanel campaignId={campaign.id} campaignName={campaign.name} ownerName={campaign.ownerName} locale={locale} />}
 
@@ -209,30 +196,6 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       })}
     </div>}
   </section>;
-}
-
-function AddMember({ locale, candidates, disabled, onAdd }: {
-  locale: Locale;
-  candidates: DirectoryUser[];
-  disabled: boolean;
-  onAdd: (userId: string, role: CampaignRole) => Promise<boolean>;
-}) {
-  const t = text[locale];
-  const [userId, setUserId] = useState("");
-  const [role, setRole] = useState<CampaignRole>("player");
-  return <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); if (userId) void onAdd(userId, role).then((ok) => { if (ok) setUserId(""); }); }}>
-    <span>{t.addMember}</span>
-    <select aria-label={t.addMember} value={userId} onChange={(event) => setUserId(event.target.value)}>
-      <option value="">…</option>
-      {candidates.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-    </select>
-    <span>{t.addAs}</span>
-    <select aria-label={t.addAs} value={role} onChange={(event) => setRole(event.target.value as CampaignRole)}>
-      <option value="player">{t.roles.player}</option>
-      <option value="dm">{t.roles.dm}</option>
-    </select>
-    <button type="submit" disabled={disabled || !userId}>{t.add}</button>
-  </form>;
 }
 
 function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaignId: string; campaignName: string; ownerName: string; locale: Locale }) {

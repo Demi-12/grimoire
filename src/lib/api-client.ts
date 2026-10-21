@@ -57,7 +57,6 @@ export interface SavedEncounter {
   lines: EncounterLine[]; playedAt: string | null; createdAt: string; updatedAt: string;
 }
 export type EncounterDraft = Pick<SavedEncounter, "title" | "notes" | "status" | "difficulty" | "budget" | "totalXp" | "partyLevels" | "lines">;
-export interface DirectoryUser { id: string; name: string; role: SiteRole }
 export interface AdminUser {
   id: string; name: string; email: string; role: SiteRole; status: AccountStatus;
   emailVerified: boolean; twoFactorEnabled: boolean; createdAt: string; campaignCount: number; characterCount: number;
