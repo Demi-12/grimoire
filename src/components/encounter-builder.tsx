@@ -201,8 +201,10 @@ function EncounterOption({ suggestion, index, locale, roles, partyLevels, campai
 export default function EncounterBuilder({ partyLevels: initialPartyLevels, creatures = sampleCreatures, locale, characters = [], campaigns = [] }: EncounterBuilderProps) {
   const savedCharacters: SavedCharacter[] = characters;
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
-  const [partySize, setPartySize] = useState(4);
-  const [partyLevel, setPartyLevel] = useState(3);
+  const [partySizeText, setPartySizeText] = useState("4");
+  const [partyLevelText, setPartyLevelText] = useState("3");
+  const partySize = Math.max(1, Math.min(12, Number(partySizeText) || 1));
+  const partyLevel = Math.max(1, Math.min(20, Number(partyLevelText) || 1));
   const [difficulty, setDifficulty] = useState<Difficulty>("moderate");
   const [suggestions, setSuggestions] = useState<EncounterSuggestion[]>([]);
   const [roll, setRoll] = useState(0);
@@ -301,8 +303,8 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
                 <p className="selected-party-note" aria-live="polite">{translate(locale, "encounter.party.selectedSummary", { count: partyLevels.length, levels: partyLevels.join(", ") })}</p>
               ) : (
                 <div className="manual-party">
-                  <label>{translate(locale, "encounter.party.size")}<input aria-label={translate(locale, "encounter.party.sizeAria")} type="number" min={1} max={12} value={partySize} onChange={(event) => setPartySize(Math.max(1, Math.min(12, Number(event.target.value) || 1)))} /></label>
-                  <label>{translate(locale, "encounter.party.levelLabel")}<input aria-label={translate(locale, "encounter.party.levelAria")} type="number" min={1} max={20} value={partyLevel} onChange={(event) => setPartyLevel(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} /></label>
+                  <label>{translate(locale, "encounter.party.size")}<input aria-label={translate(locale, "encounter.party.sizeAria")} type="number" min={1} max={12} value={partySizeText} onChange={(event) => setPartySizeText(event.target.value)} onBlur={() => setPartySizeText(String(partySize))} /></label>
+                  <label>{translate(locale, "encounter.party.levelLabel")}<input aria-label={translate(locale, "encounter.party.levelAria")} type="number" min={1} max={20} value={partyLevelText} onChange={(event) => setPartyLevelText(event.target.value)} onBlur={() => setPartyLevelText(String(partyLevel))} /></label>
                 </div>
               )}
             </>
