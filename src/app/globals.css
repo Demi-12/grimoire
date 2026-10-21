@@ -398,3 +398,26 @@ body {
 :root[data-theme="dark"] .editor-panel select,:root[data-theme="dark"] .party-campaign-select select{background:#2b2b25;border-color:#4a4334;color:var(--ink)}
 :root[data-theme="dark"] .gate-shell{background:var(--paper)}
 :root[data-theme="dark"] .admin-error{color:#ffc1a7;border-color:#8d5141;background:rgba(131,56,45,.18)}
+
+/* Large screens: header, content and footer share one centred column so their edges line up. */
+@media (min-width: 901px) {
+  .workspace {
+    --content-max: 1120px;
+    --gutter: clamp(24px, 5vw, 70px);
+    --edge: max(var(--gutter), calc((100% - var(--content-max)) / 2));
+  }
+  .workspace-header, .app-footer { padding-inline: var(--edge); }
+  .page-content { width: 100%; max-width: none; margin: 0; padding-inline: var(--edge); }
+}
+@media (min-width: 1500px) {
+  .workspace { --content-max: 1280px; }
+  .page-content { padding-top: 44px; padding-bottom: 88px; }
+  .welcome-banner { min-height: 340px; padding: 48px 56px; }
+  .banner-art { right: 7%; }
+  .dashboard-section { margin-top: 48px; }
+  .dashboard-grid, .character-grid { gap: 18px; }
+  .encounter-layout { gap: 22px; }
+}
+@media (min-width: 1900px) {
+  .workspace { --content-max: 1360px; }
+}
