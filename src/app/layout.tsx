@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Alegreya, Alegreya_SC, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
+import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
 import "./tokens.css";
 import "./globals.css";
 import "./dnd-theme.css";
@@ -17,7 +18,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={fontVars}>
+    <html lang="en" className={fontVars} suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
       <body>{children}</body>
     </html>
   );
