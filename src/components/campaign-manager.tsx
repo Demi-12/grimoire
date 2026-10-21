@@ -38,7 +38,8 @@ const text = {
     nameRequired: "Enter a campaign name.",
     invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone with an approved account who opens the link can join as a player. Links expire after 7 days.",
     journal: "Encounter journal",
-    copyLink: "Copy link", copied: "Copied", revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
+    copyLink: "Copy link", copied: "Copied", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
+    shareMessage: (owner: string, c: string) => `⚔️ ${owner} is calling you to the table! Join the campaign "${c}" on Grimoire, build your hero and roll initiative.\n\n🎲 Your invitation (valid 7 days):`, revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
     eyebrow: "✦  LA CRÓNICA", title: "Campañas",
@@ -60,7 +61,8 @@ const text = {
     nameRequired: "Escribe un nombre para la campaña.",
     invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien tenga una cuenta aprobada y abra el enlace se une como jugador. Los enlaces caducan a los 7 días.",
     journal: "Diario de encuentros",
-    copyLink: "Copiar enlace", copied: "Copiado", revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
+    copyLink: "Copiar enlace", copied: "Copiado", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
+    shareMessage: (owner: string, c: string) => `⚔️ ¡${owner} te convoca a la mesa! Únete a la campaña «${c}» en Grimoire, crea a tu héroe y prepárate para tirar iniciativa.\n\n🎲 Tu invitación (válida 7 días):`, revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
   },
 };
 
@@ -182,7 +184,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
           {campaign.canManage && (candidates.length ? <AddMember key={candidates.length} locale={locale} candidates={candidates} disabled={busy}
             onAdd={(userId, role) => run(() => api(`/api/campaigns/${campaign.id}/members`, { method: "POST", body: { userId, role } }))} /> : <p className={styles.noMembers}>{t.noOneToAdd}</p>)}
 
-          {campaign.canManage && <InvitePanel campaignId={campaign.id} locale={locale} />}
+          {campaign.canManage && <InvitePanel campaignId={campaign.id} campaignName={campaign.name} ownerName={campaign.ownerName} locale={locale} />}
 
           {campaign.canManage && <details className={styles.journalBox}>
             <summary className={styles.subheading}>{t.journal}</summary>
@@ -236,13 +238,15 @@ function AddMember({ locale, candidates, disabled, onAdd }: {
   </form>;
 }
 
-function InvitePanel({ campaignId, locale }: { campaignId: string; locale: Locale }) {
+function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaignId: string; campaignName: string; ownerName: string; locale: Locale }) {
   const t = text[locale];
   const [invites, setInvites] = useState<Invite[]>([]);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState("");
   const [failed, setFailed] = useState(false);
+  const [canShare, setCanShare] = useState(false);
 
+  useEffect(() => { setCanShare(typeof navigator.share === "function"); }, []);
   useEffect(() => {
     api<{ invites: Invite[] }>(`/api/campaigns/${campaignId}/invites`).then((data) => setInvites(data.invites)).catch(() => setInvites([]));
   }, [campaignId]);
@@ -262,12 +266,38 @@ function InvitePanel({ campaignId, locale }: { campaignId: string; locale: Local
     }
   }
 
+  const messageFor = (invite: Invite) => `${t.shareMessage(ownerName, campaignName)}\n${linkFor(invite)}`;
+
   async function copy(invite: Invite) {
+    const message = messageFor(invite);
     try {
-      await navigator.clipboard.writeText(linkFor(invite));
-      setCopiedId(invite.id);
+      await navigator.clipboard.writeText(message);
     } catch {
-      window.prompt(t.copyLink, linkFor(invite));
+      // Insecure contexts and some mobile webviews have no async clipboard: fall back to a hidden textarea.
+      const area = document.createElement("textarea");
+      area.value = message;
+      area.setAttribute("readonly", "");
+      area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(area);
+      area.select();
+      area.setSelectionRange(0, message.length);
+      let done = false;
+      try { done = document.execCommand("copy"); } catch { /* handled below */ }
+      document.body.removeChild(area);
+      if (!done) {
+        window.prompt(t.copyLink, linkFor(invite));
+        return;
+      }
+    }
+    setCopiedId(invite.id);
+    window.setTimeout(() => setCopiedId((current) => (current === invite.id ? "" : current)), 2500);
+  }
+
+  async function share(invite: Invite) {
+    try {
+      await navigator.share({ title: t.shareTitle(campaignName), text: t.shareMessage(ownerName, campaignName), url: linkFor(invite) });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) await copy(invite);
     }
   }
 
@@ -278,6 +308,7 @@ function InvitePanel({ campaignId, locale }: { campaignId: string; locale: Local
     {invites.length ? <ul className={styles.memberList}>{invites.map((invite) => <li key={invite.id}>
       <span className={styles.sigle}>⚑</span>
       <span className={styles.heroName}>…{invite.token.slice(-6)}<small>{t.expires} {new Date(invite.expiresAt).toLocaleDateString(locale === "es" ? "es-ES" : "en-US")}</small></span>
+      {canShare && <button type="button" className={styles.quietButton} onClick={() => void share(invite)}>{t.share}</button>}
       <button type="button" className={styles.quietButton} onClick={() => void copy(invite)}>{copiedId === invite.id ? t.copied : t.copyLink}</button>
       <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void change(() => api(`/api/campaigns/${campaignId}/invites/${invite.id}`, { method: "DELETE" }))}>{t.revoke}</button>
     </li>)}</ul> : <p className={styles.noMembers}>{t.noInvites}</p>}
