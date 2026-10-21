@@ -2,7 +2,7 @@
 import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "./rules";
 import {
   armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
-  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
+  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId, type Text, type WeaponProperty, weaponTable,
 } from "./dnd2024";
 import { featInfo, type FightingStyleId, type LevelFeatId } from "./levelup-data";
 
@@ -240,6 +240,28 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     gold: equipment.gold + background.gold,
     feats,
   };
+}
+
+export interface SheetAttack { name: Text; bonus: number; dice: string; modifier: number; type: Text }
+
+/** Weapons in the chosen class and background gear with their attack bonus and damage. */
+export function attackList(build: CharacterBuild, sheet: DerivedSheet): SheetAttack[] {
+  const cls = findClass(build.classId);
+  if (!cls) return [];
+  const classGear = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
+  const backgroundGear = findBackground(build.backgroundId)?.equipment.find((option) => option.id === build.backgroundEquipment);
+  const training = cls.weapons.en;
+  const restriction = /with the (Light|Finesse)(?: or (Light|Finesse))? property/.exec(training)?.slice(1).filter(Boolean).map((word) => word.toLowerCase()) ?? [];
+  const str = abilityModifier(sheet.scores.str);
+  const dex = abilityModifier(sheet.scores.dex);
+  return [...new Set([...(classGear.weapons ?? []), ...(backgroundGear?.weapons ?? [])])].map((id) => {
+    const weapon = weaponTable[id];
+    const modifier = weapon.ranged ? dex : weapon.properties.includes("finesse") ? Math.max(str, dex) : str;
+    const trained = weapon.martial
+      ? /Martial/.test(training) && (restriction.length === 0 || restriction.some((property) => weapon.properties.includes(property as WeaponProperty)))
+      : /Simple/.test(training);
+    return { name: weapon.name, bonus: modifier + (trained ? sheet.proficiency : 0), dice: weapon.dice, modifier, type: weapon.type };
+  });
 }
 
 /** Problems that block finishing each step; an empty list means the step is complete. */

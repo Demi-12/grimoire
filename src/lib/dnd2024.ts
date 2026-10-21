@@ -30,9 +30,39 @@ export const armorTable: Record<ArmorKey, { base: number; dexCap: number | null;
   chainMail: { base: 16, dexCap: 0, name: { en: "Chain Mail", es: "Cota de mallas" } },
 };
 
+/** Weapons the starting equipment can grant; used for the attack list on the character sheet. */
+export type WeaponId =
+  | "dagger" | "handaxe" | "javelin" | "quarterstaff" | "mace" | "sickle" | "spear" | "lightCrossbow" | "shortbow"
+  | "greataxe" | "greatsword" | "longsword" | "flail" | "scimitar" | "shortsword" | "longbow";
+export type WeaponProperty = "finesse" | "light";
+export interface WeaponData { name: Text; dice: string; type: Text; martial?: boolean; properties: WeaponProperty[]; ranged?: boolean }
+const piercing = { en: "piercing", es: "perforante" };
+const slashing = { en: "slashing", es: "cortante" };
+const bludgeoning = { en: "bludgeoning", es: "contundente" };
+export const weaponTable: Record<WeaponId, WeaponData> = {
+  dagger: { name: { en: "Dagger", es: "Daga" }, dice: "1d4", type: piercing, properties: ["finesse", "light"] },
+  handaxe: { name: { en: "Handaxe", es: "Hacha de mano" }, dice: "1d6", type: slashing, properties: ["light"] },
+  javelin: { name: { en: "Javelin", es: "Jabalina" }, dice: "1d6", type: piercing, properties: [] },
+  quarterstaff: { name: { en: "Quarterstaff", es: "Bastón" }, dice: "1d6", type: bludgeoning, properties: [] },
+  mace: { name: { en: "Mace", es: "Maza" }, dice: "1d6", type: bludgeoning, properties: [] },
+  sickle: { name: { en: "Sickle", es: "Hoz" }, dice: "1d4", type: slashing, properties: ["light"] },
+  spear: { name: { en: "Spear", es: "Lanza" }, dice: "1d6", type: piercing, properties: [] },
+  lightCrossbow: { name: { en: "Light Crossbow", es: "Ballesta ligera" }, dice: "1d8", type: piercing, properties: [], ranged: true },
+  shortbow: { name: { en: "Shortbow", es: "Arco corto" }, dice: "1d6", type: piercing, properties: [], ranged: true },
+  greataxe: { name: { en: "Greataxe", es: "Gran hacha" }, dice: "1d12", type: slashing, martial: true, properties: [] },
+  greatsword: { name: { en: "Greatsword", es: "Espadón" }, dice: "2d6", type: slashing, martial: true, properties: [] },
+  longsword: { name: { en: "Longsword", es: "Espada larga" }, dice: "1d8", type: slashing, martial: true, properties: [] },
+  flail: { name: { en: "Flail", es: "Mayal" }, dice: "1d8", type: bludgeoning, martial: true, properties: [] },
+  scimitar: { name: { en: "Scimitar", es: "Cimitarra" }, dice: "1d6", type: slashing, martial: true, properties: ["finesse", "light"] },
+  shortsword: { name: { en: "Shortsword", es: "Espada corta" }, dice: "1d6", type: piercing, martial: true, properties: ["finesse", "light"] },
+  longbow: { name: { en: "Longbow", es: "Arco largo" }, dice: "1d8", type: piercing, martial: true, properties: [], ranged: true },
+};
+
 export interface EquipmentOption {
   id: "A" | "B" | "C";
   items: Text[];
+  /** Weapons among `items`, by id. */
+  weapons?: WeaponId[];
   gold: number;
   armor?: ArmorKey;
   shield?: boolean;
@@ -80,7 +110,7 @@ export const classes: ClassData[] = [
     subclass: t("Path of the Berserker", "Senda del berserker"),
     summary: t("A fierce warrior fueled by primal rage.", "Un guerrero feroz impulsado por una furia primigenia."),
     equipment: [
-      { id: "A", items: [t("Greataxe", "Gran hacha"), t("4 Handaxes", "4 hachas de mano"), t("Explorer's Pack", "Equipo de explorador"), gp(15)], gold: 15 },
+      { id: "A", items: [t("Greataxe", "Gran hacha"), t("4 Handaxes", "4 hachas de mano"), t("Explorer's Pack", "Equipo de explorador"), gp(15)], weapons: ["greataxe", "handaxe"], gold: 15 },
       { id: "B", items: [gp(75)], gold: 75 },
     ],
   },
@@ -94,7 +124,7 @@ export const classes: ClassData[] = [
     subclass: t("College of Lore", "Colegio del Saber"),
     summary: t("An inspiring performer whose words and music weave magic.", "Un artista inspirador cuya música y palabras tejen magia."),
     equipment: [
-      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("2 Daggers", "2 dagas"), t("Musical Instrument", "Instrumento musical"), t("Entertainer's Pack", "Equipo de artista"), gp(19)], gold: 19, armor: "leather" },
+      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("2 Daggers", "2 dagas"), t("Musical Instrument", "Instrumento musical"), t("Entertainer's Pack", "Equipo de artista"), gp(19)], weapons: ["dagger"], gold: 19, armor: "leather" },
       { id: "B", items: [gp(90)], gold: 90 },
     ],
   },
@@ -107,7 +137,7 @@ export const classes: ClassData[] = [
     subclass: t("Life Domain", "Dominio de la Vida"),
     summary: t("A priestly champion who wields divine magic.", "Un campeón sacerdotal que empuña magia divina."),
     equipment: [
-      { id: "A", items: [t("Chain Shirt", "Camisote de mallas"), t("Shield", "Escudo"), t("Mace", "Maza"), t("Holy Symbol", "Símbolo sagrado"), t("Priest's Pack", "Equipo de sacerdote"), gp(7)], gold: 7, armor: "chainShirt", shield: true },
+      { id: "A", items: [t("Chain Shirt", "Camisote de mallas"), t("Shield", "Escudo"), t("Mace", "Maza"), t("Holy Symbol", "Símbolo sagrado"), t("Priest's Pack", "Equipo de sacerdote"), gp(7)], weapons: ["mace"], gold: 7, armor: "chainShirt", shield: true },
       { id: "B", items: [gp(110)], gold: 110 },
     ],
   },
@@ -121,7 +151,7 @@ export const classes: ClassData[] = [
     subclass: t("Circle of the Land", "Círculo de la Tierra"),
     summary: t("A priest of the old faith wielding the powers of nature.", "Sacerdote de la fe antigua que domina los poderes de la naturaleza."),
     equipment: [
-      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("Shield", "Escudo"), t("Sickle", "Hoz"), t("Druidic Focus (Quarterstaff)", "Canalizador druídico (bastón)"), t("Explorer's Pack", "Equipo de explorador"), t("Herbalism Kit", "Útiles de herborista"), gp(9)], gold: 9, armor: "leather", shield: true },
+      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("Shield", "Escudo"), t("Sickle", "Hoz"), t("Druidic Focus (Quarterstaff)", "Canalizador druídico (bastón)"), t("Explorer's Pack", "Equipo de explorador"), t("Herbalism Kit", "Útiles de herborista"), gp(9)], weapons: ["sickle", "quarterstaff"], gold: 9, armor: "leather", shield: true },
       { id: "B", items: [gp(50)], gold: 50 },
     ],
   },
@@ -134,8 +164,8 @@ export const classes: ClassData[] = [
     subclass: t("Champion", "Campeón"),
     summary: t("A master of martial combat, skilled with many weapons and armor.", "Maestro del combate marcial, diestro con armas y armaduras."),
     equipment: [
-      { id: "A", items: [t("Chain Mail", "Cota de mallas"), t("Greatsword", "Espadón"), t("Flail", "Mayal"), t("8 Javelins", "8 jabalinas"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(4)], gold: 4, armor: "chainMail" },
-      { id: "B", items: [t("Studded Leather Armor", "Armadura de cuero tachonado"), t("Scimitar", "Cimitarra"), t("Shortsword", "Espada corta"), t("Longbow", "Arco largo"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(11)], gold: 11, armor: "studdedLeather" },
+      { id: "A", items: [t("Chain Mail", "Cota de mallas"), t("Greatsword", "Espadón"), t("Flail", "Mayal"), t("8 Javelins", "8 jabalinas"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(4)], weapons: ["greatsword", "flail", "javelin"], gold: 4, armor: "chainMail" },
+      { id: "B", items: [t("Studded Leather Armor", "Armadura de cuero tachonado"), t("Scimitar", "Cimitarra"), t("Shortsword", "Espada corta"), t("Longbow", "Arco largo"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(11)], weapons: ["scimitar", "shortsword", "longbow"], gold: 11, armor: "studdedLeather" },
       { id: "C", items: [gp(155)], gold: 155 },
     ],
   },
@@ -148,7 +178,7 @@ export const classes: ClassData[] = [
     subclass: t("Warrior of the Open Hand", "Guerrero de la Mano Abierta"),
     summary: t("A martial artist who channels inner power through body and mind.", "Un artista marcial que canaliza su poder interior."),
     equipment: [
-      { id: "A", items: [t("Spear", "Lanza"), t("5 Daggers", "5 dagas"), t("Artisan's Tools or Musical Instrument", "Herramientas de artesano o instrumento musical"), t("Explorer's Pack", "Equipo de explorador"), gp(11)], gold: 11 },
+      { id: "A", items: [t("Spear", "Lanza"), t("5 Daggers", "5 dagas"), t("Artisan's Tools or Musical Instrument", "Herramientas de artesano o instrumento musical"), t("Explorer's Pack", "Equipo de explorador"), gp(11)], weapons: ["spear", "dagger"], gold: 11 },
       { id: "B", items: [gp(50)], gold: 50 },
     ],
   },
@@ -162,7 +192,7 @@ export const classes: ClassData[] = [
     subclass: t("Oath of Devotion", "Juramento de Devoción"),
     summary: t("A holy warrior bound to a sacred oath.", "Un guerrero sagrado ligado a un juramento."),
     equipment: [
-      { id: "A", items: [t("Chain Mail", "Cota de mallas"), t("Shield", "Escudo"), t("Longsword", "Espada larga"), t("6 Javelins", "6 jabalinas"), t("Holy Symbol", "Símbolo sagrado"), t("Priest's Pack", "Equipo de sacerdote"), gp(9)], gold: 9, armor: "chainMail", shield: true },
+      { id: "A", items: [t("Chain Mail", "Cota de mallas"), t("Shield", "Escudo"), t("Longsword", "Espada larga"), t("6 Javelins", "6 jabalinas"), t("Holy Symbol", "Símbolo sagrado"), t("Priest's Pack", "Equipo de sacerdote"), gp(9)], weapons: ["longsword", "javelin"], gold: 9, armor: "chainMail", shield: true },
       { id: "B", items: [gp(150)], gold: 150 },
     ],
   },
@@ -176,7 +206,7 @@ export const classes: ClassData[] = [
     subclass: t("Hunter", "Cazador"),
     summary: t("A wandering warrior imbued with primal magic.", "Un guerrero errante imbuido de magia primigenia."),
     equipment: [
-      { id: "A", items: [t("Studded Leather Armor", "Armadura de cuero tachonado"), t("Scimitar", "Cimitarra"), t("Shortsword", "Espada corta"), t("Longbow", "Arco largo"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Druidic Focus (sprig of mistletoe)", "Canalizador druídico (ramita de muérdago)"), t("Explorer's Pack", "Equipo de explorador"), gp(7)], gold: 7, armor: "studdedLeather" },
+      { id: "A", items: [t("Studded Leather Armor", "Armadura de cuero tachonado"), t("Scimitar", "Cimitarra"), t("Shortsword", "Espada corta"), t("Longbow", "Arco largo"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Druidic Focus (sprig of mistletoe)", "Canalizador druídico (ramita de muérdago)"), t("Explorer's Pack", "Equipo de explorador"), gp(7)], weapons: ["scimitar", "shortsword", "longbow"], gold: 7, armor: "studdedLeather" },
       { id: "B", items: [gp(150)], gold: 150 },
     ],
   },
@@ -190,7 +220,7 @@ export const classes: ClassData[] = [
     subclass: t("Thief", "Ladrón"),
     summary: t("A dexterous expert in stealth and subterfuge.", "Experto diestro en sigilo y subterfugio."),
     equipment: [
-      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("2 Daggers", "2 dagas"), t("Shortsword", "Espada corta"), t("Shortbow", "Arco corto"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Thieves' Tools", "Herramientas de ladrón"), t("Burglar's Pack", "Equipo de ladrón"), gp(8)], gold: 8, armor: "leather" },
+      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("2 Daggers", "2 dagas"), t("Shortsword", "Espada corta"), t("Shortbow", "Arco corto"), t("20 Arrows", "20 flechas"), t("Quiver", "Carcaj"), t("Thieves' Tools", "Herramientas de ladrón"), t("Burglar's Pack", "Equipo de ladrón"), gp(8)], weapons: ["dagger", "shortsword", "shortbow"], gold: 8, armor: "leather" },
       { id: "B", items: [gp(100)], gold: 100 },
     ],
   },
@@ -203,7 +233,7 @@ export const classes: ClassData[] = [
     subclass: t("Draconic Sorcery", "Hechicería dracónica"),
     summary: t("A spellcaster whose magic flows from an innate source.", "Un lanzador cuya magia brota de un origen innato."),
     equipment: [
-      { id: "A", items: [t("Spear", "Lanza"), t("2 Daggers", "2 dagas"), t("Arcane Focus (crystal)", "Canalizador arcano (cristal)"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(28)], gold: 28 },
+      { id: "A", items: [t("Spear", "Lanza"), t("2 Daggers", "2 dagas"), t("Arcane Focus (crystal)", "Canalizador arcano (cristal)"), t("Dungeoneer's Pack", "Equipo de explorador de mazmorras"), gp(28)], weapons: ["spear", "dagger"], gold: 28 },
       { id: "B", items: [gp(50)], gold: 50 },
     ],
   },
@@ -216,7 +246,7 @@ export const classes: ClassData[] = [
     subclass: t("Fiend Patron", "Patrón Infernal"),
     summary: t("An occultist whose power comes from a pact with an otherworldly being.", "Un ocultista cuyo poder nace de un pacto con un ser de otro mundo."),
     equipment: [
-      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("Sickle", "Hoz"), t("2 Daggers", "2 dagas"), t("Arcane Focus (orb)", "Canalizador arcano (orbe)"), t("Book (occult lore)", "Libro (saber oculto)"), t("Scholar's Pack", "Equipo de erudito"), gp(15)], gold: 15, armor: "leather" },
+      { id: "A", items: [t("Leather Armor", "Armadura de cuero"), t("Sickle", "Hoz"), t("2 Daggers", "2 dagas"), t("Arcane Focus (orb)", "Canalizador arcano (orbe)"), t("Book (occult lore)", "Libro (saber oculto)"), t("Scholar's Pack", "Equipo de erudito"), gp(15)], weapons: ["sickle", "dagger"], gold: 15, armor: "leather" },
       { id: "B", items: [gp(100)], gold: 100 },
     ],
   },
@@ -229,7 +259,7 @@ export const classes: ClassData[] = [
     subclass: t("Evoker", "Evocador"),
     summary: t("A scholarly magic-user who studies the arcane.", "Un estudioso de la magia que domina lo arcano."),
     equipment: [
-      { id: "A", items: [t("2 Daggers", "2 dagas"), t("Arcane Focus (Quarterstaff)", "Canalizador arcano (bastón)"), t("Robe", "Túnica"), t("Spellbook", "Libro de conjuros"), t("Scholar's Pack", "Equipo de erudito"), gp(5)], gold: 5 },
+      { id: "A", items: [t("2 Daggers", "2 dagas"), t("Arcane Focus (Quarterstaff)", "Canalizador arcano (bastón)"), t("Robe", "Túnica"), t("Spellbook", "Libro de conjuros"), t("Scholar's Pack", "Equipo de erudito"), gp(5)], weapons: ["dagger", "quarterstaff"], gold: 5 },
       { id: "B", items: [gp(55)], gold: 55 },
     ],
   },
@@ -318,7 +348,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["sleightOfHand", "stealth"], tool: tools.thieves,
     summary: t("You eked out a living in dark alleyways.", "Te ganaste la vida en callejones oscuros."),
     equipment: [
-      { id: "A", items: [daggers2, tools.thieves, t("Crowbar", "Palanca"), pouches, clothes, gp(16)], gold: 16 }, bgB,
+      { id: "A", items: [daggers2, tools.thieves, t("Crowbar", "Palanca"), pouches, clothes, gp(16)], weapons: ["dagger"], gold: 16 }, bgB,
     ],
   },
   {
@@ -334,7 +364,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["animalHandling", "nature"], tool: t("Carpenter's Tools", "Herramientas de carpintero"),
     summary: t("You grew strong working the land and tending animals.", "Te hiciste fuerte trabajando la tierra y cuidando animales."),
     equipment: [
-      { id: "A", items: [t("Sickle", "Hoz"), t("Carpenter's Tools", "Herramientas de carpintero"), healersKit, t("Iron Pot", "Olla de hierro"), t("Shovel", "Pala"), clothes, gp(30)], gold: 30 }, bgB,
+      { id: "A", items: [t("Sickle", "Hoz"), t("Carpenter's Tools", "Herramientas de carpintero"), healersKit, t("Iron Pot", "Olla de hierro"), t("Shovel", "Pala"), clothes, gp(30)], weapons: ["sickle"], gold: 30 }, bgB,
     ],
   },
   {
@@ -342,7 +372,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["athletics", "perception"], tool: tools.gaming,
     summary: t("You kept watch over a gate, a wall or a caravan.", "Vigilaste una puerta, una muralla o una caravana."),
     equipment: [
-      { id: "A", items: [spear, t("Light Crossbow", "Ballesta ligera"), t("20 Bolts", "20 virotes"), gamingSet, t("Hooded Lantern", "Linterna sorda"), t("Manacles", "Grilletes"), quiver, clothes, gp(12)], gold: 12 }, bgB,
+      { id: "A", items: [spear, t("Light Crossbow", "Ballesta ligera"), t("20 Bolts", "20 virotes"), gamingSet, t("Hooded Lantern", "Linterna sorda"), t("Manacles", "Grilletes"), quiver, clothes, gp(12)], weapons: ["lightCrossbow", "spear"], gold: 12 }, bgB,
     ],
   },
   {
@@ -350,7 +380,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["stealth", "survival"], tool: t("Cartographer's Tools", "Herramientas de cartógrafo"),
     summary: t("You learned the wilds and led others through them.", "Aprendiste los parajes salvajes y guiaste a otros por ellos."),
     equipment: [
-      { id: "A", items: [t("Shortbow", "Arco corto"), arrows, t("Cartographer's Tools", "Herramientas de cartógrafo"), bedroll, quiver, t("Tent", "Tienda de campaña"), clothes, gp(3)], gold: 3 }, bgB,
+      { id: "A", items: [t("Shortbow", "Arco corto"), arrows, t("Cartographer's Tools", "Herramientas de cartógrafo"), bedroll, quiver, t("Tent", "Tienda de campaña"), clothes, gp(3)], weapons: ["shortbow"], gold: 3 }, bgB,
     ],
   },
   {
@@ -358,7 +388,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["medicine", "religion"], tool: t("Herbalism Kit", "Útiles de herborista"),
     summary: t("You lived in seclusion, in search of peace or insight.", "Viviste aislado en busca de paz o de revelaciones."),
     equipment: [
-      { id: "A", items: [t("Quarterstaff", "Bastón"), t("Herbalism Kit", "Útiles de herborista"), bedroll, t("Book (philosophy)", "Libro (filosofía)"), lamp, oil, clothes, gp(16)], gold: 16 }, bgB,
+      { id: "A", items: [t("Quarterstaff", "Bastón"), t("Herbalism Kit", "Útiles de herborista"), bedroll, t("Book (philosophy)", "Libro (filosofía)"), lamp, oil, clothes, gp(16)], weapons: ["quarterstaff"], gold: 16 }, bgB,
     ],
   },
   {
@@ -382,7 +412,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["arcana", "history"], tool: tools.calligrapher,
     summary: t("You spent your formative years among manuscripts.", "Pasaste tus años de formación entre manuscritos."),
     equipment: [
-      { id: "A", items: [t("Quarterstaff", "Bastón"), tools.calligrapher, t("Book (history)", "Libro (historia)"), t("Parchment (8 sheets)", "Pergamino (8 hojas)"), t("Robe", "Túnica"), gp(8)], gold: 8 }, bgB,
+      { id: "A", items: [t("Quarterstaff", "Bastón"), tools.calligrapher, t("Book (history)", "Libro (historia)"), t("Parchment (8 sheets)", "Pergamino (8 hojas)"), t("Robe", "Túnica"), gp(8)], weapons: ["quarterstaff"], gold: 8 }, bgB,
     ],
   },
   {
@@ -390,7 +420,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["acrobatics", "perception"], tool: tools.navigator,
     summary: t("You lived aboard a ship, braving the sea and its ports.", "Viviste a bordo de un barco, desafiando el mar y sus puertos."),
     equipment: [
-      { id: "A", items: [dagger, tools.navigator, t("Rope", "Cuerda"), clothes, gp(20)], gold: 20 }, bgB,
+      { id: "A", items: [dagger, tools.navigator, t("Rope", "Cuerda"), clothes, gp(20)], weapons: ["dagger"], gold: 20 }, bgB,
     ],
   },
   {
@@ -406,7 +436,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["athletics", "intimidation"], tool: tools.gaming,
     summary: t("You trained for war from a young age.", "Te entrenaste para la guerra desde joven."),
     equipment: [
-      { id: "A", items: [spear, t("Shortbow", "Arco corto"), arrows, gamingSet, healersKit, quiver, clothes, gp(14)], gold: 14 }, bgB,
+      { id: "A", items: [spear, t("Shortbow", "Arco corto"), arrows, gamingSet, healersKit, quiver, clothes, gp(14)], weapons: ["shortbow", "spear"], gold: 14 }, bgB,
     ],
   },
   {
@@ -414,7 +444,7 @@ export const backgrounds: BackgroundData[] = [
     skills: ["insight", "stealth"], tool: tools.thieves,
     summary: t("You grew up on the streets or the road, relying on your wits.", "Creciste en la calle o en el camino, confiando en tu ingenio."),
     equipment: [
-      { id: "A", items: [daggers2, tools.thieves, gamingSet, bedroll, pouches, clothes, gp(16)], gold: 16 }, bgB,
+      { id: "A", items: [daggers2, tools.thieves, gamingSet, bedroll, pouches, clothes, gp(16)], weapons: ["dagger"], gold: 16 }, bgB,
     ],
   },
 ];
