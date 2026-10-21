@@ -135,3 +135,112 @@ export function parseCampaignInput(body: unknown): { name: string; description: 
   if (!name || description === null) return null;
   return { name, description };
 }
+
+const roleTagValues = ["frontline", "damage", "support", "control", "scouting"] as const;
+
+export interface CreatureInput {
+  name: string;
+  xp: number;
+  source: string;
+  monsterSlug: string | null;
+  cr: number | null;
+  type: string | null;
+  roleTags: string[];
+}
+
+/** Validate a catalog creature from the browser; null when anything is out of bounds. */
+export function parseCreatureInput(body: unknown): CreatureInput | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  const name = text(value.name, 60);
+  const source = text(value.source, 60);
+  if (!name || source === null) return null;
+  if (!Number.isInteger(value.xp) || (value.xp as number) < 1 || (value.xp as number) > 100_000) return null;
+  const monsterSlug = value.monsterSlug === undefined || value.monsterSlug === null || value.monsterSlug === "" ? null : text(value.monsterSlug, 100);
+  const type = value.type === undefined || value.type === null || value.type === "" ? null : text(value.type, 40);
+  if (monsterSlug === "" || type === "") return null;
+  const cr = value.cr === undefined || value.cr === null ? null : value.cr;
+  if (cr !== null && (typeof cr !== "number" || !Number.isFinite(cr) || cr < 0 || cr > 30)) return null;
+  const rawTags = value.roleTags === undefined ? [] : value.roleTags;
+  if (!Array.isArray(rawTags) || rawTags.length > roleTagValues.length || !rawTags.every((tag) => roleTagValues.includes(tag as never))) return null;
+  return { name, xp: value.xp as number, source, monsterSlug, cr, type, roleTags: [...new Set(rawTags as string[])] };
+}
+
+export const encounterStatuses = ["planned", "played"] as const;
+export type EncounterStatus = (typeof encounterStatuses)[number];
+
+export interface EncounterLineInput {
+  name: string;
+  xp: number;
+  count: number;
+  monsterSlug?: string;
+  cr?: number;
+  type?: string;
+  source?: string;
+}
+
+export interface EncounterInput {
+  title: string;
+  notes: string;
+  status: EncounterStatus;
+  difficulty: "low" | "moderate" | "high";
+  budget: number;
+  totalXp: number;
+  partyLevels: number[];
+  lines: EncounterLineInput[];
+}
+
+/** Validate an encounter payload (a saved suggestion plus title/notes/status). Null when invalid. */
+export function parseEncounterInput(body: unknown): EncounterInput | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  const title = text(value.title, 80);
+  const notes = text(value.notes, 2000);
+  if (!title || notes === null) return null;
+  const status = value.status === undefined ? "planned" : value.status;
+  if (!encounterStatuses.includes(status as EncounterStatus)) return null;
+  if (!["low", "moderate", "high"].includes(value.difficulty as string)) return null;
+  const isCount = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
+  if (!isCount(value.budget, 0, 10_000_000) || !isCount(value.totalXp, 0, 10_000_000)) return null;
+  if (!Array.isArray(value.partyLevels) || value.partyLevels.length > 20 || !value.partyLevels.every((level) => isCount(level, 1, 20))) return null;
+  if (!Array.isArray(value.lines) || value.lines.length < 1 || value.lines.length > 30) return null;
+  const lines: EncounterLineInput[] = [];
+  for (const raw of value.lines as unknown[]) {
+    if (!raw || typeof raw !== "object") return null;
+    const line = raw as Record<string, unknown>;
+    const name = text(line.name, 60);
+    const source = text(line.source, 60);
+    const monsterSlug = text(line.monsterSlug, 100);
+    const type = text(line.type, 40);
+    if (!name || source === null || monsterSlug === null || type === null) return null;
+    if (!isCount(line.xp, 0, 1_000_000) || !isCount(line.count, 1, 100)) return null;
+    if (line.cr !== undefined && (typeof line.cr !== "number" || !Number.isFinite(line.cr) || line.cr < 0 || line.cr > 30)) return null;
+    lines.push({
+      name, xp: line.xp as number, count: line.count as number,
+      ...(source ? { source } : {}), ...(monsterSlug ? { monsterSlug } : {}), ...(type ? { type } : {}),
+      ...(line.cr !== undefined ? { cr: line.cr as number } : {}),
+    });
+  }
+  return {
+    title, notes, status: status as EncounterStatus, difficulty: value.difficulty as EncounterInput["difficulty"],
+    budget: value.budget as number, totalXp: value.totalXp as number, partyLevels: value.partyLevels as number[], lines,
+  };
+}
+
+export interface PreferencesInput { locale?: "en" | "es"; theme?: "light" | "dark" }
+
+/** Partial update of account preferences; null when empty or invalid. */
+export function parsePreferencesInput(body: unknown): PreferencesInput | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  const result: PreferencesInput = {};
+  if (value.locale !== undefined) {
+    if (value.locale !== "en" && value.locale !== "es") return null;
+    result.locale = value.locale;
+  }
+  if (value.theme !== undefined) {
+    if (value.theme !== "light" && value.theme !== "dark") return null;
+    result.theme = value.theme;
+  }
+  return result.locale || result.theme ? result : null;
+}

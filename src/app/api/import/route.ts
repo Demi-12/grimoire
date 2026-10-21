@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
 import { jsonError, readJson, requireApproved } from "@/lib/access";
 import { importLocalData } from "@/lib/data";
-import { parseCampaignInput, parseCharacterInput, type CharacterInput } from "@/lib/permissions";
+import { parseCampaignInput, parseCharacterInput, parseCreatureInput, type CharacterInput, type CreatureInput } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 const MAX_ITEMS = 200;
 
-/** One-time copy of characters/campaigns saved in the browser into the signed-in account. */
+/** One-time copy of characters/campaigns/creatures saved in the browser into the signed-in account. */
 export async function POST(request: Request) {
   const user = await requireApproved();
   if (user instanceof NextResponse) return user;
-  const body = await readJson(request) as { characters?: unknown; campaigns?: unknown } | null;
-  if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns))) {
+  const body = await readJson(request) as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
+  if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns)) || (body.creatures !== undefined && !Array.isArray(body.creatures))) {
     return jsonError(400, "Invalid import.");
   }
-  if (body.characters.length > MAX_ITEMS || (Array.isArray(body.campaigns) && body.campaigns.length > MAX_ITEMS)) {
+  if (body.characters.length > MAX_ITEMS || (Array.isArray(body.campaigns) && body.campaigns.length > MAX_ITEMS) || (Array.isArray(body.creatures) && body.creatures.length > 500)) {
     return jsonError(413, "Too many items to import at once.");
   }
 
@@ -32,6 +32,12 @@ export async function POST(request: Request) {
     if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [] });
   }
 
-  const imported = await importLocalData(user, characters, campaigns);
+  const creatures: CreatureInput[] = [];
+  for (const raw of (body.creatures ?? []) as unknown[]) {
+    const input = parseCreatureInput(raw);
+    if (input) creatures.push(input);
+  }
+
+  const imported = await importLocalData(user, characters, campaigns, creatures);
   return NextResponse.json({ imported });
 }
