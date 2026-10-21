@@ -7,7 +7,7 @@ import type { Campaign, Character, CharacterDraft } from "@/lib/api-client";
 import CharacterWizard, { describeBuild, type WizardResult } from "@/components/character-wizard";
 import LevelUp, { type LevelUpResult } from "@/components/level-up";
 import { deriveSheet, type CharacterBuild, type DerivedSheet } from "@/lib/character-sheet";
-import { findBackground, findClass, findSpecies, say, skillKeys } from "@/lib/dnd2024";
+import { backgrounds, classes, findBackground, findClass, findSpecies, say, skillKeys, species as speciesList, type Text } from "@/lib/dnd2024";
 import { featInfo } from "@/lib/levelup-data";
 import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
 
@@ -39,6 +39,19 @@ function ScoreFields({ scores, onChange, locale }: { scores: AbilityScores; onCh
       </small>
     </label>;
   })}</div>;
+}
+
+/** Select over catalog names; keeps a legacy free-text value selectable so older sheets don't lose it. */
+function CatalogSelect({ value, onChange, options, locale, placeholder, maxLength }: {
+  value: string; onChange: (value: string) => void; options: Text[]; locale: Locale; placeholder: string; maxLength: number;
+}) {
+  const names = options.map((option) => say(option, locale));
+  const extra = value && !names.includes(value) ? value : "";
+  return <select value={value} onChange={(event) => onChange(event.target.value.slice(0, maxLength))}>
+    <option value="">{placeholder}</option>
+    {extra && <option value={extra}>{extra}</option>}
+    {names.map((name) => <option key={name} value={name}>{name}</option>)}
+  </select>;
 }
 
 function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
@@ -81,11 +94,11 @@ function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
       <button className="icon-button" type="button" onClick={onCancel} aria-label={translate(locale, "character.closeEditor")}>×</button></div>
     <div className="form-grid three-columns">
       <label>{translate(locale, "character.name")}<input autoFocus required maxLength={50} value={name} onChange={(event) => setName(event.target.value)} placeholder={translate(locale, "character.namePlaceholder")} /></label>
-      <label>{translate(locale, "character.class")}<input maxLength={40} value={className} onChange={(event) => setClassName(event.target.value)} placeholder={translate(locale, "character.classPlaceholder")} /></label>
+      <label>{translate(locale, "character.class")}<CatalogSelect value={className} onChange={setClassName} options={classes.map((item) => item.name)} locale={locale} maxLength={40} placeholder={translate(locale, "character.classPlaceholder")} /></label>
       <label>{translate(locale, "character.level")}<input type="number" min={1} max={20} step={1} required value={level} aria-invalid={level !== "" && !validLevel}
         onChange={(event) => setLevel(event.target.value)} />{!validLevel && <small role="alert">{translate(locale, "character.levelValidation")}</small>}</label>
-      <label>{translate(locale, "character.species")}<input maxLength={40} value={species} onChange={(event) => setSpecies(event.target.value)} placeholder={translate(locale, "character.speciesPlaceholder")} /></label>
-      <label>{translate(locale, "character.background")}<input maxLength={50} value={background} onChange={(event) => setBackground(event.target.value)} placeholder={translate(locale, "character.backgroundPlaceholder")} /></label>
+      <label>{translate(locale, "character.species")}<CatalogSelect value={species} onChange={setSpecies} options={speciesList.map((item) => item.name)} locale={locale} maxLength={40} placeholder={translate(locale, "character.speciesPlaceholder")} /></label>
+      <label>{translate(locale, "character.background")}<CatalogSelect value={background} onChange={setBackground} options={backgrounds.map((item) => item.name)} locale={locale} maxLength={50} placeholder={translate(locale, "character.backgroundPlaceholder")} /></label>
       <label>{translate(locale, "character.campaign")}<select value={campaignId} onChange={(event) => setCampaignId(event.target.value)}>
         <option value="">{translate(locale, "character.noCampaign")}</option>
         {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
