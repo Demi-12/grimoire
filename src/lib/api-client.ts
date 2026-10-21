@@ -39,7 +39,24 @@ export interface Campaign {
 export interface Invite { id: string; token: string; createdByName: string; createdAt: string; expiresAt: string }
 export interface InvitePreview { campaignId: string; campaignName: string; description: string; ownerName: string; alreadyMember: boolean }
 
-export interface Me { id: string; name: string; email: string; role: SiteRole; status: AccountStatus }
+export interface Preferences { locale: "en" | "es" | null; theme: "light" | "dark" | null; legacyImported: boolean }
+export interface Me { id: string; name: string; email: string; role: SiteRole; status: AccountStatus; preferences?: Preferences }
+
+/** A creature in the account's personal catalog. */
+export interface CatalogCreature {
+  id: string; name: string; xp: number; source: string;
+  monsterSlug?: string; cr?: number; type?: string; roleTags?: string[];
+}
+
+export type EncounterStatus = "planned" | "played";
+export interface EncounterLine { name: string; xp: number; count: number; monsterSlug?: string; cr?: number; type?: string; source?: string }
+/** A saved encounter in a campaign's journal (DM-only). */
+export interface SavedEncounter {
+  id: string; campaignId: string; createdByName: string; title: string; notes: string; status: EncounterStatus;
+  difficulty: "low" | "moderate" | "high"; budget: number; totalXp: number; partyLevels: number[];
+  lines: EncounterLine[]; playedAt: string | null; createdAt: string; updatedAt: string;
+}
+export type EncounterDraft = Pick<SavedEncounter, "title" | "notes" | "status" | "difficulty" | "budget" | "totalXp" | "partyLevels" | "lines">;
 export interface DirectoryUser { id: string; name: string; role: SiteRole }
 export interface AdminUser {
   id: string; name: string; email: string; role: SiteRole; status: AccountStatus;

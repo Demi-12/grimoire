@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { translate, type Locale } from "@/lib/i18n";
 import {
   encounterBudget,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/rules";
 import MonsterSheet from "@/components/monster-sheet";
 import { creatureTypeKey, creatureTypeLabel, fetchSrdCatalog, formatChallenge, srdLabel, type MonsterEdition, type SrdMonster } from "@/lib/monster-api";
-import type { Campaign, Character } from "@/lib/api-client";
+import { api, type Campaign, type Character, type EncounterDraft } from "@/lib/api-client";
 
 export interface EncounterBuilderProps {
   locale: Locale;
@@ -60,7 +60,70 @@ function inferRoles(characters: SavedCharacter[]): PartyRoles {
   return roles;
 }
 
-function EncounterOption({ suggestion, index, locale, roles }: { suggestion: EncounterSuggestion; index: number; locale: Locale; roles: PartyRoles }) {
+function SaveToCampaign({ suggestion, partyLevels, campaigns, locale, creatureName }: {
+  suggestion: EncounterSuggestion; partyLevels: number[]; campaigns: Campaign[]; locale: Locale; creatureName: (creature: Creature) => string;
+}) {
+  const defaultTitle = suggestion.lines.slice(0, 3).map(({ creature, quantity }) => `${quantity}× ${creatureName(creature)}`).join(", ").slice(0, 80);
+  const [open, setOpen] = useState(false);
+  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
+  const [title, setTitle] = useState(defaultTitle);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedTo, setSavedTo] = useState("");
+  const selectedId = campaigns.some((campaign) => campaign.id === campaignId) ? campaignId : campaigns[0]?.id ?? "";
+
+  if (!campaigns.length) return <p className="encounter-footnote">{translate(locale, "encounter.save.noCampaign")}</p>;
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const campaign = campaigns.find((item) => item.id === selectedId);
+    if (!campaign || !title.trim()) return;
+    const draft: EncounterDraft = {
+      title: title.trim().slice(0, 80), notes: "", status: "planned", difficulty: suggestion.difficulty,
+      budget: Math.round(suggestion.budget), totalXp: Math.round(suggestion.totalXp), partyLevels,
+      lines: suggestion.lines.map(({ creature, quantity }) => ({
+        name: creatureName(creature).slice(0, 60), xp: Math.round(creature.xp), count: quantity,
+        ...(creature.monsterSlug ? { monsterSlug: creature.monsterSlug } : {}),
+        ...(creature.cr !== undefined ? { cr: creature.cr } : {}),
+        ...(creature.type ? { type: creature.type } : {}),
+        ...(creature.source ? { source: creature.source.slice(0, 60) } : {}),
+      })),
+    };
+    setStatus("saving");
+    try {
+      await api(`/api/campaigns/${campaign.id}/encounters`, { method: "POST", body: draft });
+      setSavedTo(campaign.name);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="encounter-save">
+      <button type="button" className="button button-quiet" aria-expanded={open} onClick={() => setOpen((current) => !current)}>✧ {translate(locale, "encounter.save.toggle")}</button>
+      {open && (
+        <form onSubmit={(event) => void save(event)} className="manual-party" style={{ marginTop: 10 }}>
+          <label>{translate(locale, "encounter.save.campaign")}
+            <select value={selectedId} onChange={(event) => { setCampaignId(event.target.value); setStatus("idle"); }}>
+              {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+            </select>
+          </label>
+          <label>{translate(locale, "encounter.save.title")}
+            <input value={title} maxLength={80} required onChange={(event) => { setTitle(event.target.value); setStatus("idle"); }} />
+          </label>
+          <button type="submit" className="button button-primary" style={{ gridColumn: "1 / -1" }} disabled={status === "saving" || !title.trim()}>
+            {status === "saving" ? translate(locale, "encounter.save.saving") : translate(locale, "encounter.save.submit")}
+          </button>
+        </form>
+      )}
+      <p className="encounter-footnote" role={status === "error" ? "alert" : "status"} aria-live="polite">
+        {status === "saved" ? translate(locale, "encounter.save.done", { campaign: savedTo }) : status === "error" ? translate(locale, "encounter.save.error") : ""}
+      </p>
+    </div>
+  );
+}
+
+function EncounterOption({ suggestion, index, locale, roles, partyLevels, campaigns }: { suggestion: EncounterSuggestion; index: number; locale: Locale; roles: PartyRoles; partyLevels: number[]; campaigns: Campaign[] }) {
   const [openMonster, setOpenMonster] = useState<string | null>(null);
   const percent = Math.round((suggestion.totalXp / suggestion.budget) * 100);
   const margin = suggestion.budget - suggestion.totalXp;
@@ -128,6 +191,7 @@ function EncounterOption({ suggestion, index, locale, roles }: { suggestion: Enc
           </>
         ) : <p>{translate(locale, "encounter.roles.unknown")}</p>}
       </div>
+      <SaveToCampaign suggestion={suggestion} partyLevels={partyLevels} campaigns={campaigns} locale={locale} creatureName={creatureName} />
     </article>
   );
 }
@@ -187,6 +251,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
   const selectedParty = savedCharacters.filter((character) => selectedCharacterIds.includes(character.id));
   const partyRoles = inferRoles(selectedParty);
   const roleProfile: PartyRoleProfile = Object.fromEntries(roleKeys.map((role) => [role, partyRoles[role].length]));
+  const managedCampaigns = campaigns.filter((campaign) => campaign.canManage);
   const numberLocale = locale === "es" ? "es-ES" : "en-US";
 
   function generate() {
@@ -289,7 +354,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
         {!suggestions.length ? (
           <div className="results-empty"><div className="empty-orbit" aria-hidden="true">⚔︎</div><p>{translate(locale, "encounter.empty.prompt")}<br /><b>{translate(locale, "encounter.empty.action")}</b> {translate(locale, "encounter.empty.detail")}</p></div>
         ) : (
-          <div className="encounter-card-list">{suggestions.map((suggestion, index) => <EncounterOption key={`${roll}-${index}`} suggestion={suggestion} index={index} locale={locale} roles={partyRoles} />)}</div>
+          <div className="encounter-card-list">{suggestions.map((suggestion, index) => <EncounterOption key={`${roll}-${index}`} suggestion={suggestion} index={index} locale={locale} roles={partyRoles} partyLevels={partyLevels} campaigns={managedCampaigns} />)}</div>
         )}
         <p className="rules-source">{translate(locale, "encounter.rulesNote")}</p>
       </section>

@@ -8,7 +8,7 @@ import BestiaryBrowser from "@/components/bestiary-browser";
 import AdminUsers from "@/components/admin-users";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
-import { api, ApiError, type Campaign, type Character, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
+import { api, ApiError, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
@@ -25,13 +25,9 @@ function readSaved<T>(key: string, fallback: T): T {
   }
 }
 
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+type LocalImport = { characters: unknown[]; campaigns: unknown[]; creatures: unknown[] };
 
-type LocalImport = { characters: unknown[]; campaigns: unknown[] };
-
-/** Characters and campaigns this browser saved before accounts were stored server-side. */
+/** Characters, campaigns and own-catalog creatures this browser saved before accounts were stored server-side. */
 function findLocalData(accountId: string): LocalImport {
   const characters = new Map<string, unknown>();
   for (const key of [storageLocation("characters", accountId), storageLocation("characters"), LEGACY_CHARACTERS_LOCATION]) {
@@ -44,7 +40,18 @@ function findLocalData(accountId: string): LocalImport {
     const saved = readSaved<unknown>(key, []);
     return Array.isArray(saved) ? saved : [];
   });
-  return { characters: [...characters.values()], campaigns };
+  const creatures = new Map<string, unknown>();
+  for (const key of [storageLocation("creatures", accountId), storageLocation("creatures")]) {
+    const saved = readSaved<unknown>(key, []);
+    for (const item of Array.isArray(saved) ? saved : []) {
+      // Only the user's own entries; samples and bestiary picks are not worth copying.
+      if (item && typeof item === "object" && (item as { source?: unknown }).source === "Catálogo propio") {
+        const id = (item as { id?: unknown }).id;
+        creatures.set(typeof id === "string" ? id : `anon-${creatures.size}`, item);
+      }
+    }
+  }
+  return { characters: [...characters.values()], campaigns, creatures: [...creatures.values()] };
 }
 
 const inviteKey = "grimoire.invite.v1";
@@ -69,12 +76,13 @@ function clearPendingInvite() {
   try { window.sessionStorage.removeItem(inviteKey); } catch { /* nothing stored */ }
 }
 
-const importDoneKey = (accountId: string) => `grimoire.users.${accountId}.imported.v1`;
+function toCreature(item: CatalogCreature): Creature {
+  return { id: item.id, name: item.name, xp: item.xp, source: item.source, roleTags: item.roleTags as Creature["roleTags"], monsterSlug: item.monsterSlug };
+}
 
 export default function Toolkit() {
   const authSession = authClient.useSession();
   const accountId = authSession.data?.user.id;
-  const creatureStorageKey = storageLocation("creatures", accountId);
   const [me, setMe] = useState<Me | null>(null);
   const [meLoadedFor, setMeLoadedFor] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -90,7 +98,10 @@ export default function Toolkit() {
   const [localeReady, setLocaleReady] = useState(false);
   const [dataLoadedFor, setDataLoadedFor] = useState("");
   const [characters, setCharacters] = useState<Character[]>([]);
-  const [creatures, setCreatures] = useState<Creature[]>(sampleCreatures);
+  const [ownCreatures, setOwnCreatures] = useState<Creature[]>([]);
+  const [catalogError, setCatalogError] = useState("");
+  // Samples are only a starting point for an empty catalog; they are never stored.
+  const creatures = ownCreatures.length ? ownCreatures : sampleCreatures;
   const [creatureName, setCreatureName] = useState("");
   const [creatureXp, setCreatureXp] = useState(100);
   const [showCatalog, setShowCatalog] = useState(false);
@@ -140,12 +151,19 @@ export default function Toolkit() {
       .then(async ({ user }) => {
         if (cancelled) return;
         setMe(user);
+        if (user.preferences?.locale) setLocale(user.preferences.locale);
+        if (user.preferences?.theme) setTheme(user.preferences.theme);
         if (user.status === "approved") {
           await reloadData();
-          let done = false;
-          try { done = window.localStorage.getItem(importDoneKey(user.id)) === "1"; } catch { done = true; }
+          try {
+            const data = await api<{ creatures: CatalogCreature[] }>("/api/creatures");
+            if (!cancelled) setOwnCreatures(data.creatures.map(toCreature));
+          } catch {
+            if (!cancelled) setCatalogError("load");
+          }
+          const done = user.preferences?.legacyImported ?? true;
           const local = done ? null : findLocalData(user.id);
-          setLocalImport(local && (local.characters.length || local.campaigns.length) ? local : null);
+          setLocalImport(local && (local.characters.length || local.campaigns.length || local.creatures.length) ? local : null);
           if (user.role === "admin") {
             api<{ users: { status: string }[] }>("/api/admin/users")
               .then((data) => { if (!cancelled) setPendingCount(data.users.filter((item) => item.status === "pending").length); })
@@ -158,7 +176,7 @@ export default function Toolkit() {
         if (cause instanceof ApiError && cause.status === 401) setMe(null);
         else setLoadError(cause instanceof Error ? cause.message : String(cause));
       })
-      .finally(() => { if (!cancelled) setMeLoadedFor(accountId); });
+      .finally(() => { if (!cancelled) { setMeLoadedFor(accountId); setDataLoadedFor(accountId); } });
     return () => { cancelled = true; };
   }, [authSession.isPending, accountId, reloadData]);
 
@@ -173,20 +191,6 @@ export default function Toolkit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inviteToken, me?.status]);
 
-  useEffect(() => {
-    if (authSession.isPending || !accountId) return;
-    setCreatures(readSaved(creatureStorageKey, sampleCreatures));
-    setDataLoadedFor(creatureStorageKey);
-  }, [authSession.isPending, accountId, creatureStorageKey]);
-  useEffect(() => {
-    if (dataLoadedFor === creatureStorageKey) {
-      try {
-        window.localStorage.setItem(creatureStorageKey, JSON.stringify(creatures));
-      } catch {
-        // The catalog still works for this session when storage is unavailable.
-      }
-    }
-  }, [creatures, creatureStorageKey, dataLoadedFor]);
   useEffect(() => {
     if (localeReady) {
       try {
@@ -212,9 +216,15 @@ export default function Toolkit() {
   const loading = <main className="app-shell min-h-screen bg-paper text-ink"><p role="status" className="page-content">{locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"}</p></main>;
   if (authSession.isPending || (accountId && meLoadedFor !== accountId)) return loading;
 
+  function savePreference(preference: { locale: Locale } | { theme: Theme }) {
+    if (accountId) api("/api/me", { method: "PATCH", body: preference }).catch(() => undefined);
+  }
+  function changeLocale(next: Locale) { setLocale(next); savePreference({ locale: next }); }
+  function changeTheme(next: Theme) { setTheme(next); savePreference({ theme: next }); }
+
   const controls = <>
-    <button type="button" className="theme-toggle ml-auto rounded-md border border-line px-2 py-1.5 text-xs text-ink" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀︎" : "☾"}<span>{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
-    <label className="inline-flex items-center gap-2 text-xs text-muted"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="rounded-md border border-line bg-parchment px-2 py-1.5 text-ink focus-visible:ring-2 focus-visible:ring-forest" value={locale} onChange={(event) => setLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
+    <button type="button" className="theme-toggle ml-auto rounded-md border border-line px-2 py-1.5 text-xs text-ink" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀︎" : "☾"}<span>{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
+    <label className="inline-flex items-center gap-2 text-xs text-muted"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="rounded-md border border-line bg-parchment px-2 py-1.5 text-ink focus-visible:ring-2 focus-visible:ring-forest" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
   </>;
 
   // Everyone must sign in; new accounts wait for an admin before they see any shared data.
@@ -236,7 +246,7 @@ export default function Toolkit() {
       </section>}
     </main>;
   }
-  if (dataLoadedFor !== creatureStorageKey) return loading;
+  if (dataLoadedFor !== accountId) return loading;
 
   const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
 
@@ -279,7 +289,7 @@ export default function Toolkit() {
   }
 
   function finishImport() {
-    try { window.localStorage.setItem(importDoneKey(currentUser.id), "1"); } catch { /* banner just shows again */ }
+    api("/api/me", { method: "PATCH", body: { legacyImported: true } }).catch(() => undefined);
     setLocalImport(null);
   }
 
@@ -287,10 +297,11 @@ export default function Toolkit() {
     if (!localImport) return;
     setImportBusy(true);
     try {
-      const { imported } = await api<{ imported: { characters: number; campaigns: number } }>("/api/import", { method: "POST", body: localImport });
+      const { imported } = await api<{ imported: { characters: number; campaigns: number; creatures?: number } }>("/api/import", { method: "POST", body: localImport });
       finishImport();
-      setImportMessage(t("import.done", imported));
+      setImportMessage(t("import.done", { characters: imported.characters, campaigns: imported.campaigns, creatures: imported.creatures ?? 0 }));
       await reloadData();
+      await loadCreatures();
     } catch {
       setImportMessage(t("import.error"));
     } finally {
@@ -298,11 +309,40 @@ export default function Toolkit() {
     }
   }
 
-  function addCreature(event: FormEvent<HTMLFormElement>) {
+  async function loadCreatures() {
+    try {
+      const data = await api<{ creatures: CatalogCreature[] }>("/api/creatures");
+      setOwnCreatures(data.creatures.map(toCreature));
+    } catch { /* keep the current list */ }
+  }
+
+  /** Saves a creature server-side (deduplicated by monsterSlug there) and merges the stored copy into the list. */
+  async function saveCreature(input: Omit<CatalogCreature, "id">): Promise<boolean> {
+    setCatalogError("");
+    try {
+      const { creature } = await api<{ creature: CatalogCreature }>("/api/creatures", { method: "POST", body: input });
+      setOwnCreatures((current) => [toCreature(creature), ...current.filter((item) => item.id !== creature.id)]);
+      return true;
+    } catch {
+      setCatalogError("save");
+      return false;
+    }
+  }
+
+  async function removeCreature(id: string) {
+    setCatalogError("");
+    try {
+      await api(`/api/creatures/${encodeURIComponent(id)}`, { method: "DELETE" });
+      setOwnCreatures((current) => current.filter((item) => item.id !== id));
+    } catch {
+      setCatalogError("remove");
+    }
+  }
+
+  async function addCreature(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!creatureName.trim() || creatureXp < 1) return;
-    setCreatures((current) => [{ id: makeId(), name: creatureName.trim(), xp: creatureXp, source: "Catálogo propio" }, ...current]);
-    setCreatureName("");
+    if (await saveCreature({ name: creatureName.trim(), xp: creatureXp, source: "Catálogo propio" })) setCreatureName("");
   }
 
   return <main className="app-shell min-h-screen bg-paper text-ink">
@@ -332,7 +372,7 @@ export default function Toolkit() {
         <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
           <button className="button button-quiet" disabled={inviteBusy} onClick={invite ? declineInvite : () => setInviteError("")}>{t(invite ? "invite.decline" : "invite.dismiss")}</button></div></div>}
       {view === "home" && <div className="page-content">
-        {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length })}</p>
+        {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length, creatures: localImport.creatures.length })}</p>
           <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
         {importMessage && <p className="import-message" role="status">{importMessage}</p>}
         <header className="desk-head">
@@ -372,10 +412,11 @@ export default function Toolkit() {
       {view === "encounters" && <div className="page-content">
         <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: creatures.length })}</button></div>
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
-        <BestiaryBrowser locale={locale} onAddCreature={(creature) => setCreatures((current) => current.some((item) => item.id === creature.id) ? current : [creature, ...current])} />
+        <BestiaryBrowser locale={locale} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
+        {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
-          <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => setCreatures((current) => current.filter((item) => item.id !== creature.id))}>{t("catalog.remove")}</button>}</div>)}</div>
+          <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => void removeCreature(creature.id)}>{t("catalog.remove")}</button>}</div>)}</div>
         </section>}
       </div>}
 

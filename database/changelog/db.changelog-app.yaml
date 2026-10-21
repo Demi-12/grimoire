@@ -90,3 +90,77 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP TABLE IF EXISTS "campaign_invite";
+
+  - changeSet:
+      id: data-003-creatures
+      author: grimoire
+      comment: Personal creature catalog moved from browser storage into the account.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "creature" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "ownerId" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "name" TEXT NOT NULL CHECK (char_length(btrim("name")) BETWEEN 1 AND 60),
+                "xp" INTEGER NOT NULL CHECK ("xp" BETWEEN 1 AND 100000),
+                "source" TEXT NOT NULL DEFAULT '' CHECK (char_length("source") <= 60),
+                "monsterSlug" TEXT CHECK (char_length("monsterSlug") <= 100),
+                "cr" NUMERIC,
+                "type" TEXT CHECK (char_length("type") <= 40),
+                "roleTags" JSONB NOT NULL DEFAULT '[]'::jsonb,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+              CREATE INDEX "creature_ownerId_idx" ON "creature" ("ownerId");
+              CREATE UNIQUE INDEX "creature_owner_slug_idx" ON "creature" ("ownerId", "monsterSlug") WHERE "monsterSlug" IS NOT NULL;
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS "creature";
+
+  - changeSet:
+      id: data-004-encounters
+      author: grimoire
+      comment: Encounter journal per campaign; visible only to the campaign's DMs so prepared encounters stay secret.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "encounter" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "campaignId" UUID NOT NULL REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                "createdBy" TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "title" TEXT NOT NULL CHECK (char_length(btrim("title")) BETWEEN 1 AND 80),
+                "notes" TEXT NOT NULL DEFAULT '' CHECK (char_length("notes") <= 2000),
+                "status" TEXT NOT NULL DEFAULT 'planned' CHECK ("status" IN ('planned', 'played')),
+                "difficulty" TEXT NOT NULL CHECK ("difficulty" IN ('low', 'moderate', 'high')),
+                "budget" INTEGER NOT NULL CHECK ("budget" >= 0),
+                "totalXp" INTEGER NOT NULL CHECK ("totalXp" >= 0),
+                "partyLevels" JSONB NOT NULL DEFAULT '[]'::jsonb,
+                "lines" JSONB NOT NULL DEFAULT '[]'::jsonb,
+                "playedAt" TIMESTAMPTZ,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+              CREATE INDEX "encounter_campaignId_idx" ON "encounter" ("campaignId", "createdAt" DESC);
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS "encounter";
+
+  - changeSet:
+      id: users-002-preferences
+      author: grimoire
+      comment: Language and theme follow the account across devices; legacyImportedAt replaces the per-browser import flag.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user"
+                ADD COLUMN "locale" TEXT,
+                ADD COLUMN "theme" TEXT,
+                ADD COLUMN "legacyImportedAt" TIMESTAMPTZ;
+              ALTER TABLE "user"
+                ADD CONSTRAINT "user_locale_check" CHECK ("locale" IN ('en', 'es')),
+                ADD CONSTRAINT "user_theme_check" CHECK ("theme" IN ('light', 'dark'));
+      rollback:
+        - sql:
+            sql: ALTER TABLE "user" DROP COLUMN IF EXISTS "legacyImportedAt", DROP COLUMN IF EXISTS "theme", DROP COLUMN IF EXISTS "locale";
