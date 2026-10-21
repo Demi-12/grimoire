@@ -2,7 +2,7 @@
 import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "./rules";
 import {
   armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
-  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
+  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId, type Text,
 } from "./dnd2024";
 import { featInfo, type FightingStyleId, type LevelFeatId } from "./levelup-data";
 
@@ -240,6 +240,54 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     gold: equipment.gold + background.gold,
     feats,
   };
+}
+
+interface WeaponData { name: Text; dice: string; type: Text; martial?: boolean; properties: ("finesse" | "light")[]; ranged?: boolean }
+const piercing: Text = { en: "piercing", es: "perforante" };
+const slashing: Text = { en: "slashing", es: "cortante" };
+const bludgeoning: Text = { en: "bludgeoning", es: "contundente" };
+const weaponTable: Record<string, WeaponData> = {
+  Dagger: { name: { en: "Dagger", es: "Daga" }, dice: "1d4", type: piercing, properties: ["finesse", "light"] },
+  Handaxe: { name: { en: "Handaxe", es: "Hacha de mano" }, dice: "1d6", type: slashing, properties: ["light"] },
+  Javelin: { name: { en: "Javelin", es: "Jabalina" }, dice: "1d6", type: piercing, properties: [] },
+  Quarterstaff: { name: { en: "Quarterstaff", es: "Bastón" }, dice: "1d6", type: bludgeoning, properties: [] },
+  Mace: { name: { en: "Mace", es: "Maza" }, dice: "1d6", type: bludgeoning, properties: [] },
+  Sickle: { name: { en: "Sickle", es: "Hoz" }, dice: "1d4", type: slashing, properties: ["light"] },
+  Spear: { name: { en: "Spear", es: "Lanza" }, dice: "1d6", type: piercing, properties: [] },
+  "Light Crossbow": { name: { en: "Light Crossbow", es: "Ballesta ligera" }, dice: "1d8", type: piercing, properties: [], ranged: true },
+  Shortbow: { name: { en: "Shortbow", es: "Arco corto" }, dice: "1d6", type: piercing, properties: [], ranged: true },
+  Greataxe: { name: { en: "Greataxe", es: "Gran hacha" }, dice: "1d12", type: slashing, martial: true, properties: [] },
+  Greatsword: { name: { en: "Greatsword", es: "Espadón" }, dice: "2d6", type: slashing, martial: true, properties: [] },
+  Longsword: { name: { en: "Longsword", es: "Espada larga" }, dice: "1d8", type: slashing, martial: true, properties: [] },
+  Flail: { name: { en: "Flail", es: "Mayal" }, dice: "1d8", type: bludgeoning, martial: true, properties: [] },
+  Scimitar: { name: { en: "Scimitar", es: "Cimitarra" }, dice: "1d6", type: slashing, martial: true, properties: ["finesse", "light"] },
+  Shortsword: { name: { en: "Shortsword", es: "Espada corta" }, dice: "1d6", type: piercing, martial: true, properties: ["finesse", "light"] },
+  Longbow: { name: { en: "Longbow", es: "Arco largo" }, dice: "1d8", type: piercing, martial: true, properties: [], ranged: true },
+};
+
+export interface SheetAttack { name: Text; bonus: number; dice: string; modifier: number; type: Text }
+
+/** Weapons in the chosen starting gear with their attack bonus and damage. */
+export function attackList(build: CharacterBuild, sheet: DerivedSheet): SheetAttack[] {
+  const cls = findClass(build.classId);
+  if (!cls) return [];
+  const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
+  const training = cls.weapons.en;
+  const restriction = /with the (Light|Finesse)(?: or (Light|Finesse))? property/.exec(training)?.slice(1).filter(Boolean).map((word) => word.toLowerCase()) ?? [];
+  const attacks: SheetAttack[] = [];
+  for (const item of equipment.items) {
+    const raw = item.en.replace(/^\d+ /, "").replace(/^.*Focus \((.*)\)$/, "$1");
+    const weapon = weaponTable[raw] ?? weaponTable[raw.replace(/s$/, "")];
+    if (!weapon || attacks.some((attack) => attack.name.en === weapon.name.en)) continue;
+    const str = abilityModifier(sheet.scores.str);
+    const dex = abilityModifier(sheet.scores.dex);
+    const modifier = weapon.ranged ? dex : weapon.properties.includes("finesse") ? Math.max(str, dex) : str;
+    const trained = weapon.martial
+      ? /Martial/.test(training) && (restriction.length === 0 || restriction.some((property) => weapon.properties.includes(property as "finesse" | "light")))
+      : /Simple/.test(training);
+    attacks.push({ name: weapon.name, bonus: modifier + (trained ? sheet.proficiency : 0), dice: weapon.dice, modifier, type: weapon.type });
+  }
+  return attacks;
 }
 
 /** Problems that block finishing each step; an empty list means the step is complete. */

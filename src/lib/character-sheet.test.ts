@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { backgrounds, species } from "./dnd2024";
-import { deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
+import { attackList, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
 
 const fighter: CharacterBuild = {
   version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
@@ -87,3 +87,16 @@ describe("2024 catalog", () => {
   });
 });
 
+
+describe("attack list", () => {
+  it("lists starting weapons with proficiency, ability and damage", () => {
+    const sheet = deriveSheet(fighter, 1)!;
+    const attacks = attackList(fighter, sheet);
+    expect(attacks.length).toBeGreaterThan(0);
+    for (const attack of attacks) expect(attack.bonus).toBe(attack.modifier + sheet.proficiency);
+    const barbarian = { ...fighter, classId: "barbarian" as const, classEquipment: "A" as const };
+    const greataxe = attackList(barbarian, deriveSheet(barbarian, 1)!).find((attack) => attack.name.en === "Greataxe");
+    expect(greataxe).toMatchObject({ dice: "1d12", modifier: 3, bonus: 5 }); // STR 17, proficient (+2)
+    expect(attackList({ ...barbarian, classEquipment: "B" }, deriveSheet(barbarian, 1)!)).toEqual([]);
+  });
+});
