@@ -257,7 +257,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
             <div><dt>{c.weapons}</dt><dd>{say(cls.weapons, locale)}</dd></div>
             {cls.tools && <div><dt>{c.tools}</dt><dd>{say(cls.tools, locale)}</dd></div>}
             <div><dt>{c.skillsPick(cls.skillCount)}</dt><dd>{cls.skillOptions.length ? cls.skillOptions.map((skill) => translate(locale, `skill.${skill}`)).join(", ") : c.anySkill}</dd></div>
-            <div><dt>{c.features}</dt><dd>{cls.features.map((feature) => say(feature, locale)).join(" · ")}{cls.weaponMasteries ? ` — ${c.masteries(cls.weaponMasteries)}` : ""}</dd></div>
+            <div><dt>{c.features}</dt><dd>{cls.features.map((feature) => say(feature.name, locale)).join(" · ")}{cls.weaponMasteries ? ` — ${c.masteries(cls.weaponMasteries)}` : ""}</dd></div>
             {cls.spellcasting && <div><dt>{c.spellcasting}</dt><dd>{translate(locale, `ability.${cls.spellcasting.ability}`)} · {c.cantrips} {cls.spellcasting.cantrips} · {c.prepared} {cls.spellcasting.prepared} · {say(cls.spellcasting.slots, locale)}</dd></div>}
           </dl>
           <div className={styles.inline}>
@@ -297,7 +297,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         {heading(2)}
         <p className={styles.intro}>{c.speciesIntro}</p>
         {quick ? selectFor(species, build.speciesId, chooseSpecies) : <div className={styles.cardGrid}>{species.map((item) => <Choice key={item.id} selected={item.id === build.speciesId} onClick={() => chooseSpecies(item.id)}>
-          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait, locale)).join(" · ")}</em>
+          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait.name, locale)).join(" · ")}</em>
         </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(sp.name, locale)}</h3>
@@ -305,7 +305,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
             <div><dt>{c.size}</dt><dd>{say(sp.size, locale)}</dd></div>
             <div><dt>{c.speed}</dt><dd>{sp.speed} {c.ft}</dd></div>
             {sp.darkvision && <div><dt>{c.darkvision}</dt><dd>{sp.darkvision} {c.ft}</dd></div>}
-            <div><dt>{c.traits}</dt><dd>{sp.traits.map((trait) => say(trait, locale)).join(" · ")}</dd></div>
+            <div><dt>{c.traits}</dt><dd>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}</dd></div>
           </dl>
           {sp.lineages && <fieldset className={styles.group}><legend>{say(sp.lineageLabel, locale)}</legend><div className={styles.pills}>
             {sp.lineages.map((lineage) => <Choice key={lineage.id} selected={lineage.id === build.lineageId} onClick={() => update({ lineageId: lineage.id })}>
@@ -447,8 +447,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
             <section><h4>{c.skills}</h4><ul className={styles.skillList}>{skillKeys.map((skill) => <li key={skill} className={sheet.skills[skill].proficient ? styles.prof : ""}>
               <i>{sheet.skills[skill].expertise ? "◆" : sheet.skills[skill].proficient ? "●" : "○"}</i>{translate(locale, `skill.${skill}`)}<b>{signed(sheet.skills[skill].bonus)}</b></li>)}</ul></section>
             <section>
-              <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature, locale)).join(" · ")}</p>
-              <h4>{c.traits}</h4><p>{sp.traits.map((trait) => say(trait, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}</p>
+              <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature.name, locale)).join(" · ")}</p>
+              <h4>{c.traits}</h4><p>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}</p>
               <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(featInfo(feat).name, locale)).join(" · ")}</p>
               {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)} · {say(cls.spellcasting.slots, locale)}</p></>}
               <h4>{c.languages}</h4><p>{[locale === "es" ? "Común" : "Common", ...build.languages.map((index) => say(standardLanguages[index], locale))].join(", ")}</p>

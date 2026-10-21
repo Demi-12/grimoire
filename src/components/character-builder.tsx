@@ -9,10 +9,9 @@ import CharacterWizard, { describeBuild, type WizardResult } from "@/components/
 import LevelUp, { type LevelUpResult } from "@/components/level-up";
 import CharacterSheetView from "@/components/character-sheet-view";
 import { attackList } from "@/lib/character-sheet";
-import { alignments, backgrounds, classes, findClass, findSpecies, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
-import { featInfo } from "@/lib/levelup-data";
-import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
-import { sheetFor, signed, startingItems } from "@/lib/character-view";
+import { alignments, backgrounds, classes, findClass, say, skillKeys, species as speciesList, standardLanguages, type Feature, type Text } from "@/lib/dnd2024";
+import { MAX_LEVEL } from "@/lib/levelup";
+import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
 
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 const standardArray: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
@@ -34,6 +33,11 @@ function ScoreFields({ scores, onChange, locale }: { scores: AbilityScores; onCh
 }
 
 /** Select over catalog names; keeps a legacy free-text value selectable so older sheets don't lose it. */
+/** Features or traits with their summaries, for the detail page of the printed sheet. */
+function PrintFeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
+  return <dl className="sheet-trait-list">{items.map((item, index) => <div key={`${item.name.en}-${index}`}><dt>{say(item.name, locale)}</dt>{say(item.tip, locale) && <dd>{say(item.tip, locale)}</dd>}</div>)}</dl>;
+}
+
 function CatalogSelect({ value, onChange, options, locale, placeholder, maxLength }: {
   value: string; onChange: (value: string) => void; options: Text[]; locale: Locale; placeholder: string; maxLength: number;
 }) {
@@ -263,12 +267,9 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
           </section>
           <section className="sheet-page sheet-page-extra">
             <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{translate(locale, "character.sheetAdventurerRecord")}</h2><small>{character.name}</small></header>
-            <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><div className="sheet-writing-area tall">{character.build && <p className="sheet-filled">{[
-              ...unlockedFeatures(character.build, character.level).map((feature) => say(feature, locale)),
-              ...(sheet?.feats ?? []).map((feat) => say(featInfo(feat).name, locale)),
-            ].join(" · ")}{sheet?.spellSaveDc ? ` · ${translate(locale, "character.spellDc")} ${sheet.spellSaveDc}, ${translate(locale, "character.spellAttack")} ${signed(sheet.spellAttack ?? 0)}` : ""}</p>}</div></section>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><div className="sheet-writing-area tall">{character.build && <p className="sheet-filled">{featureList(character.build, character.level).map((feature) => say(feature.name, locale)).join(" · ")}{sheet?.spellSaveDc ? ` · ${translate(locale, "character.spellDc")} ${sheet.spellSaveDc}, ${translate(locale, "character.spellAttack")} ${signed(sheet.spellAttack ?? 0)}` : ""}</p>}</div></section>
             <div className="sheet-columns">
-              <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><div className="sheet-writing-area medium">{character.build && <p className="sheet-filled">{(findSpecies(character.build.speciesId)?.traits ?? []).map((trait) => say(trait, locale)).join(" · ")}{sheet?.darkvision ? ` · ${translate(locale, "character.darkvision")} ${sheet.darkvision}` : ""}</p>}</div></section>
+              <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><div className="sheet-writing-area medium">{character.build && <p className="sheet-filled">{speciesTraits(character.build).map((trait) => say(trait.name, locale)).join(" · ")}{sheet?.darkvision ? ` · ${translate(locale, "character.darkvision")} ${sheet.darkvision}` : ""}</p>}</div></section>
               <section className="sheet-section"><h4>{translate(locale, "character.sheetProficiencies")}</h4><div className="sheet-writing-area medium">{character.build && (() => { const cls = findClass(character.build.classId); return cls ? <p className="sheet-filled">{say(cls.armor, locale)} · {say(cls.weapons, locale)}{cls.tools ? ` · ${say(cls.tools, locale)}` : ""}<br />{translate(locale, "character.sheetLanguages")}: {[locale === "es" ? "Común" : "Common", ...character.build.languages.map((index) => standardLanguages[index] ? say(standardLanguages[index], locale) : "")].filter(Boolean).join(", ")}</p> : null; })()}</div></section>
             </div>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetEquipment")}</h4><div className="sheet-equipment-table"><div><b>{translate(locale, "character.sheetItem")}</b><b>{translate(locale, "character.sheetQuantity")}</b><b>{translate(locale, "character.sheetWeight")}</b><b>{translate(locale, "character.sheetNotes")}</b></div>{(() => { const items = character.build ? startingItems(character.build, locale) : []; return Array.from({ length: Math.max(7, items.length) }, (_, index) => <div key={index}><span>{items[index] ?? ""}</span><span /><span /><span /></div>); })()}</div></section>
@@ -279,6 +280,12 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
             <section className="sheet-section"><h4>{translate(locale, "character.sheetSpells")}</h4><div className="sheet-spell-lines">{Array.from({ length: 4 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div></section>
             <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
           </section>
+          {character.build && <section className="sheet-page sheet-page-traits">
+            <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{translate(locale, "character.sheetTraitsDetail")}</h2><small>{character.name}</small></header>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><PrintFeatureList items={featureList(character.build, character.level)} locale={locale} /></section>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><PrintFeatureList items={speciesTraits(character.build)} locale={locale} /></section>
+            <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
+          </section>}
         </div>
         {sheet && <div className="card-vitals">
           <div><span>{translate(locale, "character.acShort")}</span><b>{sheet.armorClass}</b></div>

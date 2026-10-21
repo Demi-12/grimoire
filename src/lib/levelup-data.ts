@@ -4,11 +4,12 @@
  * Feature names are official; the one-line tips are our own plain-language summaries, not rules text.
  */
 import type { AbilityKey } from "./rules";
-import { originFeats, type ClassId, type FeatId, type SkillKey, type Text } from "./dnd2024";
+import { originFeats, type ClassId, type FeatId, type Feature, type SkillKey, type Text } from "./dnd2024";
+
+export type { Feature };
 
 const t = (en: string, es: string): Text => ({ en, es });
 
-export interface Feature { name: Text; tip: Text }
 const f = (en: string, es: string, tipEn: string, tipEs: string): Feature => ({ name: t(en, es), tip: t(tipEn, tipEs) });
 
 export type FightingStyleId = "archery" | "defense" | "greatWeaponFighting" | "twoWeaponFighting";
