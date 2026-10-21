@@ -19,19 +19,17 @@ describe("parseAdminEmails", () => {
 });
 
 describe("campaign permissions", () => {
-  it("lets only approved DMs and admins open campaigns", () => {
-    expect(canCreateCampaign({ role: "dm", status: "approved" })).toBe(true);
-    expect(canCreateCampaign({ role: "admin", status: "approved" })).toBe(true);
-    expect(canCreateCampaign({ role: "player", status: "approved" })).toBe(false);
-    expect(canCreateCampaign({ role: "dm", status: "pending" })).toBe(false);
+  it("lets any unblocked account open a campaign", () => {
+    expect(canCreateCampaign({ status: "approved" })).toBe(true);
+    expect(canCreateCampaign({ status: "blocked" })).toBe(false);
   });
 
   it("lets owners, co-DMs and admins manage a campaign, not players", () => {
     const campaign = { ownerId: "owner" };
-    expect(canManageCampaign({ id: "owner", role: "dm" }, campaign)).toBe(true);
-    expect(canManageCampaign({ id: "co", role: "player" }, { ...campaign, myRole: "dm" })).toBe(true);
+    expect(canManageCampaign({ id: "owner", role: "user" }, campaign)).toBe(true);
+    expect(canManageCampaign({ id: "co", role: "user" }, { ...campaign, myRole: "dm" })).toBe(true);
     expect(canManageCampaign({ id: "boss", role: "admin" }, campaign)).toBe(true);
-    expect(canManageCampaign({ id: "p", role: "player" }, { ...campaign, myRole: "player" })).toBe(false);
+    expect(canManageCampaign({ id: "p", role: "user" }, { ...campaign, myRole: "player" })).toBe(false);
   });
 });
 
@@ -40,20 +38,20 @@ describe("checkAdminChange", () => {
   const other = { id: "b", role: "admin" as const, status: "approved" as const };
 
   it("stops admins from editing or deleting themselves", () => {
-    expect(checkAdminChange(admin, admin, { role: "player" }, 2)).toBe("self");
+    expect(checkAdminChange(admin, admin, { role: "user" }, 2)).toBe("self");
     expect(checkAdminChange(admin, admin, "delete", 2)).toBe("self");
   });
 
   it("always keeps one approved admin", () => {
     expect(checkAdminChange(admin, other, { status: "blocked" }, 1)).toBe("last-admin");
-    expect(checkAdminChange(admin, other, { role: "dm" }, 1)).toBe("last-admin");
+    expect(checkAdminChange(admin, other, { role: "user" }, 1)).toBe("last-admin");
     expect(checkAdminChange(admin, other, "delete", 1)).toBe("last-admin");
     expect(checkAdminChange(admin, other, { status: "blocked" }, 2)).toBeNull();
     expect(checkAdminChange(admin, other, { role: "admin" }, 1)).toBeNull();
   });
 
   it("allows any change to non-admin accounts", () => {
-    expect(checkAdminChange(admin, { id: "c", role: "player", status: "pending" }, { status: "approved", role: "dm" }, 1)).toBeNull();
+    expect(checkAdminChange(admin, { id: "c", role: "user", status: "approved" }, { status: "blocked", role: "admin" }, 1)).toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Campaign, type Character, type DirectoryUser, type Invite, type Me } from "@/lib/api-client";
+import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
 import EncounterJournal from "@/components/encounter-journal";
 import styles from "./campaign-manager.module.css";
@@ -20,9 +20,8 @@ type Props = {
 const text = {
   en: {
     eyebrow: "✦  THE CHRONICLE", title: "Campaigns",
-    subtitle: "Gather your table beneath one banner: players, Dungeon Masters and their heroes.",
+    subtitle: "Gather your table beneath one banner. You are the DM of the campaigns you create and a player in the ones you join.",
     newCampaign: "New campaign", placeholder: "Name your campaign", create: "Create campaign",
-    playerHint: "Only Dungeon Masters can open campaigns. Ask yours to add you to the table.",
     rename: "Edit", save: "Save", cancel: "Cancel", remove: "Delete campaign", leave: "Leave campaign",
     description: "Description", descriptionPlaceholder: "Setting, schedule, house rules…",
     deleteConfirm: (name: string) => `Delete “${name}”? Characters stay with their owners.`,
@@ -30,22 +29,21 @@ const text = {
     empty: "No campaigns yet.", owner: (name: string) => `Run by ${name}`,
     roles: { dm: "DM", player: "Player" } as Record<CampaignRole, string>,
     yourRole: "Your role", table: "The table", heroes: "Heroes",
-    addMember: "Add someone", addAs: "as", add: "Add", noOneToAdd: "Every approved account is already here.",
     makeDm: "Make DM", makePlayer: "Make player", removeMember: "Remove",
+    addMember: "Add by email or name", addAs: "as", add: "Add", added: (name: string) => `${name} joined the table.`,
     noHeroes: "No heroes have joined this campaign yet.", addHero: "Bring one of your characters",
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
     removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
-    invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone with an approved account who opens the link can join as a player. Links expire after 7 days.",
+    invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone who opens the link and signs in joins as a player. Links expire after 7 days.",
     journal: "Encounter journal",
     copyLink: "Copy link", copied: "Copied", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ${owner} is calling you to the table! Join the campaign "${c}" on Grimoire, build your hero and roll initiative.\n\n🎲 Your invitation (valid 7 days):`, revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
     eyebrow: "✦  LA CRÓNICA", title: "Campañas",
-    subtitle: "Reúne a tu mesa bajo un mismo estandarte: jugadores, DMs y sus héroes.",
+    subtitle: "Reúne a tu mesa bajo un mismo estandarte. Eres el DM de las campañas que creas y jugador en las que te unes.",
     newCampaign: "Nueva campaña", placeholder: "Nombre de la campaña", create: "Crear campaña",
-    playerHint: "Solo los DMs pueden abrir campañas. Pide al tuyo que te añada a la mesa.",
     rename: "Editar", save: "Guardar", cancel: "Cancelar", remove: "Eliminar campaña", leave: "Salir de la campaña",
     description: "Descripción", descriptionPlaceholder: "Ambientación, horario, reglas de la casa…",
     deleteConfirm: (name: string) => `¿Eliminar «${name}»? Los personajes se quedan con sus dueños.`,
@@ -53,13 +51,13 @@ const text = {
     empty: "Aún no hay campañas.", owner: (name: string) => `Dirigida por ${name}`,
     roles: { dm: "DM", player: "Jugador" } as Record<CampaignRole, string>,
     yourRole: "Tu papel", table: "La mesa", heroes: "Héroes",
-    addMember: "Añadir a alguien", addAs: "como", add: "Añadir", noOneToAdd: "Todas las cuentas aprobadas ya están aquí.",
     makeDm: "Hacer DM", makePlayer: "Hacer jugador", removeMember: "Quitar",
+    addMember: "Añadir por correo o nombre", addAs: "como", add: "Añadir", added: (name: string) => `${name} se ha unido a la mesa.`,
     noHeroes: "Todavía no se han unido héroes a esta campaña.", addHero: "Trae uno de tus personajes",
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
     removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
-    invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien tenga una cuenta aprobada y abra el enlace se une como jugador. Los enlaces caducan a los 7 días.",
+    invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien abra el enlace e inicie sesión se une como jugador. Los enlaces caducan a los 7 días.",
     journal: "Diario de encuentros",
     copyLink: "Copiar enlace", copied: "Copiado", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ¡${owner} te convoca a la mesa! Únete a la campaña «${c}» en Grimoire, crea a tu héroe y prepárate para tirar iniciativa.\n\n🎲 Tu invitación (válida 7 días):`, revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
@@ -68,20 +66,12 @@ const text = {
 
 export default function CampaignManager({ me, campaigns, characters, locale, onChanged }: Props) {
   const t = text[locale];
-  const canCreate = me.role === "admin" || me.role === "dm";
-  const managesAny = campaigns.some((campaign) => campaign.canManage);
-  const [directory, setDirectory] = useState<DirectoryUser[]>([]);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!managesAny) return;
-    api<{ users: DirectoryUser[] }>("/api/directory").then((data) => setDirectory(data.users)).catch(() => setDirectory([]));
-  }, [managesAny]);
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -127,21 +117,19 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       <p>{t.subtitle}</p>
     </header>
 
-    {canCreate ? <form className={styles.createForm} onSubmit={(event) => void createCampaign(event)}>
+    <form className={styles.createForm} onSubmit={(event) => void createCampaign(event)}>
       <label htmlFor="campaign-name">{t.newCampaign}</label>
       <div className={styles.createRow}>
         <input id="campaign-name" value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} placeholder={t.placeholder} />
         <button type="submit" disabled={busy}>✧ {t.create}</button>
       </div>
-    </form> : <p className={styles.noMembers}>{t.playerHint}</p>}
+    </form>
 
     {error && <p className={styles.error} role="alert">{error}</p>}
     {!campaigns.length ? <p className={styles.empty}>{t.empty}</p> : <div className={styles.campaignList}>
       {campaigns.map((campaign) => {
         const heroes = characters.filter((character) => character.campaignId === campaign.id);
         const myLooseCharacters = characters.filter((character) => character.editable && character.campaignId !== campaign.id);
-        const memberIds = new Set(campaign.members.map((member) => member.userId));
-        const candidates = directory.filter((user) => !memberIds.has(user.id));
         const canDelete = campaign.isOwner || me.role === "admin";
         return <article className={styles.campaign} key={campaign.id}>
           <div className={styles.campaignHead}>
@@ -181,8 +169,8 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
               </>}
             </li>;
           })}</ul>
-          {campaign.canManage && (candidates.length ? <AddMember key={candidates.length} locale={locale} candidates={candidates} disabled={busy}
-            onAdd={(userId, role) => run(() => api(`/api/campaigns/${campaign.id}/members`, { method: "POST", body: { userId, role } }))} /> : <p className={styles.noMembers}>{t.noOneToAdd}</p>)}
+
+          {campaign.canManage && <AddMember key={campaign.members.length} campaignId={campaign.id} locale={locale} onAdded={onChanged} />}
 
           {campaign.canManage && <InvitePanel campaignId={campaign.id} campaignName={campaign.name} ownerName={campaign.ownerName} locale={locale} />}
 
@@ -214,28 +202,46 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
   </section>;
 }
 
-function AddMember({ locale, candidates, disabled, onAdd }: {
-  locale: Locale;
-  candidates: DirectoryUser[];
-  disabled: boolean;
-  onAdd: (userId: string, role: CampaignRole) => Promise<boolean>;
-}) {
+function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale: Locale; onAdded: () => Promise<void> | void }) {
   const t = text[locale];
-  const [userId, setUserId] = useState("");
+  const [query, setQuery] = useState("");
   const [role, setRole] = useState<CampaignRole>("player");
-  return <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); if (userId) void onAdd(userId, role).then((ok) => { if (ok) setUserId(""); }); }}>
-    <span>{t.addMember}</span>
-    <select aria-label={t.addMember} value={userId} onChange={(event) => setUserId(event.target.value)}>
-      <option value="">…</option>
-      {candidates.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-    </select>
-    <span>{t.addAs}</span>
-    <select aria-label={t.addAs} value={role} onChange={(event) => setRole(event.target.value as CampaignRole)}>
-      <option value="player">{t.roles.player}</option>
-      <option value="dm">{t.roles.dm}</option>
-    </select>
-    <button type="submit" disabled={disabled || !userId}>{t.add}</button>
-  </form>;
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const { name } = await api<{ name: string }>(`/api/campaigns/${campaignId}/members`, { method: "POST", body: { query: query.trim(), role } });
+      setQuery("");
+      setFailed(false);
+      setMessage(t.added(name));
+      await onAdded();
+    } catch (cause) {
+      setFailed(true);
+      setMessage(cause instanceof ApiError && cause.status !== 403 ? cause.message : t.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <>
+    <form className={styles.addMember} onSubmit={(event) => void submit(event)}>
+      <span>{t.addMember}</span>
+      <input aria-label={t.addMember} value={query} maxLength={254} onChange={(event) => setQuery(event.target.value)} />
+      <span>{t.addAs}</span>
+      <select aria-label={t.addAs} value={role} onChange={(event) => setRole(event.target.value as CampaignRole)}>
+        <option value="player">{t.roles.player}</option>
+        <option value="dm">{t.roles.dm}</option>
+      </select>
+      <button type="submit" disabled={busy || !query.trim()}>{t.add}</button>
+    </form>
+    {message && <p className={failed ? styles.error : styles.noMembers} role={failed ? "alert" : "status"}>{message}</p>}
+  </>;
 }
 
 function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaignId: string; campaignName: string; ownerName: string; locale: Locale }) {

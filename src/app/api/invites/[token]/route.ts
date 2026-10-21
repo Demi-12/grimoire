@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, requireApproved } from "@/lib/access";
+import { dataErrorResponse, jsonError, requireUser } from "@/lib/access";
 import { acceptInvite, readInvite } from "@/lib/data";
 import { isInviteToken } from "@/lib/permissions";
 
@@ -9,7 +9,7 @@ type Context = { params: Promise<{ token: string }> };
 
 /** Which campaign an invite link opens, so the invitee can confirm before joining. */
 export async function GET(_request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { token } = await params;
   if (!isInviteToken(token)) return jsonError(404, "Not found.");
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: Context) {
 
 /** Join the campaign as a player. */
 export async function POST(_request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { token } = await params;
   if (!isInviteToken(token)) return jsonError(404, "Not found.");

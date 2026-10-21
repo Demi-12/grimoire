@@ -164,3 +164,33 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: ALTER TABLE "user" DROP COLUMN IF EXISTS "legacyImportedAt", DROP COLUMN IF EXISTS "theme", DROP COLUMN IF EXISTS "locale";
+
+  - changeSet:
+      id: users-003-open-signup-and-campaign-roles
+      author: grimoire
+      comment: >-
+        Sign-ups no longer wait for an admin and dm/player stop being site roles (they are per campaign,
+        via campaign_member). Pending accounts become approved; dm/player site roles collapse into user.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user" DROP CONSTRAINT "user_role_check", DROP CONSTRAINT "user_status_check";
+              UPDATE "user" SET "status" = 'approved' WHERE "status" = 'pending';
+              UPDATE "user" SET "role" = 'user' WHERE "role" <> 'admin';
+              ALTER TABLE "user"
+                ALTER COLUMN "role" SET DEFAULT 'user',
+                ALTER COLUMN "status" SET DEFAULT 'approved',
+                ADD CONSTRAINT "user_role_check" CHECK ("role" IN ('admin', 'user')),
+                ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('approved', 'blocked'));
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user" DROP CONSTRAINT "user_role_check", DROP CONSTRAINT "user_status_check";
+              UPDATE "user" SET "role" = 'player' WHERE "role" = 'user';
+              ALTER TABLE "user"
+                ALTER COLUMN "role" SET DEFAULT 'player',
+                ALTER COLUMN "status" SET DEFAULT 'pending',
+                ADD CONSTRAINT "user_role_check" CHECK ("role" IN ('admin', 'dm', 'player')),
+                ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('pending', 'approved', 'blocked'));

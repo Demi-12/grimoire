@@ -13,7 +13,7 @@ const copy = {
     createAccount: "Create an account", already: "Already have an account? Sign in", forgot: "Forgot password?",
     sendReset: "Send recovery link", resetTitle: "Choose a new password", updatePassword: "Set new password",
     checkEmail: "If an account can receive mail at that address, we’ve sent the next step. Check your inbox.",
-    created: "Account created. An admin has to approve it before you can enter.", twoFactor: "Authenticator code",
+    created: "Account created. You can sign in now.", google: "Continue with Google", twoFactor: "Authenticator code",
     verify: "Verify code", backup: "Use a backup code", useTotp: "Use an authenticator code", passkey: "Sign in with a passkey",
     processing: "Working…", passwordMismatch: "The passwords do not match.", genericError: "We could not complete that request. Check the details and try again.",
     settings: "Account security", addPasskey: "Add a passkey", passkeys: "Saved passkeys", noPasskeys: "No passkeys saved yet.",
@@ -29,7 +29,7 @@ const copy = {
     createAccount: "Crear una cuenta", already: "¿Ya tienes cuenta? Inicia sesión", forgot: "¿Has olvidado la contraseña?",
     sendReset: "Enviar enlace de recuperación", resetTitle: "Elige una contraseña nueva", updatePassword: "Guardar contraseña",
     checkEmail: "Si existe una cuenta que pueda recibir correo en esa dirección, hemos enviado el siguiente paso. Revisa tu bandeja.",
-    created: "Cuenta creada. Un admin tendrá que aprobarla para que puedas entrar.", twoFactor: "Código de la app autenticadora",
+    created: "Cuenta creada. Ya puedes iniciar sesión.", google: "Continuar con Google", twoFactor: "Código de la app autenticadora",
     verify: "Verificar código", backup: "Usar un código de recuperación", useTotp: "Usar código de autenticación", passkey: "Iniciar con una clave de acceso",
     processing: "Procesando…", passwordMismatch: "Las contraseñas no coinciden.", genericError: "No se pudo completar la solicitud. Revisa los datos e inténtalo de nuevo.",
     settings: "Seguridad de la cuenta", addPasskey: "Añadir clave de acceso", passkeys: "Claves guardadas", noPasskeys: "Todavía no hay claves guardadas.",
@@ -61,7 +61,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label style={{ display: "grid", gap: 6, color: "var(--auth-label)", fontSize: 13 }}>{label}{children}</label>;
 }
 
-export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: AuthMode; locale?: Locale }) {
+export function AuthPanel({ initialMode = "sign-in", locale, googleEnabled = false }: { initialMode?: AuthMode; locale?: Locale; googleEnabled?: boolean }) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [language, setLanguage] = useState<Locale>(locale ?? "en");
   const [email, setEmail] = useState("");
@@ -106,7 +106,7 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         if (password !== confirmation) throw new Error(t.passwordMismatch);
         const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin });
         if (result.error) throw result.error;
-        // The server signs the new account in directly; the app then shows it as pending approval.
+        // The server signs the new account in directly.
         if (result.data && "token" in result.data && result.data.token) window.location.assign("/");
         else notice(t.created);
       } else if (mode === "sign-in") {
@@ -135,6 +135,19 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
     } catch (cause) {
       setError(errorText(cause, t.genericError));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    setBusy(true);
+    setError("");
+    try {
+      // Redirects to Google; the invite token (if any) waits in sessionStorage for the return trip.
+      const result = await authClient.signIn.social({ provider: "google", callbackURL: window.location.origin });
+      if (result.error) throw result.error;
+    } catch (cause) {
+      setError(errorText(cause, t.genericError));
       setBusy(false);
     }
   }
@@ -180,6 +193,7 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
           {busy ? t.processing : mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : mode === "forgot-password" ? t.sendReset : mode === "reset-password" ? t.updatePassword : t.verify}
         </button>
       </form>
+      {googleEnabled && (mode === "sign-in" || mode === "sign-up") && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={signInWithGoogle} disabled={busy}>{t.google}</button>}
       {mode === "sign-in" && <div style={{ display: "grid", gap: 12, marginTop: 15 }}>
         <button type="button" className="button button-quiet" onClick={signInWithPasskey} disabled={busy}>{t.passkey}</button>
         <button type="button" className="button button-quiet" onClick={() => { setMessage(""); setError(""); setMode("forgot-password"); }}>{t.forgot}</button>

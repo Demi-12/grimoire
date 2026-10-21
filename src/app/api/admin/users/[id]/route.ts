@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, readJson, requireApproved } from "@/lib/access";
+import { jsonError, readJson, requireUser } from "@/lib/access";
 import { applyAdminChange, countApprovedAdmins, deleteUser, readUserForAdmin, revokeUserSessions } from "@/lib/data";
 import { checkAdminChange, isAccountStatus, isSiteRole, type AdminChange } from "@/lib/permissions";
 
@@ -14,7 +14,7 @@ const guardMessages = {
 
 /** Change a user's role and/or status, or revoke their sessions with `{ "revokeSessions": true }`. */
 export async function PATCH(request: Request, { params }: Context) {
-  const user = await requireApproved(["admin"]);
+  const user = await requireUser(["admin"]);
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   const target = await readUserForAdmin(id);
@@ -46,7 +46,7 @@ export async function PATCH(request: Request, { params }: Context) {
 }
 
 export async function DELETE(_request: Request, { params }: Context) {
-  const user = await requireApproved(["admin"]);
+  const user = await requireUser(["admin"]);
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   const target = await readUserForAdmin(id);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireApproved } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
 import { createEncounter, listEncounters } from "@/lib/data";
 import { isUuid, parseEncounterInput } from "@/lib/permissions";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");
@@ -17,7 +17,7 @@ export async function GET(_request: Request, { params }: Context) {
 }
 
 export async function POST(request: Request, { params }: Context) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, readJson, requireApproved } from "@/lib/access";
+import { jsonError, readJson, requireUser } from "@/lib/access";
 import { importLocalData } from "@/lib/data";
 import { parseCampaignInput, parseCharacterInput, parseCreatureInput, type CharacterInput, type CreatureInput } from "@/lib/permissions";
 
@@ -9,7 +9,7 @@ const MAX_ITEMS = 200;
 
 /** One-time copy of characters/campaigns/creatures saved in the browser into the signed-in account. */
 export async function POST(request: Request) {
-  const user = await requireApproved();
+  const user = await requireUser();
   if (user instanceof NextResponse) return user;
   const body = await readJson(request) as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
   if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns)) || (body.creatures !== undefined && !Array.isArray(body.creatures))) {
