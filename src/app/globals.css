@@ -399,6 +399,29 @@ body {
 :root[data-theme="dark"] .gate-shell{background:var(--paper)}
 :root[data-theme="dark"] .admin-error{color:#ffc1a7;border-color:#8d5141;background:rgba(131,56,45,.18)}
 
+/* Large screens: header, content and footer share one centred column so their edges line up. */
+@media (min-width: 901px) {
+  .workspace {
+    --content-max: 1120px;
+    --gutter: clamp(24px, 5vw, 70px);
+    --edge: max(var(--gutter), calc((100% - var(--content-max)) / 2));
+  }
+  .workspace-header, .app-footer { padding-inline: var(--edge); }
+  .page-content { width: 100%; max-width: none; margin: 0; padding-inline: var(--edge); }
+}
+@media (min-width: 1500px) {
+  .workspace { --content-max: 1280px; }
+  .page-content { padding-top: 44px; padding-bottom: 88px; }
+  .welcome-banner { min-height: 340px; padding: 48px 56px; }
+  .banner-art { right: 7%; }
+  .dashboard-section { margin-top: 48px; }
+  .dashboard-grid, .character-grid { gap: 18px; }
+  .encounter-layout { gap: 22px; }
+}
+@media (min-width: 1900px) {
+  .workspace { --content-max: 1360px; }
+}
+
 /* Sign out + scrollable mobile nav so the admin tab is always reachable */
 .sidebar-signout,.header-signout{border:1px solid var(--line);background:transparent;border-radius:3px;cursor:pointer;color:inherit;font-size:11px;padding:6px 10px}
 .sidebar-signout{margin-top:10px;width:100%}
@@ -409,3 +432,6 @@ body {
   .sidebar-bottom{display:none}
 }
 @media (min-width: 651px) { .header-signout{display:none} }
+
+/* iOS draws some symbols (⚔ ✳ ☀) as colour emoji; force the text glyph so they follow the theme colours. */
+body { font-variant-emoji: text; }

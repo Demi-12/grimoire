@@ -285,9 +285,9 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
         </button>
       </section>
       <section className="encounter-results" aria-live="polite" aria-label={translate(locale, "encounter.resultsAria")}>
-        <div className="results-heading"><div><p className="eyebrow">{translate(locale, "encounter.proposals")}{roll > 1 ? ` · ${translate(locale, "encounter.roll", { number: roll })}` : ""}</p><h2>{suggestions.length ? translate(locale, "encounter.optionsReady", { count: suggestions.length }) : translate(locale, "encounter.optionsWaiting")}</h2></div><span className="result-sigil" aria-hidden="true">✳</span></div>
+        <div className="results-heading"><div><p className="eyebrow">{translate(locale, "encounter.proposals")}{roll > 1 ? ` · ${translate(locale, "encounter.roll", { number: roll })}` : ""}</p><h2>{suggestions.length ? translate(locale, "encounter.optionsReady", { count: suggestions.length }) : translate(locale, "encounter.optionsWaiting")}</h2></div><span className="result-sigil" aria-hidden="true">✳︎</span></div>
         {!suggestions.length ? (
-          <div className="results-empty"><div className="empty-orbit" aria-hidden="true">⚔</div><p>{translate(locale, "encounter.empty.prompt")}<br /><b>{translate(locale, "encounter.empty.action")}</b> {translate(locale, "encounter.empty.detail")}</p></div>
+          <div className="results-empty"><div className="empty-orbit" aria-hidden="true">⚔︎</div><p>{translate(locale, "encounter.empty.prompt")}<br /><b>{translate(locale, "encounter.empty.action")}</b> {translate(locale, "encounter.empty.detail")}</p></div>
         ) : (
           <div className="encounter-card-list">{suggestions.map((suggestion, index) => <EncounterOption key={`${roll}-${index}`} suggestion={suggestion} index={index} locale={locale} roles={partyRoles} />)}</div>
         )}
