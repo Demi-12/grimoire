@@ -464,3 +464,27 @@ body { font-variant-emoji: text; }
   .import-banner>div{display:flex;flex-wrap:wrap;width:100%}
   .import-banner>div .button{flex:1 1 120px}
 }
+
+/* Account / sign-in panel tokens (consumed by inline styles in auth-panel.tsx) */
+:root {
+  --auth-border: #bda36d;
+  --auth-panel: rgba(251, 244, 229, .94);
+  --auth-shadow: 0 16px 45px rgba(54, 39, 19, .13);
+  --auth-input: #fffaf0;
+  --auth-input-line: #c7b58e;
+  --auth-label: #574832;
+  --auth-ok: #526245;
+  --auth-error: #9b3a29;
+  --auth-code: #efe3ca;
+}
+:root[data-theme="dark"] {
+  --auth-border: #5d5139;
+  --auth-panel: rgba(36, 36, 31, .94);
+  --auth-shadow: 0 16px 45px rgba(0, 0, 0, .45);
+  --auth-input: #171813;
+  --auth-input-line: #63563c;
+  --auth-label: #d6cbb3;
+  --auth-ok: #a8ba87;
+  --auth-error: #f0a58f;
+  --auth-code: #2e2c24;
+}
