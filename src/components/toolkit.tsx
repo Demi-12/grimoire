@@ -12,6 +12,7 @@ import { api, ApiError, type Campaign, type Character, type CatalogCreature, typ
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
+import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
 type Theme = "light" | "dark";
@@ -207,7 +208,18 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     }
   }, [theme, themeReady]);
 
-  const loading = <main className="app-shell min-h-screen bg-paper text-ink"><p role="status" className="page-content">{locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"}</p></main>;
+  const loading = <main className="app-shell min-h-screen bg-paper text-ink" aria-busy="true">
+    <aside className="sidebar" aria-hidden="true"><div className="skeleton-shell-nav">{[0, 1, 2, 3, 4].map((item) => <Skeleton key={item} height={34} />)}</div></aside>
+    <section className="workspace">
+      <SkeletonRegion label={locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"} className="page-content">
+        <div className="skeleton-grid">
+          <Skeleton width="38%" height={38} /><Skeleton width="55%" height={14} />
+          <div className="tool-grid">{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-card"><Skeleton width={28} height={28} className="skeleton-circle" /><Skeleton width="60%" height={14} /><Skeleton width="30%" height={26} /></div>)}</div>
+          {[0, 1, 2].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="45%" height={14} /></div></div>)}
+        </div>
+      </SkeletonRegion>
+    </section>
+  </main>;
   if (authSession.isPending || (accountId && meLoadedFor !== accountId)) return loading;
 
   function savePreference(preference: { locale: Locale } | { theme: Theme }) {
@@ -362,11 +374,11 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true">⚑</span>
         {invite ? <p><b>{t("invite.title", { campaign: invite.campaignName })}</b> {invite.alreadyMember ? t("invite.already", { owner: invite.ownerName }) : t("invite.description", { owner: invite.ownerName })}</p>
           : <p>{inviteError}</p>}
-        <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
+        <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{inviteBusy && <Spinner />}{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
           <button className="button button-quiet" disabled={inviteBusy} onClick={invite ? declineInvite : () => setInviteError("")}>{t(invite ? "invite.decline" : "invite.dismiss")}</button></div></div>}
       {view === "home" && <div className="page-content">
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length, creatures: localImport.creatures.length })}</p>
-          <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
+          <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{importBusy && <Spinner />}{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
         {importMessage && <p className="import-message" role="status">{importMessage}</p>}
         <header className="desk-head">
           <div><h1>{t("home.title")}</h1><p>{t("home.signedIn", { name: me.name })}</p></div>

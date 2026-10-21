@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "./skeleton";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
@@ -121,7 +122,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       <label htmlFor="campaign-name">{t.newCampaign}</label>
       <div className={styles.createRow}>
         <input id="campaign-name" value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} placeholder={t.placeholder} />
-        <button type="submit" disabled={busy}>✧ {t.create}</button>
+        <button type="submit" disabled={busy}>{busy ? <Spinner /> : "✧ "}{t.create}</button>
       </div>
     </form>
 
@@ -137,7 +138,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
               <input aria-label={t.newCampaign} autoFocus value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} />
               <textarea aria-label={t.description} className={styles.descriptionInput} value={editDescription} maxLength={1000} rows={2}
                 placeholder={t.descriptionPlaceholder} onChange={(event) => setEditDescription(event.target.value)} />
-              <button type="submit" disabled={busy}>{t.save}</button>
+              <button type="submit" disabled={busy}>{busy && <Spinner />}{t.save}</button>
               <button type="button" className={styles.quietButton} onClick={() => { setEditingId(null); setError(""); }}>{t.cancel}</button>
             </form> : <>
               <div>
@@ -238,7 +239,7 @@ function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale
         <option value="player">{t.roles.player}</option>
         <option value="dm">{t.roles.dm}</option>
       </select>
-      <button type="submit" disabled={busy || !query.trim()}>{t.add}</button>
+      <button type="submit" disabled={busy || !query.trim()}>{busy && <Spinner />}{t.add}</button>
     </form>
     {message && <p className={failed ? styles.error : styles.noMembers} role={failed ? "alert" : "status"}>{message}</p>}
   </>;
@@ -319,7 +320,7 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
       <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void change(() => api(`/api/campaigns/${campaignId}/invites/${invite.id}`, { method: "DELETE" }))}>{t.revoke}</button>
     </li>)}</ul> : <p className={styles.noMembers}>{t.noInvites}</p>}
     <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); void change(() => api(`/api/campaigns/${campaignId}/invites`, { method: "POST" })); }}>
-      <button type="submit" disabled={busy}>{t.createInvite}</button>
+      <button type="submit" disabled={busy}>{busy && <Spinner />}{t.createInvite}</button>
     </form>
   </>;
 }
