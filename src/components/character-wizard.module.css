@@ -70,7 +70,7 @@
 .abilityRow { border-top: 1px solid var(--line); font-size: 13px; }
 .abilityRow:nth-child(odd) { background: color-mix(in srgb, var(--paper) 60%, transparent); }
 .abilityRow b { font: 600 13px var(--font-display); }
-.abilityRow b i { color: var(--gilt); font-style: normal; }
+.abilityRow b i { color: var(--gilt-text); font-style: normal; }
 .abilityRow select { padding: 6px 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 13px var(--font-body); }
 .abilityRow strong { font: 700 18px var(--font-display); color: var(--ink); }
 .bonusCell { color: var(--crimson); font-weight: 700; }

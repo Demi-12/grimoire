@@ -350,17 +350,18 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     if (await saveCreature({ name: creatureName.trim(), xp: creatureXp, source: "Catálogo propio" })) setCreatureName("");
   }
 
-  return <main className="app-shell min-h-screen bg-paper text-ink">
+  return <div className="app-shell min-h-screen bg-paper text-ink">
+    <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">
       <button className="brand" onClick={() => setView("home")}><span>✳︎</span><b>GRIMOIRE</b></button>
       <div className="sidebar-caption">{t("nav.workspace")}</div>
       <nav className="side-nav" aria-label={t("nav.aria")}>
-        <button className={view === "home" ? "active" : ""} onClick={() => setView("home")}><span aria-hidden="true">⌂</span>{t("nav.home")}</button>
-        <button className={view === "characters" ? "active" : ""} onClick={() => setView("characters")}><span aria-hidden="true">♙</span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
-        <button className={view === "campaigns" ? "active" : ""} onClick={() => setView("campaigns")}><span aria-hidden="true">⚑</span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
-        <button className={view === "encounters" ? "active" : ""} onClick={() => setView("encounters")}><span aria-hidden="true">⚔︎</span>{t("nav.encounters")}</button>
-        <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
-        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}</button>}
+        <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><span aria-hidden="true">⌂</span>{t("nav.home")}</button>
+        <button className={view === "characters" ? "active" : ""} aria-current={view === "characters" ? "page" : undefined} onClick={() => setView("characters")}><span aria-hidden="true">♙</span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
+        <button className={view === "campaigns" ? "active" : ""} aria-current={view === "campaigns" ? "page" : undefined} onClick={() => setView("campaigns")}><span aria-hidden="true">⚑</span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
+        <button className={view === "encounters" ? "active" : ""} aria-current={view === "encounters" ? "page" : undefined} onClick={() => setView("encounters")}><span aria-hidden="true">⚔︎</span>{t("nav.encounters")}</button>
+        <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
+        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}</button>}
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
@@ -376,7 +377,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           : <p>{inviteError}</p>}
         <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{inviteBusy && <Spinner />}{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
           <button className="button button-quiet" disabled={inviteBusy} onClick={invite ? declineInvite : () => setInviteError("")}>{t(invite ? "invite.decline" : "invite.dismiss")}</button></div></div>}
-      {view === "home" && <div className="page-content">
+      {view === "home" && <main className="page-content" id="main" tabIndex={-1}>
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length, creatures: localImport.creatures.length })}</p>
           <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{importBusy && <Spinner />}{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
         {importMessage && <p className="import-message" role="status">{importMessage}</p>}
@@ -402,19 +403,19 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           </li>)}</ul> : <p className="desk-empty">{t("home.noCharacters")} <button className="small-action" onClick={() => setView("characters")}>{t("home.createCharacter")}</button></p>}
         </section>
         <p className="local-data-note">◈ {t("home.privacyDescription")}</p>
-      </div>}
+      </main>}
 
-      {view === "characters" && <div className="page-content">
+      {view === "characters" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("characters.kicker")}</p><h1>{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
         <CharacterBuilder locale={locale} characters={ownCharacters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter} />
         <p className="local-data-note">{t("characters.localData")}</p>
-      </div>}
+      </main>}
 
-      {view === "campaigns" && <div className="page-content">
+      {view === "campaigns" && <main className="page-content" id="main" tabIndex={-1}>
         <CampaignManager me={me} campaigns={campaigns} characters={characters} locale={locale} onChanged={reloadData} />
-      </div>}
+      </main>}
 
-      {view === "encounters" && <div className="page-content">
+      {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: creatures.length })}</button></div>
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
         <BestiaryBrowser locale={locale} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
@@ -423,18 +424,18 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
           <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => void removeCreature(creature.id)}>{t("catalog.remove")}</button>}</div>)}</div>
         </section>}
-      </div>}
+      </main>}
 
-      {view === "account" && <div className="page-content">
+      {view === "account" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
         <AuthPanel locale={locale} googleEnabled={googleEnabled} />
-      </div>}
+      </main>}
 
-      {view === "admin" && me.role === "admin" && <div className="page-content">
+      {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("admin.kicker")}</p><h1>{t("nav.admin")}</h1><p className="title-description">{t("admin.description")}</p></div></div>
         <AdminUsers me={me} locale={locale} />
-      </div>}
+      </main>}
       <footer className="app-footer"><span>{t("footer.brand")}</span><span>{t("footer.rules")}</span></footer>
     </section>
-  </main>;
+  </div>;
 }
