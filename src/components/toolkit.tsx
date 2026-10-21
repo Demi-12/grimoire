@@ -229,7 +229,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
   function changeTheme(next: Theme) { setTheme(next); savePreference({ theme: next }); }
 
   const controls = <div className="header-controls">
-    <button type="button" className="header-control theme-toggle" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}><span className="theme-glyph" aria-hidden="true">{theme === "dark" ? "☀\uFE0E" : "☾\uFE0E"}</span><span className="theme-label">{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
+    <button type="button" className="header-control theme-toggle" aria-label={t(theme === "dark" ? "theme.switchToLight" : "theme.switchToDark")} onClick={() => changeTheme(theme === "dark" ? "light" : "dark")}><span className="theme-glyph" aria-hidden="true">{theme === "dark" ? <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg> : <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>}</span><span className="theme-label">{t(theme === "dark" ? "theme.light" : "theme.dark")}</span></button>
     <label className="header-select"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="header-control" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
   </div>;
 
@@ -370,7 +370,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       <header className="workspace-header"><div className="mobile-brand">✳︎ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
         {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true">♛</span></button>}
-        <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
+        <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>
         <span className="edition-badge">{t("common.edition")}</span></header>
       {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true">⚑</span>
         {invite ? <p><b>{t("invite.title", { campaign: invite.campaignName })}</b> {invite.alreadyMember ? t("invite.already", { owner: invite.ownerName }) : t("invite.description", { owner: invite.ownerName })}</p>
