@@ -1,0 +1,39 @@
+.progress { display: flex; gap: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto; border-block: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 70%, transparent); }
+.progress li { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border-right: 1px solid var(--line); color: var(--muted); font: 600 11px var(--sans); white-space: nowrap; }
+.progress li:last-child { border-right: 0; }
+.progress li span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--white); font: 600 10px var(--serif); }
+.progress .current { color: var(--ink); background: var(--white); box-shadow: inset 0 -3px var(--green); }
+.progress .current span { background: var(--crimson-fill, var(--green)); border-color: var(--crimson-fill, var(--green)); color: #fff7e6; }
+.progress .done span { background: color-mix(in srgb, var(--lime) 45%, var(--white)); border-color: var(--lime); color: var(--ink); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.card { padding: 14px 16px; border: 1px solid var(--line); background: var(--paper); }
+.card h3 { margin: 0 0 8px; font: 600 15px var(--serif); color: var(--green); }
+.card p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.card .big { margin: 0; font: 600 22px var(--serif); color: var(--ink); }
+.card .big b { color: var(--green); }
+.changes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.changes li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.changes b { font: 600 12px var(--mono); color: var(--ink); text-align: right; }
+
+.heading { margin: 18px 0 8px; font: 600 15px var(--serif); color: var(--green); }
+.features { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.features li { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid var(--line); border-left: 3px solid var(--green); background: var(--white); }
+.features b { font: 600 13px var(--serif); color: var(--ink); }
+.features span { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.ahead { margin: 14px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
+.callout { margin: 14px 0 0; padding: 10px 14px; border: 1px dashed var(--green); background: var(--paper); font-size: 13px; color: var(--ink); }
+.customName { margin-top: 14px; max-width: 360px; }
+
+.tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.abilityPick { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
+
+.review { margin: 0; display: grid; gap: 6px; }
+.review div { display: grid; grid-template-columns: minmax(130px, .5fr) 1fr; gap: 12px; padding: 9px 12px; border: 1px solid var(--line); background: var(--paper); }
+.review dt { font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.review dd { margin: 0; font: 600 14px var(--serif); color: var(--ink); }
+
+@media (max-width: 560px) {
+  .tabs, .review div { grid-template-columns: 1fr; }
+  .progress li { padding: 9px 10px; }
+}
