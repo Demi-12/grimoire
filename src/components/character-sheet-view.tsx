@@ -2,11 +2,10 @@
 
 import { type Character } from "@/lib/api-client";
 import { attackList } from "@/lib/character-sheet";
-import { sheetFor, signed, startingItems } from "@/lib/character-view";
-import { findClass, findSpecies, say, skillKeys, standardLanguages } from "@/lib/dnd2024";
+import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
+import { findClass, say, skillKeys, standardLanguages, type Feature } from "@/lib/dnd2024";
 import { translate, type Locale } from "@/lib/i18n";
-import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
-import { featInfo } from "@/lib/levelup-data";
+import { MAX_LEVEL } from "@/lib/levelup";
 import { abilities, abilityModifier, proficiencyBonus } from "@/lib/rules";
 import styles from "./character-sheet-view.module.css";
 
@@ -22,17 +21,21 @@ type Props = {
   onLevelUp?: () => void;
 };
 
+function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
+  return <dl className={styles.features}>{items.map((item, index) => <div key={`${item.name.en}-${index}`}>
+    <dt>{say(item.name, locale)}</dt>{say(item.tip, locale) && <dd>{say(item.tip, locale)}</dd>}
+  </div>)}</dl>;
+}
+
 /** Everything the app knows about a character, readable on screen (the PDF sheet is separate). */
 export default function CharacterSheetView({ character, campaignName, locale, onBack, onExport, onEdit, onLevelUp }: Props) {
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const sheet = sheetFor(character);
   const build = character.build;
   const bonus = sheet?.proficiency ?? proficiencyBonus(character.level);
-  const species = build ? findSpecies(build.speciesId) : undefined;
   const cls = build ? findClass(build.classId) : undefined;
-  const features = build ? unlockedFeatures(build, character.level).map((feature) => say(feature, locale)) : [];
-  const feats = (sheet?.feats ?? []).map((feat) => say(featInfo(feat).name, locale));
-  const traits = species?.traits.map((trait) => say(trait, locale)) ?? [];
+  const features = build ? featureList(build, character.level) : [];
+  const traits = build ? speciesTraits(build) : [];
   const gear = build ? startingItems(build, locale) : [];
   const attacks = build && sheet ? attackList(build, sheet) : [];
   const languages = build ? [t("character.common"), ...build.languages.map((index) => standardLanguages[index]).filter(Boolean).map((language) => say(language, locale))] : [];
@@ -125,14 +128,14 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <span className={styles.muted}>{`${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}`}</span></li>)}</ul>
         </section>}
 
-        {(features.length > 0 || feats.length > 0) && <section className={styles.panel} aria-labelledby="sheet-features">
+        {features.length > 0 && <section className={styles.panel} aria-labelledby="sheet-features">
           <h3 id="sheet-features">{t("character.sheetFeatures")}</h3>
-          <ul className={styles.tags}>{[...features, ...feats].map((name, index) => <li key={`${name}-${index}`}>{name}</li>)}</ul>
+          <FeatureList items={features} locale={locale} />
         </section>}
 
         {traits.length > 0 && <section className={styles.panel} aria-labelledby="sheet-traits">
           <h3 id="sheet-traits">{t("character.sheetSpeciesTraits")}</h3>
-          <ul className={styles.tags}>{traits.map((name, index) => <li key={`${name}-${index}`}>{name}</li>)}</ul>
+          <FeatureList items={traits} locale={locale} />
         </section>}
 
         {cls && <section className={styles.panel} aria-labelledby="sheet-proficiencies">

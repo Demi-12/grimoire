@@ -36,8 +36,12 @@
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.tags li { padding: 3px 10px; border: 1px solid var(--line); background: var(--paper); font-size: 14px; color: var(--ink); }
+.features { display: grid; margin: 0; }
+.features > div { padding: 8px 0; border-bottom: 1px dotted var(--line); }
+.features > div:first-child { padding-top: 0; }
+.features > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.features dt { font: 600 15px var(--font-display); color: var(--ink); }
+.features dd { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .items { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 15px; color: var(--ink); }
 .note { padding: 12px 14px; border: 1px dashed var(--control-line); color: var(--muted); font-size: 14px; }
 .empty { padding: 28px 20px; border: 1px dashed var(--control-line); text-align: center; display: grid; gap: 10px; justify-items: center; }

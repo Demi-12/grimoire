@@ -170,13 +170,13 @@ export function subclassLabel(build: CharacterBuild, level: number, locale: "en"
   return build.customSubclass?.trim() ?? "";
 }
 
-/** Feature names a character has earned by `level`, for the printed sheet: level 1 features, class progression and the SRD subclass. */
-export function unlockedFeatures(build: CharacterBuild, level: number): Text[] {
+/** Features a character has earned by `level`, with their summaries: level 1 features, class progression and the SRD subclass. */
+export function unlockedFeatures(build: CharacterBuild, level: number): Feature[] {
   const cls = findClass(build.classId);
-  const names = [...(cls?.features ?? [])];
+  const features = [...(cls?.features ?? [])];
   for (let current = 2; current <= level; current += 1) {
-    names.push(...(classFeatures[build.classId][current] ?? []).map((feature) => feature.name));
-    if (build.useSubclass && current >= SUBCLASS_LEVEL) names.push(...(subclassFeatures[build.classId][current] ?? []).map((feature) => feature.name));
+    features.push(...(classFeatures[build.classId][current] ?? []));
+    if (build.useSubclass && current >= SUBCLASS_LEVEL) features.push(...(subclassFeatures[build.classId][current] ?? []));
   }
-  return names;
+  return features;
 }

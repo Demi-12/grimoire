@@ -76,12 +76,17 @@
   body[data-printing-sheet] .character-grid{display:block!important}
   body[data-printing-sheet] .character-card{display:none!important}
   body[data-printing-sheet] .character-card[data-print-target="true"]{display:block!important;width:100%!important;padding:0!important;border:0!important;background:#fff!important;color:#2c2417!important;break-inside:auto}
-  body[data-printing-sheet] .character-card-top,body[data-printing-sheet] .character-card h3,body[data-printing-sheet] .character-subtitle,body[data-printing-sheet] .mini-stats,body[data-printing-sheet] .character-notes,body[data-printing-sheet] .character-card-footer{display:none!important}
+  body[data-printing-sheet] .character-card-top,body[data-printing-sheet] .character-card h3,body[data-printing-sheet] .character-subtitle,body[data-printing-sheet] .mini-stats,body[data-printing-sheet] .card-vitals,body[data-printing-sheet] .character-notes,body[data-printing-sheet] .character-card-footer{display:none!important}
   body[data-printing-sheet] .character-card[data-print-target="true"] .export-only{display:block!important}
   body[data-printing-sheet] .sheet-page{position:relative;width:210mm;height:297mm;min-height:297mm;overflow:hidden;padding:12mm 13mm 10mm;background:#f8f1df!important;color:#2f291d!important;border:1px solid #967544;page-break-after:always;break-after:page;box-sizing:border-box}
   body[data-printing-sheet] .sheet-page::before{content:"";position:absolute;inset:5mm;border:1px solid #b8a274;pointer-events:none}
   body[data-printing-sheet] .sheet-page::after{content:"✦";position:absolute;left:50%;top:4mm;transform:translateX(-50%);color:#967544;font-size:13px}
-  body[data-printing-sheet] .sheet-page-extra{page-break-after:auto;break-after:auto}
+  body[data-printing-sheet] .sheet-page:last-child{page-break-after:auto;break-after:auto}
+  body[data-printing-sheet] .sheet-page-traits{height:auto;overflow:visible}
+  body[data-printing-sheet] .sheet-trait-list{columns:2;column-gap:6mm;margin:0}
+  body[data-printing-sheet] .sheet-trait-list>div{break-inside:avoid;padding:0 0 1.6mm;margin-bottom:1.6mm;border-bottom:1px dotted #c1b18d}
+  body[data-printing-sheet] .sheet-trait-list dt{font:700 8px/1.3 Georgia,serif;color:#3b2f1f}
+  body[data-printing-sheet] .sheet-trait-list dd{margin:.5mm 0 0;font:7px/1.4 var(--font-body);color:#51452f}
   body[data-printing-sheet] .sheet-banner{position:relative;text-align:center;padding:2mm 5mm 4mm;border-bottom:2px double #a58a55}
   body[data-printing-sheet] .sheet-banner>span{position:absolute;right:2mm;top:3mm;color:#997949;font-size:23px}
   body[data-printing-sheet] .sheet-banner p{font:8px var(--font-label);letter-spacing:.16em;color:#716142;margin:0 0 2mm}
