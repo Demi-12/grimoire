@@ -13,6 +13,14 @@ const character = {
   id: "ch1", ownerId: admin.id, ownerName: admin.name, campaignId: "c1", name: "Thorin Oakenshield", level: 3,
   className: "Fighter", species: "Dwarf", background: "Soldier", notes: "Carries a very long name and an even longer note to stress the layout of the card.",
   scores: { str: 16, dex: 12, con: 15, int: 10, wis: 11, cha: 8 }, editable: true,
+  // Made with the step-by-step creator, so the full sheet has every section to lay out.
+  build: {
+    version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
+    abilityMethod: "standard", baseScores: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
+    bonusMode: "plus2plus1", bonusAbilities: ["str", "con"], classSkills: ["perception", "survival"],
+    speciesSkills: ["insight"], speciesFeat: "alert", featSkills: [], expertise: [], languages: [1, 4],
+    classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "A scarred veteran of the mines.",
+  },
 };
 
 const adminUsers = [{
@@ -39,7 +47,7 @@ async function mockApi(page: Page) {
   });
 }
 
-const routes = ["/", "/characters", "/campaigns", "/encounters", "/account", "/admin"];
+const routes = ["/", "/characters", "/characters/ch1", "/campaigns", "/encounters", "/account", "/admin"];
 const widths = [320, 360, 390, 1280];
 const themes = ["light", "dark"] as const;
 
@@ -60,6 +68,15 @@ for (const theme of themes) {
           await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
           await expect(page.locator(".page-content h1, .page-content h2").first()).toBeVisible();
           await page.evaluate(() => document.fonts.ready);
+
+          if (route === "/characters/ch1") {
+            // The sheet itself opened (not just the list), with derived stats, and the card list is hidden behind it.
+            await expect(page.getByRole("heading", { name: "Thorin Oakenshield", level: 2 })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Saving throws" })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Attacks" })).toBeVisible();
+            await expect(page.locator(".character-grid")).toBeHidden();
+          }
 
           // (a) No horizontal page scroll.
           const scroll = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));

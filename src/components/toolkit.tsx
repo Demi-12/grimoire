@@ -20,10 +20,17 @@ type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "ad
 
 /** Each view has its own URL (see src/app/(app)); Toolkit stays mounted in the shared layout. */
 const viewPaths: Record<View, string> = { home: "/", characters: "/characters", campaigns: "/campaigns", encounters: "/encounters", account: "/account", admin: "/admin" };
+/** `/characters/<id>` is the characters view with that character's full sheet open. */
+const characterPath = /^\/characters\/([^/]+)$/;
 function viewFromPath(pathname: string): View {
   const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (characterPath.test(normalized)) return "characters";
   return (Object.keys(viewPaths) as View[]).find((candidate) => viewPaths[candidate] === normalized) ?? "home";
 }
+const characterIdFromPath = (pathname: string): string | null => {
+  const id = characterPath.exec(pathname.replace(/\/+$/, ""))?.[1];
+  return id ? decodeURIComponent(id) : null;
+};
 type Theme = "light" | "dark";
 
 function readSaved<T>(key: string, fallback: T): T {
@@ -101,7 +108,9 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
   const [importMessage, setImportMessage] = useState("");
   const [loadError, setLoadError] = useState("");
   const router = useRouter();
-  const view = viewFromPath(usePathname());
+  const pathname = usePathname();
+  const view = viewFromPath(pathname);
+  const selectedCharacterId = characterIdFromPath(pathname);
   const setView = (next: View) => { if (next !== view) router.push(viewPaths[next]); };
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<Theme>("light");
@@ -425,7 +434,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
         <section className="desk-panel">
           <div className="desk-panel-head"><h2>{t("home.recent")}</h2>{ownCharacters.length > 4 && <button className="small-action" onClick={() => setView("characters")}>{t("home.seeAll", { count: ownCharacters.length })}</button>}</div>
           {ownCharacters.length ? <ul className="roster">{ownCharacters.slice(0, 4).map((character) => <li key={character.id}>
-            <button onClick={() => setView("characters")}><span className="roster-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+            <button onClick={() => router.push(`/characters/${encodeURIComponent(character.id)}`)}><span className="roster-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
               <span className="roster-name">{character.name}<small>{[character.className, character.species].filter(Boolean).join(" · ") || t("character.adventurer")}</small></span>
               <span className="roster-level">{t("character.levelPill", { level: character.level })}</span></button>
           </li>)}</ul> : <p className="desk-empty">{t("home.noCharacters")} <button className="small-action" onClick={() => setView("characters")}>{t("home.createCharacter")}</button></p>}
@@ -435,12 +444,13 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
 
       {view === "characters" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("characters.kicker")}</p><h1>{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
-        <CharacterBuilder locale={locale} characters={ownCharacters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter} />
+        <CharacterBuilder locale={locale} characters={ownCharacters} allCharacters={characters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter}
+          selectedId={selectedCharacterId} onSelect={(id) => router.push(id ? `/characters/${encodeURIComponent(id)}` : viewPaths.characters)} />
         <p className="local-data-note">{t("characters.localData")}</p>
       </main>}
 
       {view === "campaigns" && <main className="page-content" id="main" tabIndex={-1}>
-        <CampaignManager me={me} campaigns={campaigns} characters={characters} locale={locale} onChanged={reloadData} />
+        <CampaignManager me={me} campaigns={campaigns} characters={characters} locale={locale} onChanged={reloadData} onOpenCharacter={(id) => router.push(`/characters/${encodeURIComponent(id)}`)} />
       </main>}
 
       {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
