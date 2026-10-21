@@ -119,7 +119,7 @@ Grimoire es privado: hay que iniciar sesión para usarlo, pero cualquiera puede 
 - **Campañas compartidas:** el DM crea la campaña y suma gente con enlaces de invitación o escribiendo el correo o nombre exacto de la cuenta desde su campaña (no hay lista de cuentas: solo el admin del sitio las ve, en **Usuarios**; si un nombre se repite, hay que usar el correo). Cada jugador pone sus personajes en la campaña; todos los miembros ven el grupo y el generador de encuentros puede cargar el grupo de una campaña de un clic. Solo el dueño edita su personaje; el DM puede sacarlo de la campaña. Al borrar una campaña los personajes vuelven a sus dueños.
 - **Datos anteriores:** si el navegador tenía personajes o campañas de la versión local, el resumen ofrece importarlos a la cuenta una vez.
 
-Personajes (incluidas las elecciones del creador paso a paso) y campañas viven en PostgreSQL (migración `database/changelog/db.changelog-app.yaml`). El catálogo de criaturas propio sigue guardándose en el navegador de cada cuenta.
+Personajes (incluidas las elecciones del creador paso a paso) y campañas viven en PostgreSQL (migración `database/changelog/db.changelog-app.yaml`). El catálogo de criaturas de cada cuenta y los monstruos homebrew también viven en PostgreSQL.
 
 ## Primera versión
 
@@ -130,6 +130,7 @@ Personajes (incluidas las elecciones del creador paso a paso) y campañas viven 
 - El catálogo inicial usa perfiles genéricos. Puedes añadir criaturas propias con sus XP; el catálogo queda en el almacenamiento local del navegador.
 - Las cuentas incluyen registro e inicio de sesión, recuperación de contraseña por correo, 2FA TOTP con códigos de respaldo y passkeys. No se verifica el correo al registrarse. La recuperación usa SMTP de cualquier proveedor (p. ej. Brevo) y es opcional: sin SMTP no se puede recuperar la contraseña por correo. El TOTP protege el acceso con contraseña; el acceso con passkey es passwordless y no pide un segundo código por defecto.
 - El bestiario consulta la API pública del SRD de D&D 5e (dnd5eapi.co) desde rutas del servidor, usando el SRD 2024 y, si no tiene monstruos, el SRD 2014, muestra fichas de monstruos y permite añadirlos al generador. Las etiquetas tácticas se infieren de sus estadísticas y no sustituyen el juicio del DM.
+- **Monstruos homebrew:** en el bestiario, la pestaña *Homebrew* permite crear monstruos con una ficha completa (características, defensas, velocidades, sentidos, rasgos, acciones, reacciones y acciones legendarias) con vista previa en vivo. El XP y la competencia se calculan a partir del valor de desafío. Cada monstruo es **privado** por defecto; su autor puede compartirlo con campañas de las que es miembro o publicarlo para **todas las cuentas del servidor**. Los monstruos homebrew se añaden al generador de encuentros igual que los del SRD y su ficha se abre desde allí. Un admin puede retirar y **bloquear** un monstruo publicado (vuelve a privado y su autor no puede volver a publicarlo hasta que se desbloquee), pero nunca ve el trabajo privado de otras cuentas. Aún no hay copiar un monstruo público a tu cuenta, tiradas de salvación ni habilidades con pericia en el editor.
 - Las propuestas son orientativas. Revisa capacidades especiales, composición y contexto antes de usar un encuentro.
 
 ## Atribución de reglas

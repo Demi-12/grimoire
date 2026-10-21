@@ -43,6 +43,8 @@ export type MonsterStatBlock = {
   image?: string;
   /** Ruleset the stat block came from, added by our API route. */
   edition?: MonsterEdition;
+  /** Set instead of `edition` when the stat block is a homebrew monster. */
+  homebrew?: { ownerName: string };
 };
 
 export type MonsterListEntry = { index: string; name: string; url?: string };

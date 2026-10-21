@@ -3,6 +3,8 @@
 import type { AccountStatus, CampaignRole, SiteRole } from "@/lib/permissions";
 import type { AbilityScores } from "@/lib/rules";
 import type { CharacterBuild } from "@/lib/character-sheet";
+import type { HomebrewVisibility } from "@/lib/homebrew";
+import type { MonsterRole, MonsterStatBlock } from "@/lib/monster-api";
 
 /** Shapes returned by the app's API routes (mirrors src/lib/data.ts). */
 export interface Character {
@@ -46,6 +48,14 @@ export interface Me { id: string; name: string; email: string; role: SiteRole; s
 export interface CatalogCreature {
   id: string; name: string; xp: number; source: string;
   monsterSlug?: string; cr?: number; type?: string; roleTags?: string[];
+}
+
+/** A homebrew monster as returned by /api/homebrew (mirrors HomebrewView in src/lib/data.ts). */
+export interface HomebrewMonster {
+  id: string; ownerId: string; ownerName: string; mine: boolean;
+  name: string; cr: number; xp: number; type: string; roleTags: MonsterRole[];
+  visibility: HomebrewVisibility; locked: boolean; campaignIds: string[];
+  statBlock: MonsterStatBlock; updatedAt: string;
 }
 
 export type EncounterStatus = "planned" | "played";
