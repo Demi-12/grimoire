@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { jsonError, readJson, requireUser } from "@/lib/access";
+import { jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { applyAdminChange, countApprovedAdmins, deleteUser, readUserForAdmin, revokeUserSessions } from "@/lib/data";
 import { checkAdminChange, isAccountStatus, isSiteRole, type AdminChange } from "@/lib/permissions";
 
@@ -16,6 +17,8 @@ const guardMessages = {
 export async function PATCH(request: Request, { params }: Context) {
   const user = await requireUser(["admin"]);
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   const target = await readUserForAdmin(id);
   if (!target) return jsonError(404, "Not found.");
@@ -48,6 +51,8 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   const user = await requireUser(["admin"]);
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   const target = await readUserForAdmin(id);
   if (!target) return jsonError(404, "Not found.");

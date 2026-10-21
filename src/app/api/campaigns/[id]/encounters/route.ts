@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { createEncounter, listEncounters } from "@/lib/data";
 import { isUuid, parseEncounterInput } from "@/lib/permissions";
 
@@ -19,6 +20,8 @@ export async function GET(_request: Request, { params }: Context) {
 export async function POST(request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");
   const input = parseEncounterInput(await readJson(request));

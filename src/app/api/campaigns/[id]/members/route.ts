@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
+import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
+import { MEMBER_LOOKUP_LIMIT } from "@/lib/rate-limit";
 import { addCampaignMemberByQuery, setCampaignMemberRole } from "@/lib/data";
 import { isCampaignRole, isUuid } from "@/lib/permissions";
 
@@ -15,6 +16,8 @@ const addMessages = {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, MEMBER_LOOKUP_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");
   const body = await readJson(request) as { userId?: unknown; query?: unknown; role?: unknown } | null;
