@@ -26,7 +26,7 @@ const copy = {
     ratingLabel: (rating: string) => rating === "0.125" ? "1/8" : rating === "0.25" ? "1/4" : rating === "0.5" ? "1/2" : rating,
   },
   es: {
-    title: "El Bestiario", subtitle: "Explora las criaturas del documento de referencia (SRD) de D&D. La interfaz está en español, pero los nombres y las fichas se ofrecen en inglés.",
+    title: "El Bestiario", subtitle: "Explora las criaturas del documento de referencia (SRD) de D&D. Los términos de reglas (tamaño, tipo, velocidades, defensas…) se traducen, pero los nombres y los textos de rasgos y acciones los sirve la API solo en inglés.",
     search: "Buscar criaturas", searchPlaceholder: "Busca «owlbear» o «dragon»…", rating: "Valor de desafío", allRatings: "Todos",
     loading: "El archivero está abriendo el bestiario…", retry: "Reintentar", errorTitle: "El bestiario no está disponible.",
     count: (count: number) => `${count} criaturas`, noResults: "Ninguna criatura coincide con esos símbolos.", select: "Abrir ficha", selected: "Elegido", add: "Añadir al catálogo de encuentros", added: "Añadido al catálogo de encuentros",
