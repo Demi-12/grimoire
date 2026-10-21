@@ -3,6 +3,7 @@ import {
   canCreateCampaign,
   canManageCampaign,
   checkAdminChange,
+  isInviteToken,
   parseAdminEmails,
   parseCampaignInput,
   parseCharacterInput,
@@ -91,5 +92,16 @@ describe("parseCampaignInput", () => {
     expect(parseCampaignInput({ name: " Curse of Strahd ", description: undefined })).toEqual({ name: "Curse of Strahd", description: "" });
     expect(parseCampaignInput({ name: "   " })).toBeNull();
     expect(parseCampaignInput({ name: "A", description: "x".repeat(1001) })).toBeNull();
+  });
+});
+
+describe("isInviteToken", () => {
+  it("accepts 32 random bytes in base64url and nothing else", () => {
+    expect(isInviteToken("A".repeat(43))).toBe(true);
+    expect(isInviteToken("a-_".repeat(14) + "a")).toBe(true);
+    expect(isInviteToken("A".repeat(42))).toBe(false);
+    expect(isInviteToken(`${"A".repeat(42)}=`)).toBe(false);
+    expect(isInviteToken("'; DROP TABLE x;--" + "A".repeat(30))).toBe(false);
+    expect(isInviteToken(undefined)).toBe(false);
   });
 });

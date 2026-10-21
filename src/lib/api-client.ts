@@ -36,6 +36,9 @@ export interface Campaign {
   members: { userId: string; name: string; role: CampaignRole }[];
 }
 
+export interface Invite { id: string; token: string; createdByName: string; createdAt: string; expiresAt: string }
+export interface InvitePreview { campaignId: string; campaignName: string; description: string; ownerName: string; alreadyMember: boolean }
+
 export interface Me { id: string; name: string; email: string; role: SiteRole; status: AccountStatus }
 export interface DirectoryUser { id: string; name: string; role: SiteRole }
 export interface AdminUser {

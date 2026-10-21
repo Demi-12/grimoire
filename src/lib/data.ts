@@ -1,9 +1,11 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
 import type { QueryResult, QueryResultRow } from "pg";
 import { pool, transaction } from "@/lib/db";
 import {
   canCreateCampaign,
   canManageCampaign,
+  INVITE_TTL_DAYS,
   type AccountStatus,
   type AppUser,
   type CampaignRole,
@@ -262,6 +264,72 @@ export async function removeCampaignCharacter(user: AppUser, campaignId: string,
   if (character.rows[0].ownerId !== user.id && !access.canManage) return fail("forbidden");
   await pool.query('UPDATE "character" SET "campaignId" = NULL, "updatedAt" = now() WHERE "id" = $1', [characterId]);
   return { ok: true, value: null };
+}
+
+export interface InviteView { id: string; token: string; createdByName: string; createdAt: string; expiresAt: string }
+
+/** Live (unexpired) invite links of a campaign, for its managers. */
+export async function listCampaignInvites(user: AppUser, campaignId: string): Promise<DataResult<InviteView[]>> {
+  const access = await readCampaignAccess(pool, user, campaignId);
+  if (!access?.visible) return fail("not-found");
+  if (!access.canManage) return fail("forbidden");
+  const result = await pool.query<{ id: string; token: string; createdByName: string; createdAt: Date; expiresAt: Date }>(
+    `SELECT i."id", i."token", u."name" AS "createdByName", i."createdAt", i."expiresAt"
+       FROM "campaign_invite" i JOIN "user" u ON u."id" = i."createdBy"
+      WHERE i."campaignId" = $1 AND i."expiresAt" > now()
+      ORDER BY i."createdAt" DESC`,
+    [campaignId],
+  );
+  return { ok: true, value: result.rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() })) };
+}
+
+export async function createCampaignInvite(user: AppUser, campaignId: string): Promise<DataResult<InviteView>> {
+  const access = await readCampaignAccess(pool, user, campaignId);
+  if (!access?.visible) return fail("not-found");
+  if (!access.canManage) return fail("forbidden");
+  const token = randomBytes(32).toString("base64url");
+  const result = await pool.query<{ id: string; createdAt: Date; expiresAt: Date }>(
+    `INSERT INTO "campaign_invite" ("campaignId", "token", "createdBy", "expiresAt")
+     VALUES ($1, $2, $3, now() + make_interval(days => $4)) RETURNING "id", "createdAt", "expiresAt"`,
+    [campaignId, token, user.id, INVITE_TTL_DAYS],
+  );
+  const row = result.rows[0];
+  return { ok: true, value: { id: row.id, token, createdByName: user.name, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() } };
+}
+
+export async function revokeCampaignInvite(user: AppUser, campaignId: string, inviteId: string): Promise<DataResult<null>> {
+  const access = await readCampaignAccess(pool, user, campaignId);
+  if (!access?.visible) return fail("not-found");
+  if (!access.canManage) return fail("forbidden");
+  await pool.query('DELETE FROM "campaign_invite" WHERE "id" = $1 AND "campaignId" = $2', [inviteId, campaignId]);
+  return { ok: true, value: null };
+}
+
+export interface InvitePreview { campaignId: string; campaignName: string; description: string; ownerName: string; alreadyMember: boolean }
+
+/** What an invite link points at, or null when the link is unknown, expired or revoked. */
+export async function readInvite(user: AppUser, token: string): Promise<InvitePreview | null> {
+  const result = await pool.query<{ campaignId: string; campaignName: string; description: string; ownerName: string; alreadyMember: boolean }>(
+    `SELECT k."id" AS "campaignId", k."name" AS "campaignName", k."description", o."name" AS "ownerName",
+            EXISTS (SELECT 1 FROM "campaign_member" m WHERE m."campaignId" = k."id" AND m."userId" = $2) AS "alreadyMember"
+       FROM "campaign_invite" i
+       JOIN "campaign" k ON k."id" = i."campaignId"
+       JOIN "user" o ON o."id" = k."ownerId"
+      WHERE i."token" = $1 AND i."expiresAt" > now()`,
+    [token, user.id],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Join the invite's campaign as a player; existing members keep their current role. */
+export async function acceptInvite(user: AppUser, token: string): Promise<DataResult<{ campaignId: string }>> {
+  const invite = await readInvite(user, token);
+  if (!invite) return fail("not-found");
+  await pool.query(
+    'INSERT INTO "campaign_member" ("campaignId", "userId", "role") VALUES ($1, $2, \'player\') ON CONFLICT ("campaignId", "userId") DO NOTHING',
+    [invite.campaignId, user.id],
+  );
+  return { ok: true, value: { campaignId: invite.campaignId } };
 }
 
 /** Approved accounts a DM can add to a campaign. */

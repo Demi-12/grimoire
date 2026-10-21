@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Campaign, type Character, type DirectoryUser, type Me } from "@/lib/api-client";
+import { api, type Campaign, type Character, type DirectoryUser, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
 import styles from "./campaign-manager.module.css";
 
@@ -35,6 +35,8 @@ const text = {
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
     removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
+    invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone with an approved account who opens the link can join as a player. Links expire after 7 days.",
+    copyLink: "Copy link", copied: "Copied", revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
     eyebrow: "✦  LA CRÓNICA", title: "Campañas",
@@ -54,6 +56,8 @@ const text = {
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
     removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
+    invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien tenga una cuenta aprobada y abra el enlace se une como jugador. Los enlaces caducan a los 7 días.",
+    copyLink: "Copiar enlace", copied: "Copiado", revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
   },
 };
 
@@ -175,6 +179,8 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
           {campaign.canManage && (candidates.length ? <AddMember key={candidates.length} locale={locale} candidates={candidates} disabled={busy}
             onAdd={(userId, role) => run(() => api(`/api/campaigns/${campaign.id}/members`, { method: "POST", body: { userId, role } }))} /> : <p className={styles.noMembers}>{t.noOneToAdd}</p>)}
 
+          {campaign.canManage && <InvitePanel campaignId={campaign.id} locale={locale} />}
+
           <h4 className={styles.subheading}>{t.heroes}</h4>
           {heroes.length ? <ul className={styles.memberList}>{heroes.map((character) => <li key={character.id}>
             <span className={styles.sigle}>✦</span>
@@ -220,4 +226,55 @@ function AddMember({ locale, candidates, disabled, onAdd }: {
     </select>
     <button type="submit" disabled={disabled || !userId}>{t.add}</button>
   </form>;
+}
+
+function InvitePanel({ campaignId, locale }: { campaignId: string; locale: Locale }) {
+  const t = text[locale];
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    api<{ invites: Invite[] }>(`/api/campaigns/${campaignId}/invites`).then((data) => setInvites(data.invites)).catch(() => setInvites([]));
+  }, [campaignId]);
+
+  const linkFor = (invite: Invite) => `${window.location.origin}/?invite=${invite.token}`;
+
+  async function change(action: () => Promise<unknown>) {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await action();
+      setInvites((await api<{ invites: Invite[] }>(`/api/campaigns/${campaignId}/invites`)).invites);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(invite: Invite) {
+    try {
+      await navigator.clipboard.writeText(linkFor(invite));
+      setCopiedId(invite.id);
+    } catch {
+      window.prompt(t.copyLink, linkFor(invite));
+    }
+  }
+
+  return <>
+    <h4 className={styles.subheading}>{t.invites}</h4>
+    <p className={styles.noMembers}>{t.inviteHint}</p>
+    {failed && <p className={styles.error} role="alert">{t.error}</p>}
+    {invites.length ? <ul className={styles.memberList}>{invites.map((invite) => <li key={invite.id}>
+      <span className={styles.sigle}>⚑</span>
+      <span className={styles.heroName}>…{invite.token.slice(-6)}<small>{t.expires} {new Date(invite.expiresAt).toLocaleDateString(locale === "es" ? "es-ES" : "en-US")}</small></span>
+      <button type="button" className={styles.quietButton} onClick={() => void copy(invite)}>{copiedId === invite.id ? t.copied : t.copyLink}</button>
+      <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void change(() => api(`/api/campaigns/${campaignId}/invites/${invite.id}`, { method: "DELETE" }))}>{t.revoke}</button>
+    </li>)}</ul> : <p className={styles.noMembers}>{t.noInvites}</p>}
+    <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); void change(() => api(`/api/campaigns/${campaignId}/invites`, { method: "POST" })); }}>
+      <button type="submit" disabled={busy}>{t.createInvite}</button>
+    </form>
+  </>;
 }
