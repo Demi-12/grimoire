@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
+import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
 import EncounterJournal from "@/components/encounter-journal";
 import styles from "./campaign-manager.module.css";
@@ -30,6 +30,7 @@ const text = {
     roles: { dm: "DM", player: "Player" } as Record<CampaignRole, string>,
     yourRole: "Your role", table: "The table", heroes: "Heroes",
     makeDm: "Make DM", makePlayer: "Make player", removeMember: "Remove",
+    addMember: "Add by email or name", addAs: "as", add: "Add", added: (name: string) => `${name} joined the table.`,
     noHeroes: "No heroes have joined this campaign yet.", addHero: "Bring one of your characters",
     level: (level: number) => `Level ${level}`, by: (name: string) => `played by ${name}`,
     removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
@@ -51,6 +52,7 @@ const text = {
     roles: { dm: "DM", player: "Jugador" } as Record<CampaignRole, string>,
     yourRole: "Tu papel", table: "La mesa", heroes: "Héroes",
     makeDm: "Hacer DM", makePlayer: "Hacer jugador", removeMember: "Quitar",
+    addMember: "Añadir por correo o nombre", addAs: "como", add: "Añadir", added: (name: string) => `${name} se ha unido a la mesa.`,
     noHeroes: "Todavía no se han unido héroes a esta campaña.", addHero: "Trae uno de tus personajes",
     level: (level: number) => `Nivel ${level}`, by: (name: string) => `de ${name}`,
     removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
@@ -168,6 +170,8 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
             </li>;
           })}</ul>
 
+          {campaign.canManage && <AddMember key={campaign.members.length} campaignId={campaign.id} locale={locale} onAdded={onChanged} />}
+
           {campaign.canManage && <InvitePanel campaignId={campaign.id} campaignName={campaign.name} ownerName={campaign.ownerName} locale={locale} />}
 
           {campaign.canManage && <details className={styles.journalBox}>
@@ -196,6 +200,48 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
       })}
     </div>}
   </section>;
+}
+
+function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale: Locale; onAdded: () => Promise<void> | void }) {
+  const t = text[locale];
+  const [query, setQuery] = useState("");
+  const [role, setRole] = useState<CampaignRole>("player");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const { name } = await api<{ name: string }>(`/api/campaigns/${campaignId}/members`, { method: "POST", body: { query: query.trim(), role } });
+      setQuery("");
+      setFailed(false);
+      setMessage(t.added(name));
+      await onAdded();
+    } catch (cause) {
+      setFailed(true);
+      setMessage(cause instanceof ApiError && cause.status !== 403 ? cause.message : t.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <>
+    <form className={styles.addMember} onSubmit={(event) => void submit(event)}>
+      <span>{t.addMember}</span>
+      <input aria-label={t.addMember} value={query} maxLength={254} onChange={(event) => setQuery(event.target.value)} />
+      <span>{t.addAs}</span>
+      <select aria-label={t.addAs} value={role} onChange={(event) => setRole(event.target.value as CampaignRole)}>
+        <option value="player">{t.roles.player}</option>
+        <option value="dm">{t.roles.dm}</option>
+      </select>
+      <button type="submit" disabled={busy || !query.trim()}>{t.add}</button>
+    </form>
+    {message && <p className={failed ? styles.error : styles.noMembers} role={failed ? "alert" : "status"}>{message}</p>}
+  </>;
 }
 
 function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaignId: string; campaignName: string; ownerName: string; locale: Locale }) {

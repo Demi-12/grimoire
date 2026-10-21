@@ -229,6 +229,32 @@ export async function deleteCampaign(user: AppUser, campaignId: string): Promise
   return { ok: true, value: null };
 }
 
+export type AddMemberError = DataError | "no-user" | "ambiguous" | "already-member";
+
+/**
+ * A manager adds an account by exact email or exact name (case-insensitive). Nothing is listed:
+ * a name shared by several accounts must be disambiguated with the email.
+ */
+export async function addCampaignMemberByQuery(
+  user: AppUser, campaignId: string, query: string, role: CampaignRole,
+): Promise<{ ok: true; value: { name: string } } | { ok: false; error: AddMemberError }> {
+  const access = await readCampaignAccess(pool, user, campaignId);
+  if (!access?.visible) return { ok: false, error: "not-found" };
+  if (!access.canManage) return { ok: false, error: "forbidden" };
+  const found = await pool.query<{ id: string; name: string }>(
+    `SELECT "id", "name" FROM "user"
+      WHERE "status" = 'approved' AND (lower("email") = lower($1) OR lower("name") = lower($1)) LIMIT 2`,
+    [query],
+  );
+  if (!found.rows.length) return { ok: false, error: "no-user" };
+  if (found.rows.length > 1) return { ok: false, error: "ambiguous" };
+  const target = found.rows[0];
+  if (target.id === access.ownerId || await membershipRole(pool, campaignId, target.id)) return { ok: false, error: "already-member" };
+  await pool.query('INSERT INTO "campaign_member" ("campaignId", "userId", "role") VALUES ($1, $2, $3)', [campaignId, target.id, role]);
+  await pool.query('UPDATE "campaign" SET "updatedAt" = now() WHERE "id" = $1', [campaignId]);
+  return { ok: true, value: { name: target.name } };
+}
+
 /** DM/player is a per-campaign role: managers change it for people who joined through an invite link. */
 export async function setCampaignMemberRole(user: AppUser, campaignId: string, memberId: string, role: CampaignRole): Promise<DataResult<null>> {
   const access = await readCampaignAccess(pool, user, campaignId);

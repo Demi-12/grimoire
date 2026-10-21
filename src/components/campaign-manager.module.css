@@ -56,8 +56,8 @@
 .descriptionInput { flex-basis: 100%; min-width: 0; padding: 10px 11px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; resize: vertical; }
 .addMember { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
 .addMember > span { color: var(--campaign-rust); font: 700 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
-.addMember select { min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
-.addMember select:first-of-type { flex: 1 1 160px; }
+.addMember select, .addMember input { min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
+.addMember input { flex: 1 1 160px; min-width: 0; padding: 8px 10px; color: var(--campaign-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; }
 .addMember button { padding: 8px 13px; color: #fff5df; background: #743329; border: 1px solid #57271f; border-radius: 2px; font: 700 12px ui-monospace, monospace; cursor: pointer; }
 .manager button:disabled { opacity: .55; cursor: wait; }
 .memberList .quietButton { padding: 3px 7px; font-size: 9px; }
@@ -74,7 +74,7 @@
 }
 :global(:root[data-theme="dark"]) .header h2, :global(:root[data-theme="dark"]) .campaignHead h3 { color: #f0dfc2; }
 :global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .campaign, :global(:root[data-theme="dark"]) .memberList li { background: rgba(0,0,0,.12); }
-:global(:root[data-theme="dark"]) .createRow input, :global(:root[data-theme="dark"]) .renameForm input, :global(:root[data-theme="dark"]) .assign select, :global(:root[data-theme="dark"]) .descriptionInput, :global(:root[data-theme="dark"]) .addMember select { color: #eee3cf; background: #332e26; border-color: #66573d; }
+:global(:root[data-theme="dark"]) .createRow input, :global(:root[data-theme="dark"]) .renameForm input, :global(:root[data-theme="dark"]) .assign select, :global(:root[data-theme="dark"]) .descriptionInput, :global(:root[data-theme="dark"]) .addMember select, :global(:root[data-theme="dark"]) .addMember input { color: #eee3cf; background: #332e26; border-color: #66573d; }
 :global(:root[data-theme="dark"]) .campaignHead, :global(:root[data-theme="dark"]) .createForm, :global(:root[data-theme="dark"]) .memberList li { border-color: #5d503b; }
 :global(:root[data-theme="dark"]) .quietButton, :global(:root[data-theme="dark"]) .deleteButton, :global(:root[data-theme="dark"]) .removeHero { color: #e1bd84; border-color: #66573d; }
 :global(:root[data-theme="dark"]) .error { color: #ffc1a7; background: rgba(131,56,45,.18); border-color: #8d5141; }
