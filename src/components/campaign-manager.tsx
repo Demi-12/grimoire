@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, type Campaign, type Character, type DirectoryUser, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
+import EncounterJournal from "@/components/encounter-journal";
 import styles from "./campaign-manager.module.css";
 
 type Locale = "en" | "es";
@@ -36,6 +37,7 @@ const text = {
     removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
     invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone with an approved account who opens the link can join as a player. Links expire after 7 days.",
+    journal: "Encounter journal",
     copyLink: "Copy link", copied: "Copied", revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
@@ -57,6 +59,7 @@ const text = {
     removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
     invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien tenga una cuenta aprobada y abra el enlace se une como jugador. Los enlaces caducan a los 7 días.",
+    journal: "Diario de encuentros",
     copyLink: "Copiar enlace", copied: "Copiado", revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
   },
 };
@@ -180,6 +183,11 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
             onAdd={(userId, role) => run(() => api(`/api/campaigns/${campaign.id}/members`, { method: "POST", body: { userId, role } }))} /> : <p className={styles.noMembers}>{t.noOneToAdd}</p>)}
 
           {campaign.canManage && <InvitePanel campaignId={campaign.id} locale={locale} />}
+
+          {campaign.canManage && <details className={styles.journalBox}>
+            <summary className={styles.subheading}>{t.journal}</summary>
+            <EncounterJournal campaign={campaign} locale={locale} />
+          </details>}
 
           <h4 className={styles.subheading}>{t.heroes}</h4>
           {heroes.length ? <ul className={styles.memberList}>{heroes.map((character) => <li key={character.id}>
