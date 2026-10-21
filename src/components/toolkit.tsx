@@ -315,7 +315,7 @@ export default function Toolkit() {
         <button className={view === "campaigns" ? "active" : ""} onClick={() => setView("campaigns")}><span aria-hidden="true">⚑</span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
         <button className={view === "encounters" ? "active" : ""} onClick={() => setView("encounters")}><span aria-hidden="true">⚔︎</span>{t("nav.encounters")}</button>
         <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
-        {me.role === "admin" && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
+        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.signedInAs", { name: me.name, role: t(`role.${me.role}`) })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
@@ -323,6 +323,7 @@ export default function Toolkit() {
     <section className="workspace">
       <header className="workspace-header"><div className="mobile-brand">✳︎ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
+        {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
         <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         <span className="edition-badge">{t("common.edition")}</span></header>
       {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true">⚑</span>
