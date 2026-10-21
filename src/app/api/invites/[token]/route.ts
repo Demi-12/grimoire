@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, requireUser } from "@/lib/access";
+import { dataErrorResponse, jsonError, requireUser, rateLimit } from "@/lib/access";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { acceptInvite, readInvite } from "@/lib/data";
 import { isInviteToken } from "@/lib/permissions";
 
@@ -21,6 +22,8 @@ export async function GET(_request: Request, { params }: Context) {
 export async function POST(_request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { token } = await params;
   if (!isInviteToken(token)) return jsonError(404, "Not found.");
   const result = await acceptInvite(user, token);

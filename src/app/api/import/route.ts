@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireUser } from "@/lib/access";
+import { jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { BackupRestoreError, looksLikeBackup, MAX_BACKUP_BYTES, parseBackup } from "@/lib/backup";
 import { importBackup } from "@/lib/backup-data";
+import { IMPORT_LIMIT } from "@/lib/rate-limit";
 import { importLocalData } from "@/lib/data";
 import { parseCampaignInput, parseCharacterInput, parseCreatureInput, type AppUser, type CharacterInput, type CreatureInput } from "@/lib/permissions";
 
@@ -38,16 +39,14 @@ async function restoreBackup(user: AppUser, body: Record<string, unknown>) {
 export async function POST(request: Request) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_BACKUP_BYTES) return backupError(413, "That file is too large.", "too-large");
-  const text = await request.text().catch(() => "");
-  if (text.length > MAX_BACKUP_BYTES) return backupError(413, "That file is too large.", "too-large");
-  let parsedBody: unknown = null;
-  try { parsedBody = JSON.parse(text); } catch { /* handled below */ }
+  const limited = rateLimit(user, IMPORT_LIMIT);
+  if (limited) return limited;
+  // Backups can be larger than the legacy browser import; item counts still cap the legacy payload.
+  const parsedBody = await readJson(request, MAX_BACKUP_BYTES);
   if (looksLikeBackup(parsedBody)) return restoreBackup(user, parsedBody);
   const body = parsedBody as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
   if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns)) || (body.creatures !== undefined && !Array.isArray(body.creatures))) {
-    return jsonError(400, "Invalid import.");
+    return jsonError(400, "Invalid import, or the data is too large.");
   }
   if (body.characters.length > MAX_ITEMS || (Array.isArray(body.campaigns) && body.campaigns.length > MAX_ITEMS) || (Array.isArray(body.creatures) && body.creatures.length > 500)) {
     return jsonError(413, "Too many items to import at once.");
@@ -63,7 +62,7 @@ export async function POST(request: Request) {
   for (const raw of (body.campaigns ?? []) as unknown[]) {
     const input = parseCampaignInput(raw);
     const ids = raw && typeof raw === "object" ? (raw as { characterIds?: unknown }).characterIds : undefined;
-    if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [] });
+    if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.slice(0, MAX_ITEMS).filter((id): id is string => typeof id === "string") : [] });
   }
 
   const creatures: CreatureInput[] = [];

@@ -2,6 +2,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth-session";
 import { pool } from "@/lib/db";
+import { readJsonLimited } from "@/lib/request-body";
+import { rateLimiter, type RateLimitPolicy } from "@/lib/rate-limit";
 import { isAccountStatus, isSiteRole, parseAdminEmails, type AppUser, type SiteRole } from "@/lib/permissions";
 
 export const jsonError = (status: number, error: string) => NextResponse.json({ error }, { status });
@@ -44,18 +46,24 @@ export async function requireUser(roles?: SiteRole[]): Promise<AppUser | NextRes
   return user;
 }
 
-/** Parse a JSON body without throwing on malformed input. */
-export async function readJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
-}
+/** Parse a JSON body without throwing on malformed or oversized input (null in both cases). */
+export const readJson = readJsonLimited;
 
 /** Map a data-layer failure to an HTTP response. */
 export function dataErrorResponse(error: "not-found" | "forbidden" | "invalid") {
   if (error === "not-found") return jsonError(404, "Not found.");
   if (error === "forbidden") return jsonError(403, "You don't have permission for that.");
   return jsonError(400, "That change isn't valid.");
+}
+
+/**
+ * Apply a rate-limit policy to the signed-in user. Returns a 429 response to return as-is, or null:
+ * `const limited = rateLimit(user, WRITE_LIMIT); if (limited) return limited;`
+ */
+export function rateLimit(user: Pick<AppUser, "id">, policy: RateLimitPolicy): NextResponse | null {
+  const result = rateLimiter.consume(policy, user.id);
+  if (result.ok) return null;
+  const response = jsonError(429, "Too many requests. Please wait a moment and try again.");
+  response.headers.set("Retry-After", String(result.retryAfterSeconds));
+  return response;
 }
