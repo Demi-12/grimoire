@@ -14,7 +14,7 @@ const text = {
     role: "Role", roles: { admin: "Admin", dm: "Dungeon Master", player: "Player" } as Record<SiteRole, string>,
     joined: (date: string) => `joined ${date}`, you: "you",
     stats: (campaigns: number, characters: number) => `${campaigns} campaign${campaigns === 1 ? "" : "s"} · ${characters} character${characters === 1 ? "" : "s"}`,
-    unverified: "email not verified", twoFactor: "2FA",
+    twoFactor: "2FA",
     deleteConfirm: (name: string) => `Delete ${name}'s account? Their characters and the campaigns they created are deleted too. This can't be undone.`,
     blockConfirm: (name: string) => `Block ${name}? They'll be signed out and can't sign in until you unblock them.`,
     revoked: "Sessions closed.", error: "That change couldn't be saved.", loading: "Reading the roll of names…",
@@ -27,7 +27,7 @@ const text = {
     role: "Rol", roles: { admin: "Admin", dm: "Dungeon Master", player: "Jugador" } as Record<SiteRole, string>,
     joined: (date: string) => `desde ${date}`, you: "tú",
     stats: (campaigns: number, characters: number) => `${campaigns} campaña${campaigns === 1 ? "" : "s"} · ${characters} personaje${characters === 1 ? "" : "s"}`,
-    unverified: "correo sin verificar", twoFactor: "2FA",
+    twoFactor: "2FA",
     deleteConfirm: (name: string) => `¿Eliminar la cuenta de ${name}? También se borran sus personajes y las campañas que creó. No se puede deshacer.`,
     blockConfirm: (name: string) => `¿Bloquear a ${name}? Se cerrarán sus sesiones y no podrá entrar hasta que lo desbloquees.`,
     revoked: "Sesiones cerradas.", error: "No se pudo guardar el cambio.", loading: "Leyendo el registro de nombres…",
@@ -96,7 +96,6 @@ export default function AdminUsers({ me, locale, onPendingCount }: { me: Me; loc
                 <span>{user.email}</span>
                 <small>
                   {t.joined(dateFormat.format(new Date(user.createdAt)))} · {t.stats(user.campaignCount, user.characterCount)}
-                  {!user.emailVerified && <> · <i>{t.unverified}</i></>}
                   {user.twoFactorEnabled && <> · {t.twoFactor}</>}
                 </small>
               </div>

@@ -13,7 +13,7 @@ const copy = {
     createAccount: "Create an account", already: "Already have an account? Sign in", forgot: "Forgot password?",
     sendReset: "Send recovery link", resetTitle: "Choose a new password", updatePassword: "Set new password",
     checkEmail: "If an account can receive mail at that address, we’ve sent the next step. Check your inbox.",
-    verifyEmail: "Check your email for a verification link. After that, an admin has to approve your account before you can enter.", twoFactor: "Authenticator code",
+    created: "Account created. An admin has to approve it before you can enter.", twoFactor: "Authenticator code",
     verify: "Verify code", backup: "Use a backup code", useTotp: "Use an authenticator code", passkey: "Sign in with a passkey",
     processing: "Working…", passwordMismatch: "The passwords do not match.", genericError: "We could not complete that request. Check the details and try again.",
     settings: "Account security", addPasskey: "Add a passkey", passkeys: "Saved passkeys", noPasskeys: "No passkeys saved yet.",
@@ -29,7 +29,7 @@ const copy = {
     createAccount: "Crear una cuenta", already: "¿Ya tienes cuenta? Inicia sesión", forgot: "¿Has olvidado la contraseña?",
     sendReset: "Enviar enlace de recuperación", resetTitle: "Elige una contraseña nueva", updatePassword: "Guardar contraseña",
     checkEmail: "Si existe una cuenta que pueda recibir correo en esa dirección, hemos enviado el siguiente paso. Revisa tu bandeja.",
-    verifyEmail: "Revisa tu correo y confirma la dirección. Después, un admin tendrá que aprobar tu cuenta para que puedas entrar.", twoFactor: "Código de la app autenticadora",
+    created: "Cuenta creada. Un admin tendrá que aprobarla para que puedas entrar.", twoFactor: "Código de la app autenticadora",
     verify: "Verificar código", backup: "Usar un código de recuperación", useTotp: "Usar código de autenticación", passkey: "Iniciar con una clave de acceso",
     processing: "Procesando…", passwordMismatch: "Las contraseñas no coinciden.", genericError: "No se pudo completar la solicitud. Revisa los datos e inténtalo de nuevo.",
     settings: "Seguridad de la cuenta", addPasskey: "Añadir clave de acceso", passkeys: "Claves guardadas", noPasskeys: "Todavía no hay claves guardadas.",
@@ -106,9 +106,9 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         if (password !== confirmation) throw new Error(t.passwordMismatch);
         const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin });
         if (result.error) throw result.error;
-        // Without SMTP the server signs the new account in directly instead of asking for verification.
+        // The server signs the new account in directly; the app then shows it as pending approval.
         if (result.data && "token" in result.data && result.data.token) window.location.assign("/");
-        else notice(t.verifyEmail);
+        else notice(t.created);
       } else if (mode === "sign-in") {
         const result = await authClient.signIn.email({ email: email.trim(), password, callbackURL: window.location.origin });
         if (result.error) throw result.error;
