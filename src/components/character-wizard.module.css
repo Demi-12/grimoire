@@ -137,3 +137,8 @@
   border-bottom: 1px solid currentColor;
   font-size: 1.1rem;
 }
+
+@media (pointer: coarse), (max-width: 650px) {
+  .close { width: 44px; height: 44px; }
+  .link { min-height: 44px; display: inline-flex; align-items: center; }
+}
