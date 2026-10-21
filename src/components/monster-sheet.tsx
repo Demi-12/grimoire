@@ -7,7 +7,7 @@ import { fetchMonster, srdLabel, type MonsterAction, type MonsterStatBlock } fro
 import styles from "./monster-sheet.module.css";
 
 type Locale = "en" | "es";
-type Props = { monsterSlug?: string | null; locale?: Locale };
+type Props = { monsterSlug?: string | null; locale?: Locale; /** Render this stat block directly (editor preview) instead of fetching one by slug. */ monster?: MonsterStatBlock };
 
 const labels = {
   en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
@@ -23,6 +23,8 @@ function traitList(title: string, items: MonsterAction[] | undefined) {
   if (!items?.length) return null;
   return <section className={styles.section}><h3 className={styles.sectionTitle}>{title}</h3>{items.map((item, index) => <article className={styles.trait} key={`${item.name ?? title}-${index}`}><strong>{item.name}</strong>{item.name && ". "}{textOf(item.desc) && <p>{textOf(item.desc)}</p>}</article>)}</section>;
 }
+
+const homebrewLabel = (locale: Locale, owner: string) => (locale === "es" ? `Homebrew · de ${owner}` : `Homebrew · by ${owner}`);
 
 const IMAGE_HOST = "https://www.dnd5eapi.co";
 
@@ -43,14 +45,15 @@ function formatArmorClass(value: MonsterStatBlock["armor_class"]) {
   return value.map((armor) => `${armor.value ?? "?"}${armor.desc ? ` (${armor.desc})` : ""}`).join(" / ");
 }
 
-export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
+export default function MonsterSheet({ monsterSlug, locale = "en", monster: given }: Props) {
   const t = labels[locale];
-  const [monster, setMonster] = useState<MonsterStatBlock | null>(null);
+  const [fetched, setMonster] = useState<MonsterStatBlock | null>(null);
+  const monster = given ?? fetched;
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!monsterSlug) { setMonster(null); setError(""); return; }
+    if (given || !monsterSlug) { setMonster(null); setError(""); return; }
     const controller = new AbortController();
     setMonster(null);
     setError("");
@@ -58,10 +61,10 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : t.error);
     });
     return () => controller.abort();
-  }, [monsterSlug, attempt, t.error]);
+  }, [monsterSlug, given, attempt, t.error]);
 
-  if (!monsterSlug) return <div className={styles.empty}>{t.empty}</div>;
-  if (error) return <div className={styles.error} role="alert">{t.error}<p>{error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>;
+  if (!given && !monsterSlug) return <div className={styles.empty}>{t.empty}</div>;
+  if (error && !given) return <div className={styles.error} role="alert">{t.error}<p>{error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>;
   if (!monster) return <SkeletonRegion label={t.loading} className={styles.loading}><Skeleton width="55%" height={30} /><SkeletonText lines={2} /><div className="skeleton-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", margin: "14px 0" }}>{[0, 1, 2, 3, 4, 5].map((item) => <Skeleton key={item} height={44} />)}</div><SkeletonText lines={4} /></SkeletonRegion>;
 
   const speed = Object.entries(monster.speed ?? {}).filter(([, value]) => value).map(([kind, value]) => `${translateTerms("speed", kind, locale)} ${translateTerms("speed", String(value), locale)}`).join(", ");
@@ -75,7 +78,7 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
   ];
 
   return <article className={styles.frame} aria-label={`${monster.name} stat block`}>
-    <header className={styles.header}><p className={styles.eyebrow}>{t.source} · {srdLabel(monster.edition)}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
+    <header className={styles.header}><p className={styles.eyebrow}>{monster.homebrew ? homebrewLabel(locale, monster.homebrew.ownerName) : `${t.source} · ${srdLabel(monster.edition)}`}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
     <MonsterPortrait monster={monster} label={t.noImage} />
     <div className={styles.quickStats}>
       <div><span>{t.ac}</span><strong>{ac}</strong></div>
@@ -95,11 +98,13 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
     {traitList(t.actions, monster.actions)}
     {traitList(t.reactions, monster.reactions)}
     {traitList(t.legendary, monster.legendary_actions)}
+    {monster.homebrew ? <p className={styles.legal}>{locale === "es" ? "Contenido homebrew creado por los usuarios de este servidor; no forma parte del SRD ni está avalado por Wizards of the Coast." : "Homebrew content made by users of this server; it is not part of the SRD and is not endorsed by Wizards of the Coast."}</p> : <>
     <p className={styles.source}>{t.source} · {srdLabel(monster.edition)} · {monster.index ?? monsterSlug}</p>
     <p className={styles.legal}>
       {monster.edition === "2014"
         ? <>This work includes material from the <a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noreferrer">System Reference Document 5.1 (“SRD 5.1”)</a> by Wizards of the Coast LLC. The SRD 5.1 is licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a>.</>
         : <>This work includes material from the <a href="https://www.dndbeyond.com/srd" target="_blank" rel="noreferrer">System Reference Document 5.2 (“SRD 5.2”)</a> by Wizards of the Coast LLC, available at D&amp;D Beyond. The SRD 5.2 is licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a>.</>}
     </p>
+    </>}
   </article>;
 }
