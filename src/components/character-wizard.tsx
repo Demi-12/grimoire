@@ -63,7 +63,7 @@ const copy = {
       scores: "Assign valid scores for the chosen method.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
       featSkills: "Choose 3 skills for Skilled.", expertise: "Choose your Expertise skills.", languages: "Choose two languages.", name: "Give your character a name.",
     } as Record<string, string>,
-    srd: "Rules data from the System Reference Document 5.2 (CC-BY-4.0).",
+    srd: "Rules data from the 2024 Player's Handbook and the System Reference Document 5.2 (CC-BY-4.0).",
   },
   es: {
     kicker: "Creación de personaje, reglas 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
@@ -99,7 +99,7 @@ const copy = {
       scores: "Asigna puntuaciones válidas para el método elegido.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
       featSkills: "Elige 3 habilidades para Habilidoso.", expertise: "Elige tus habilidades de Pericia.", languages: "Elige dos idiomas.", name: "Ponle nombre a tu personaje.",
     } as Record<string, string>,
-    srd: "Datos de reglas del System Reference Document 5.2 (CC-BY-4.0).",
+    srd: "Datos de reglas del Manual del Jugador 2024 y del System Reference Document 5.2 (CC-BY-4.0).",
   },
 };
 

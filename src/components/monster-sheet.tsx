@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { translateAbility, translateTerms } from "@/lib/monster-i18n";
 import { fetchMonster, srdLabel, type MonsterAction, type MonsterStatBlock } from "@/lib/monster-api";
 import styles from "./monster-sheet.module.css";
 
@@ -49,18 +50,18 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
   if (error) return <div className={styles.error} role="alert">{t.error}<p>{error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>;
   if (!monster) return <div className={styles.loading} role="status">{t.loading}</div>;
 
-  const speed = Object.entries(monster.speed ?? {}).filter(([, value]) => value).map(([kind, value]) => `${kind} ${value}`).join(", ");
+  const speed = Object.entries(monster.speed ?? {}).filter(([, value]) => value).map(([kind, value]) => `${translateTerms("speed", kind, locale)} ${translateTerms("speed", String(value), locale)}`).join(", ");
   const ac = formatArmorClass(monster.armor_class);
   const saves = monster.proficiencies?.filter((item) => item.proficiency?.name?.toLowerCase().includes("saving throw"));
   const defenses = [
-    ...(monster.damage_vulnerabilities?.length ? [`${locale === "es" ? "Vulnerabilidad" : "Vulnerabilities"}: ${monster.damage_vulnerabilities.join(", ")}`] : []),
-    ...(monster.damage_resistances?.length ? [`${locale === "es" ? "Resistencias" : "Resistances"}: ${monster.damage_resistances.join(", ")}`] : []),
-    ...(monster.damage_immunities?.length ? [`${locale === "es" ? "Inmunidades al daño" : "Damage Immunities"}: ${monster.damage_immunities.join(", ")}`] : []),
-    ...(monster.condition_immunities?.length ? [`${locale === "es" ? "Inmunidades a estados" : "Condition Immunities"}: ${monster.condition_immunities.map((item) => item.name).filter(Boolean).join(", ")}`] : []),
+    ...(monster.damage_vulnerabilities?.length ? [`${locale === "es" ? "Vulnerabilidad" : "Vulnerabilities"}: ${translateTerms("damage", monster.damage_vulnerabilities.join(", "), locale)}`] : []),
+    ...(monster.damage_resistances?.length ? [`${locale === "es" ? "Resistencias" : "Resistances"}: ${translateTerms("damage", monster.damage_resistances.join(", "), locale)}`] : []),
+    ...(monster.damage_immunities?.length ? [`${locale === "es" ? "Inmunidades al daño" : "Damage Immunities"}: ${translateTerms("damage", monster.damage_immunities.join(", "), locale)}`] : []),
+    ...(monster.condition_immunities?.length ? [`${locale === "es" ? "Inmunidades a estados" : "Condition Immunities"}: ${translateTerms("condition", monster.condition_immunities.map((item) => item.name).filter(Boolean).join(", "), locale)}`] : []),
   ];
 
   return <article className={styles.frame} aria-label={`${monster.name} stat block`}>
-    <header className={styles.header}><p className={styles.eyebrow}>{t.source} · {srdLabel(monster.edition)}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[monster.size, monster.type, monster.alignment].filter(Boolean).join(" · ")}</p></header>
+    <header className={styles.header}><p className={styles.eyebrow}>{t.source} · {srdLabel(monster.edition)}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
     <div className={styles.quickStats}>
       <div><span>{t.ac}</span><strong>{ac}</strong></div>
       <div><span>{t.hp}</span><strong>{monster.hit_points ?? "—"}</strong>{monster.hit_dice && <small>({monster.hit_dice})</small>}</div>
@@ -69,10 +70,10 @@ export default function MonsterSheet({ monsterSlug, locale = "en" }: Props) {
     <section className={styles.section}><h3 className={styles.sectionTitle}>{t.abilities}</h3><div className={styles.abilities}>{abilityKeys.map((key, index) => { const score = monster[key]; return <div className={styles.ability} key={key}><span>{abilityNames[locale][index]}</span><b>{score ?? "—"}</b>{score != null && <small>{modifier(score)}</small>}</div>; })}</div></section>
     <div className={styles.facts}>
       {speed && <p><b>{locale === "es" ? "Velocidad" : "Speed"}</b> {speed}</p>}
-      {!!saves?.length && <p><b>{t.saves}</b> {saves.map((item) => { const value = item.value ?? 0; return `${item.proficiency?.name?.replace(/^Saving Throw:\s*/i, "") ?? ""} ${value >= 0 ? "+" : ""}${value}`; }).join(", ")}</p>}
+      {!!saves?.length && <p><b>{t.saves}</b> {saves.map((item) => { const value = item.value ?? 0; return `${translateAbility(item.proficiency?.name?.replace(/^Saving Throw:\s*/i, "") ?? "", locale)} ${value >= 0 ? "+" : ""}${value}`; }).join(", ")}</p>}
       {!!defenses.length && <p><b>{t.defenses}</b> {defenses.join(" · ")}</p>}
-      {monster.senses && <p><b>{t.senses}</b> {Object.entries(monster.senses).filter(([, value]) => value).map(([key, value]) => `${key.replaceAll("_", " ")} ${value}`).join(", ")}</p>}
-      {monster.languages && <p><b>{t.languages}</b> {monster.languages}</p>}
+      {monster.senses && <p><b>{t.senses}</b> {Object.entries(monster.senses).filter(([, value]) => value).map(([key, value]) => `${translateTerms("sense", key, locale).replaceAll("_", " ")} ${translateTerms("sense", String(value), locale)}`).join(", ")}</p>}
+      {monster.languages && <p><b>{t.languages}</b> {translateTerms("language", monster.languages, locale)}</p>}
       {monster.proficiency_bonus != null && <p><b>{t.prof}</b> +{monster.proficiency_bonus}</p>}
     </div>
     {traitList(t.traits, monster.special_abilities)}

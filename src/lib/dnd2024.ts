@@ -1,7 +1,7 @@
 /**
- * Character creation data for the 2024 rules, limited to what the System Reference
- * Document 5.2 (CC-BY-4.0, Wizards of the Coast) publishes: the 12 classes with
- * their SRD subclass, the 9 species, the 4 SRD backgrounds and the SRD origin feats.
+ * Character creation data for the 2024 rules: the 12 classes with their SRD subclass,
+ * the 10 Player's Handbook species, the 16 Player's Handbook backgrounds and the origin
+ * feats they grant (the System Reference Document 5.2, CC-BY-4.0, only covers part of it).
  * Names are given in English and Spanish; rules text is summarized, not reproduced.
  */
 import type { AbilityKey } from "./rules";
@@ -235,17 +235,26 @@ export const classes: ClassData[] = [
   },
 ];
 
-export type FeatId = "alert" | "magicInitiate" | "savageAttacker" | "skilled";
+export type FeatId =
+  | "alert" | "crafter" | "healer" | "lucky" | "magicInitiate" | "musician" | "savageAttacker" | "skilled" | "tavernBrawler" | "tough";
 export const originFeats: Record<FeatId, { name: Text; summary: Text }> = {
   alert: { name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado.") },
+  crafter: { name: t("Crafter", "Artesano"), summary: t("Proficiency with three Artisan's Tools, a discount on nonmagical items and fast crafting.", "Competencia con tres herramientas de artesano, descuento en objetos no mágicos y fabricación rápida.") },
+  healer: { name: t("Healer", "Sanador"), summary: t("Use a Healer's Kit to restore Hit Points to an ally and reroll low healing dice.", "Usa un botiquín de sanador para curar a un aliado y repite los dados de curación bajos.") },
+  lucky: { name: t("Lucky", "Afortunado"), summary: t("Luck Points equal to your Proficiency Bonus to gain Advantage or turn an attack against you into a Disadvantage.", "Puntos de suerte igual a tu bonificador por competencia para obtener ventaja o imponer desventaja a un ataque contra ti.") },
   magicInitiate: { name: t("Magic Initiate", "Iniciado en la magia"), summary: t("Learn two cantrips and one level 1 spell from the Cleric, Druid or Wizard list.", "Aprende dos trucos y un conjuro de nivel 1 de la lista de clérigo, druida o mago.") },
+  musician: { name: t("Musician", "Músico"), summary: t("Proficiency with three Musical Instruments and a song that grants Heroic Inspiration to allies.", "Competencia con tres instrumentos musicales y una canción que otorga inspiración heroica a tus aliados.") },
   savageAttacker: { name: t("Savage Attacker", "Atacante salvaje"), summary: t("Once per turn, roll weapon damage dice twice and use either roll.", "Una vez por turno, tira dos veces los dados de daño de un arma y elige el resultado.") },
   skilled: { name: t("Skilled", "Habilidoso"), summary: t("Gain proficiency in any combination of three skills or tools.", "Obtienes competencia en tres habilidades o herramientas a tu elección.") },
+  tavernBrawler: { name: t("Tavern Brawler", "Pendenciero"), summary: t("Stronger Unarmed Strikes, reroll 1s on their damage and shove after a hit.", "Golpes sin armas más fuertes, repites los 1 en su daño y empujas tras un impacto.") },
+  tough: { name: t("Tough", "Duro"), summary: t("Your Hit Point maximum increases by twice your level.", "Tus puntos de golpe máximos aumentan el doble de tu nivel.") },
 };
 export const magicInitiateLists = { cleric: t("Cleric", "Clérigo"), druid: t("Druid", "Druida"), wizard: t("Wizard", "Mago") } as const;
 export type MagicInitiateList = keyof typeof magicInitiateLists;
 
-export type BackgroundId = "acolyte" | "criminal" | "sage" | "soldier";
+export type BackgroundId =
+  | "acolyte" | "artisan" | "charlatan" | "criminal" | "entertainer" | "farmer" | "guard" | "guide"
+  | "hermit" | "merchant" | "noble" | "sage" | "sailor" | "scribe" | "soldier" | "wayfarer";
 export interface BackgroundData {
   id: BackgroundId;
   name: Text;
@@ -258,46 +267,159 @@ export interface BackgroundData {
   summary: Text;
 }
 
+const bgB: EquipmentOption = { id: "B", items: [gp(50)], gold: 50 };
+const clothes = t("Traveler's Clothes", "Ropa de viaje");
+const pouches = t("2 Pouches", "2 bolsas");
+const lamp = t("Lamp", "Lámpara");
+const oil = t("Oil (3 flasks)", "Aceite (3 frascos)");
+const bedroll = t("Bedroll", "Saco de dormir");
+const fineClothes = t("Fine Clothes", "Ropa fina");
+const quiver = t("Quiver", "Carcaj");
+const arrows = t("20 Arrows", "20 flechas");
+const tools = {
+  calligrapher: t("Calligrapher's Supplies", "Útiles de calígrafo"),
+  thieves: t("Thieves' Tools", "Herramientas de ladrón"),
+  gaming: t("One Gaming Set", "Un juego"),
+  navigator: t("Navigator's Tools", "Herramientas de navegante"),
+};
+const gamingSet = t("Gaming Set", "Juego");
+const dagger = t("Dagger", "Daga");
+const daggers2 = t("2 Daggers", "2 dagas");
+const spear = t("Spear", "Lanza");
+const healersKit = t("Healer's Kit", "Útiles de sanador");
+
 export const backgrounds: BackgroundData[] = [
   {
     id: "acolyte", name: t("Acolyte", "Acólito"), abilities: ["int", "wis", "cha"], feat: "magicInitiate", featList: "cleric",
-    skills: ["insight", "religion"], tool: t("Calligrapher's Supplies", "Útiles de calígrafo"),
+    skills: ["insight", "religion"], tool: tools.calligrapher,
     summary: t("You devoted yourself to service in a temple.", "Te consagraste al servicio de un templo."),
     equipment: [
-      { id: "A", items: [t("Calligrapher's Supplies", "Útiles de calígrafo"), t("Book (prayers)", "Libro (oraciones)"), t("Holy Symbol", "Símbolo sagrado"), t("Parchment (10 sheets)", "Pergamino (10 hojas)"), t("Robe", "Túnica"), gp(8)], gold: 8 },
-      { id: "B", items: [gp(50)], gold: 50 },
+      { id: "A", items: [tools.calligrapher, t("Book (prayers)", "Libro (oraciones)"), t("Holy Symbol", "Símbolo sagrado"), t("Parchment (10 sheets)", "Pergamino (10 hojas)"), t("Robe", "Túnica"), gp(8)], gold: 8 }, bgB,
+    ],
+  },
+  {
+    id: "artisan", name: t("Artisan", "Artesano"), abilities: ["str", "dex", "int"], feat: "crafter",
+    skills: ["investigation", "persuasion"], tool: t("One Artisan's Tools", "Unas herramientas de artesano"),
+    summary: t("You learned a trade as an apprentice and sold your wares.", "Aprendiste un oficio como aprendiz y vendiste tus obras."),
+    equipment: [
+      { id: "A", items: [t("Artisan's Tools", "Herramientas de artesano"), pouches, clothes, gp(32)], gold: 32 }, bgB,
+    ],
+  },
+  {
+    id: "charlatan", name: t("Charlatan", "Charlatán"), abilities: ["dex", "con", "cha"], feat: "skilled",
+    skills: ["deception", "sleightOfHand"], tool: t("Forgery Kit", "Kit de falsificación"),
+    summary: t("You learned to read people and sell them what they wanted to believe.", "Aprendiste a leer a la gente y a venderle lo que quería creer."),
+    equipment: [
+      { id: "A", items: [t("Forgery Kit", "Kit de falsificación"), t("Costume", "Disfraz"), fineClothes, gp(15)], gold: 15 }, bgB,
     ],
   },
   {
     id: "criminal", name: t("Criminal", "Criminal"), abilities: ["dex", "con", "int"], feat: "alert",
-    skills: ["sleightOfHand", "stealth"], tool: t("Thieves' Tools", "Herramientas de ladrón"),
+    skills: ["sleightOfHand", "stealth"], tool: tools.thieves,
     summary: t("You eked out a living in dark alleyways.", "Te ganaste la vida en callejones oscuros."),
     equipment: [
-      { id: "A", items: [t("2 Daggers", "2 dagas"), t("Thieves' Tools", "Herramientas de ladrón"), t("Crowbar", "Palanca"), t("2 Pouches", "2 bolsas"), t("Traveler's Clothes", "Ropa de viaje"), gp(16)], gold: 16 },
-      { id: "B", items: [gp(50)], gold: 50 },
+      { id: "A", items: [daggers2, tools.thieves, t("Crowbar", "Palanca"), pouches, clothes, gp(16)], gold: 16 }, bgB,
+    ],
+  },
+  {
+    id: "entertainer", name: t("Entertainer", "Artista"), abilities: ["str", "dex", "cha"], feat: "musician",
+    skills: ["acrobatics", "performance"], tool: t("One Musical Instrument", "Un instrumento musical"),
+    summary: t("You thrived in front of an audience, honing your act.", "Floreciste ante el público perfeccionando tu número."),
+    equipment: [
+      { id: "A", items: [t("Musical Instrument", "Instrumento musical"), t("2 Costumes", "2 disfraces"), t("Mirror", "Espejo"), t("Perfume", "Perfume"), clothes, gp(11)], gold: 11 }, bgB,
+    ],
+  },
+  {
+    id: "farmer", name: t("Farmer", "Granjero"), abilities: ["str", "con", "wis"], feat: "tough",
+    skills: ["animalHandling", "nature"], tool: t("Carpenter's Tools", "Herramientas de carpintero"),
+    summary: t("You grew strong working the land and tending animals.", "Te hiciste fuerte trabajando la tierra y cuidando animales."),
+    equipment: [
+      { id: "A", items: [t("Sickle", "Hoz"), t("Carpenter's Tools", "Herramientas de carpintero"), healersKit, t("Iron Pot", "Olla de hierro"), t("Shovel", "Pala"), clothes, gp(30)], gold: 30 }, bgB,
+    ],
+  },
+  {
+    id: "guard", name: t("Guard", "Guardia"), abilities: ["str", "int", "wis"], feat: "alert",
+    skills: ["athletics", "perception"], tool: tools.gaming,
+    summary: t("You kept watch over a gate, a wall or a caravan.", "Vigilaste una puerta, una muralla o una caravana."),
+    equipment: [
+      { id: "A", items: [spear, t("Light Crossbow", "Ballesta ligera"), t("20 Bolts", "20 virotes"), gamingSet, t("Hooded Lantern", "Linterna sorda"), t("Manacles", "Grilletes"), quiver, clothes, gp(12)], gold: 12 }, bgB,
+    ],
+  },
+  {
+    id: "guide", name: t("Guide", "Guía"), abilities: ["dex", "con", "wis"], feat: "magicInitiate", featList: "druid",
+    skills: ["stealth", "survival"], tool: t("Cartographer's Tools", "Herramientas de cartógrafo"),
+    summary: t("You learned the wilds and led others through them.", "Aprendiste los parajes salvajes y guiaste a otros por ellos."),
+    equipment: [
+      { id: "A", items: [t("Shortbow", "Arco corto"), arrows, t("Cartographer's Tools", "Herramientas de cartógrafo"), bedroll, quiver, t("Tent", "Tienda de campaña"), clothes, gp(3)], gold: 3 }, bgB,
+    ],
+  },
+  {
+    id: "hermit", name: t("Hermit", "Ermitaño"), abilities: ["con", "wis", "cha"], feat: "healer",
+    skills: ["medicine", "religion"], tool: t("Herbalism Kit", "Útiles de herborista"),
+    summary: t("You lived in seclusion, in search of peace or insight.", "Viviste aislado en busca de paz o de revelaciones."),
+    equipment: [
+      { id: "A", items: [t("Quarterstaff", "Bastón"), t("Herbalism Kit", "Útiles de herborista"), bedroll, t("Book (philosophy)", "Libro (filosofía)"), lamp, oil, clothes, gp(16)], gold: 16 }, bgB,
+    ],
+  },
+  {
+    id: "merchant", name: t("Merchant", "Mercader"), abilities: ["con", "int", "cha"], feat: "lucky",
+    skills: ["animalHandling", "persuasion"], tool: tools.navigator,
+    summary: t("You apprenticed with traders and learned to haggle.", "Fuiste aprendiz de comerciantes y aprendiste a regatear."),
+    equipment: [
+      { id: "A", items: [tools.navigator, pouches, clothes, gp(22)], gold: 22 }, bgB,
+    ],
+  },
+  {
+    id: "noble", name: t("Noble", "Noble"), abilities: ["str", "int", "cha"], feat: "skilled",
+    skills: ["history", "persuasion"], tool: tools.gaming,
+    summary: t("You grew up in wealth, privilege and expectation.", "Creciste entre riquezas, privilegios y expectativas."),
+    equipment: [
+      { id: "A", items: [gamingSet, fineClothes, t("Perfume", "Perfume"), gp(29)], gold: 29 }, bgB,
     ],
   },
   {
     id: "sage", name: t("Sage", "Sabio"), abilities: ["con", "int", "wis"], feat: "magicInitiate", featList: "wizard",
-    skills: ["arcana", "history"], tool: t("Calligrapher's Supplies", "Útiles de calígrafo"),
+    skills: ["arcana", "history"], tool: tools.calligrapher,
     summary: t("You spent your formative years among manuscripts.", "Pasaste tus años de formación entre manuscritos."),
     equipment: [
-      { id: "A", items: [t("Quarterstaff", "Bastón"), t("Calligrapher's Supplies", "Útiles de calígrafo"), t("Book (history)", "Libro (historia)"), t("Parchment (8 sheets)", "Pergamino (8 hojas)"), t("Robe", "Túnica"), gp(8)], gold: 8 },
-      { id: "B", items: [gp(50)], gold: 50 },
+      { id: "A", items: [t("Quarterstaff", "Bastón"), tools.calligrapher, t("Book (history)", "Libro (historia)"), t("Parchment (8 sheets)", "Pergamino (8 hojas)"), t("Robe", "Túnica"), gp(8)], gold: 8 }, bgB,
+    ],
+  },
+  {
+    id: "sailor", name: t("Sailor", "Marinero"), abilities: ["str", "dex", "wis"], feat: "tavernBrawler",
+    skills: ["acrobatics", "perception"], tool: tools.navigator,
+    summary: t("You lived aboard a ship, braving the sea and its ports.", "Viviste a bordo de un barco, desafiando el mar y sus puertos."),
+    equipment: [
+      { id: "A", items: [dagger, tools.navigator, t("Rope", "Cuerda"), clothes, gp(20)], gold: 20 }, bgB,
+    ],
+  },
+  {
+    id: "scribe", name: t("Scribe", "Escriba"), abilities: ["dex", "int", "wis"], feat: "skilled",
+    skills: ["investigation", "perception"], tool: tools.calligrapher,
+    summary: t("You copied documents with precision and an eye for detail.", "Copiaste documentos con precisión y buen ojo para el detalle."),
+    equipment: [
+      { id: "A", items: [tools.calligrapher, fineClothes, lamp, oil, t("Parchment (12 sheets)", "Pergamino (12 hojas)"), gp(23)], gold: 23 }, bgB,
     ],
   },
   {
     id: "soldier", name: t("Soldier", "Soldado"), abilities: ["str", "dex", "con"], feat: "savageAttacker",
-    skills: ["athletics", "intimidation"], tool: t("One Gaming Set", "Un juego"),
+    skills: ["athletics", "intimidation"], tool: tools.gaming,
     summary: t("You trained for war from a young age.", "Te entrenaste para la guerra desde joven."),
     equipment: [
-      { id: "A", items: [t("Spear", "Lanza"), t("Shortbow", "Arco corto"), t("20 Arrows", "20 flechas"), t("Gaming Set", "Juego"), t("Healer's Kit", "Útiles de sanador"), t("Quiver", "Carcaj"), t("Traveler's Clothes", "Ropa de viaje"), gp(14)], gold: 14 },
-      { id: "B", items: [gp(50)], gold: 50 },
+      { id: "A", items: [spear, t("Shortbow", "Arco corto"), arrows, gamingSet, healersKit, quiver, clothes, gp(14)], gold: 14 }, bgB,
+    ],
+  },
+  {
+    id: "wayfarer", name: t("Wayfarer", "Trotamundos"), abilities: ["dex", "wis", "cha"], feat: "lucky",
+    skills: ["insight", "stealth"], tool: tools.thieves,
+    summary: t("You grew up on the streets or the road, relying on your wits.", "Creciste en la calle o en el camino, confiando en tu ingenio."),
+    equipment: [
+      { id: "A", items: [daggers2, tools.thieves, gamingSet, bedroll, pouches, clothes, gp(16)], gold: 16 }, bgB,
     ],
   },
 ];
 
-export type SpeciesId = "dragonborn" | "dwarf" | "elf" | "gnome" | "goliath" | "halfling" | "human" | "orc" | "tiefling";
+export type SpeciesId = "aasimar" | "dragonborn" | "dwarf" | "elf" | "gnome" | "goliath" | "halfling" | "human" | "orc" | "tiefling";
 export interface Lineage { id: string; name: Text; detail?: Text; speed?: number; darkvision?: number }
 export interface SpeciesData {
   id: SpeciesId;
@@ -317,6 +439,10 @@ export interface SpeciesData {
 }
 
 export const species: SpeciesData[] = [
+  {
+    id: "aasimar", name: t("Aasimar", "Aasimar"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [t("Celestial Resistance", "Resistencia celestial"), t("Healing Hands", "Manos curativas"), t("Light Bearer", "Portador de luz"), t("Celestial Revelation (level 3)", "Revelación celestial (nivel 3)")],
+  },
   {
     id: "dragonborn", name: t("Dragonborn", "Dracónido"), size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
     traits: [t("Breath Weapon", "Arma de aliento"), t("Damage Resistance", "Resistencia al daño"), t("Draconic Flight (level 5)", "Vuelo dracónico (nivel 5)")],
