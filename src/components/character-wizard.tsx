@@ -12,6 +12,8 @@ import {
   backgroundBonuses, characterFeats, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues,
   validBaseScores, type AbilityMethod, type CharacterBuild,
 } from "@/lib/character-sheet";
+import { featInfo } from "@/lib/levelup-data";
+import { subclassLabel, unlockedFeatures } from "@/lib/levelup";
 import styles from "./character-wizard.module.css";
 
 export interface WizardResult {
@@ -203,7 +205,8 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
     // The stepper allows jumping ahead, so check every step before saving.
     const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === 6 && !name.trim()));
     if (incomplete >= 0) { setStep(incomplete); return; }
-    onSave({ name: name.trim(), level, notes: notes.trim(), build });
+    // Level-ups above the chosen level no longer apply.
+    onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...build, levelUps: build.levelUps?.filter((entry) => entry.level <= level) } });
   }
 
   const pool = build.abilityMethod === "standard" ? [...STANDARD_ARRAY] : build.rolledPool ?? [];
@@ -246,7 +249,7 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
           </dl>
           <div className={styles.inline}>
             <label className={styles.field}>{c.level}<input type="number" min={1} max={20} value={level} onChange={(event) => setLevel(Math.min(20, Math.max(1, Math.floor(Number(event.target.value) || 1))))} /></label>
-            {level >= 3 && <label className={styles.check}><input type="checkbox" checked={build.useSubclass} onChange={(event) => update({ useSubclass: event.target.checked })} />{c.useSubclass}: <b>{say(cls.subclass, locale)}</b></label>}
+            {level >= 3 && <label className={styles.check}><input type="checkbox" checked={build.useSubclass} onChange={(event) => update({ useSubclass: event.target.checked, ...(event.target.checked ? { customSubclass: undefined } : {}) })} />{c.useSubclass}: <b>{say(cls.subclass, locale)}</b></label>}
           </div>
           {level >= 3 && <p className={styles.note}>{c.subclassNote}</p>}
         </div>
@@ -404,7 +407,7 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
         <p className={styles.intro}>{c.summaryIntro}</p>
         <article className={styles.summary}>
           <header><h3>{name || "—"}</h3><p>{[say(sp.lineages?.find((item) => item.id === build.lineageId)?.name, locale), say(sp.name, locale), say(cls.name, locale), `${locale === "es" ? "nivel" : "level"} ${sheet.level}`].filter(Boolean).join(" · ")}</p>
-            <p>{say(bg.name, locale)} · {say(alignments[build.alignment], locale)}{level >= 3 && build.useSubclass ? ` · ${say(cls.subclass, locale)}` : ""}</p></header>
+            <p>{say(bg.name, locale)} · {say(alignments[build.alignment], locale)}{subclassLabel(build, level, locale) ? ` · ${subclassLabel(build, level, locale)}` : ""}</p></header>
           <div className={styles.vitals}>
             {[[c.ac, sheet.armorClass], [c.hp, sheet.hitPoints], [c.initiative, signed(sheet.initiative)], [c.speed, `${sheet.speed} ${c.ft}`], [c.proficiency, signed(sheet.proficiency)], [c.passive, sheet.passivePerception]].map(([label, value]) =>
               <div key={String(label)}><span>{label}</span><b>{value}</b></div>)}
@@ -417,9 +420,9 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
             <section><h4>{c.skills}</h4><ul className={styles.skillList}>{skillKeys.map((skill) => <li key={skill} className={sheet.skills[skill].proficient ? styles.prof : ""}>
               <i>{sheet.skills[skill].expertise ? "◆" : sheet.skills[skill].proficient ? "●" : "○"}</i>{translate(locale, `skill.${skill}`)}<b>{signed(sheet.skills[skill].bonus)}</b></li>)}</ul></section>
             <section>
-              <h4>{c.features}</h4><p>{cls.features.map((feature) => say(feature, locale)).join(" · ")}</p>
+              <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature, locale)).join(" · ")}</p>
               <h4>{c.traits}</h4><p>{sp.traits.map((trait) => say(trait, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}</p>
-              <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(originFeats[feat].name, locale)).join(" · ")}</p>
+              <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(featInfo(feat).name, locale)).join(" · ")}</p>
               {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)} · {say(cls.spellcasting.slots, locale)}</p></>}
               <h4>{c.languages}</h4><p>{[locale === "es" ? "Común" : "Common", ...build.languages.map((index) => say(standardLanguages[index], locale))].join(", ")}</p>
               <h4>{c.totalGold}</h4><p>{sheet.gold} {locale === "es" ? "po" : "GP"} · {c.hitDie} {sheet.hitDice}</p>
@@ -441,13 +444,14 @@ export default function CharacterWizard({ locale, initial, onSave, onCancel }: P
 }
 
 /** Display names stored alongside the build so older views keep working. */
-export function describeBuild(build: CharacterBuild, locale: Locale) {
+export function describeBuild(build: CharacterBuild, locale: Locale, level = 20) {
   const sp = findSpecies(build.speciesId);
   const lineage = sp?.lineages?.find((item) => item.id === build.lineageId);
+  const subclass = subclassLabel(build, level, locale);
   return {
-    className: say(findClass(build.classId)?.name, locale),
+    className: `${say(findClass(build.classId)?.name, locale)}${subclass ? ` (${subclass})` : ""}`,
     species: [say(lineage?.name, locale), say(sp?.name, locale)].filter(Boolean).join(" · "),
     background: say(findBackground(build.backgroundId)?.name, locale),
-    scores: finalScores(build),
+    scores: finalScores(build, level),
   };
 }

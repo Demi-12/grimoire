@@ -4,15 +4,44 @@ import {
   armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
 } from "./dnd2024";
+import { featInfo, type FightingStyleId, type LevelFeatId } from "./levelup-data";
 
 export type AbilityMethod = "standard" | "pointBuy" | "rolled";
 export type BonusMode = "plus2plus1" | "plus1x3";
+
+/** A feat picked while leveling up, with whatever it asks you to decide. */
+export interface FeatPick {
+  id: LevelFeatId;
+  /** The +1 some feats give (Grappler, Epic Boons). */
+  ability?: AbilityKey;
+  /** Skilled: three extra skills. */
+  skills?: SkillKey[];
+  /** Magic Initiate: which spell list. */
+  list?: MagicInitiateList;
+}
+
+/** Everything the player decided when reaching one level (2-20). Nothing is stored for choices that level does not offer. */
+export interface LevelUpChoice {
+  level: number;
+  /** Hit Die result when the player rolled; omitted means the fixed average. */
+  hp?: number;
+  /** Ability Score Improvement: +2 to one score or +1 to two. */
+  asi?: Partial<Record<AbilityKey, number>>;
+  /** Feat taken instead of raising scores (or the Epic Boon at level 19). */
+  feat?: FeatPick;
+  fightingStyle?: FightingStyleId;
+  expertise?: SkillKey[];
+}
 
 /** Choices made in the creator. Everything on the sheet is derived from these. */
 export interface CharacterBuild {
   version: 1;
   classId: ClassId;
   useSubclass: boolean;
+  /** Name of a subclass from outside the SRD, typed by the player. */
+  customSubclass?: string;
+  /** One entry per level gained after level 1, added by the level-up guide. */
+  levelUps?: LevelUpChoice[];
   backgroundId: BackgroundId;
   speciesId: SpeciesId;
   lineageId?: string;
@@ -79,9 +108,22 @@ export function validBonuses(build: Pick<CharacterBuild, "bonusMode" | "bonusAbi
   return total === 3;
 }
 
-export function finalScores(build: CharacterBuild): AbilityScores {
+/** Level-up choices that apply at the given level, lowest level first. */
+export function levelChoices(build: Pick<CharacterBuild, "levelUps">, level = 20): LevelUpChoice[] {
+  return (build.levelUps ?? []).filter((choice) => choice.level >= 2 && choice.level <= level).sort((a, b) => a.level - b.level);
+}
+
+/** Scores after the background bonus and every Ability Score Improvement up to `level` (20 cap, 30 for an Epic Boon). */
+export function finalScores(build: CharacterBuild, level = 20): AbilityScores {
   const bonus = backgroundBonuses(build);
-  return Object.fromEntries(abilities.map(({ key }) => [key, Math.min(20, build.baseScores[key] + (bonus[key] ?? 0))])) as AbilityScores;
+  const scores = Object.fromEntries(abilities.map(({ key }) => [key, Math.min(20, build.baseScores[key] + (bonus[key] ?? 0))])) as AbilityScores;
+  for (const choice of levelChoices(build, level)) {
+    const cap = choice.feat && featInfo(choice.feat.id).category === "epicBoon" ? 30 : 20;
+    const gains: Partial<Record<AbilityKey, number>> = { ...choice.asi };
+    if (choice.feat?.ability) gains[choice.feat.ability] = (gains[choice.feat.ability] ?? 0) + 1;
+    for (const key of Object.keys(gains) as AbilityKey[]) scores[key] = Math.min(cap, scores[key] + (gains[key] ?? 0));
+  }
+  return scores;
 }
 
 /** Feat granted by the background plus the Human's Versatile feat, if any. */
@@ -93,10 +135,16 @@ export function characterFeats(build: CharacterBuild): FeatId[] {
   return feats;
 }
 
-export function proficientSkills(build: CharacterBuild): SkillKey[] {
+/** Every feat the character has at `level`: origin feats, feats taken at level-ups, Fighting Styles and Epic Boons. */
+export function allFeats(build: CharacterBuild, level = 20): LevelFeatId[] {
+  return [...characterFeats(build), ...levelChoices(build, level).flatMap((choice) => [choice.feat?.id, choice.fightingStyle].filter((id): id is LevelFeatId => !!id))];
+}
+
+export function proficientSkills(build: CharacterBuild, level = 20): SkillKey[] {
   const background = findBackground(build.backgroundId);
   return [...new Set([...(background?.skills ?? []), ...build.speciesSkills, ...build.classSkills,
-    ...(characterFeats(build).includes("skilled") ? build.featSkills : [])])];
+    ...(characterFeats(build).includes("skilled") ? build.featSkills : []),
+    ...levelChoices(build, level).flatMap((choice) => choice.feat?.id === "skilled" ? choice.feat.skills ?? [] : [])])];
 }
 
 export interface DerivedSheet {
@@ -116,7 +164,7 @@ export interface DerivedSheet {
   spellSaveDc?: number;
   spellAttack?: number;
   gold: number;
-  feats: FeatId[];
+  feats: LevelFeatId[];
 }
 
 export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet | null {
@@ -125,16 +173,20 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
   const sp = findSpecies(build.speciesId);
   if (!cls || !bg || !sp) return null;
   const safeLevel = Math.min(20, Math.max(1, Math.floor(level)));
-  const scores = finalScores(build);
+  const scores = finalScores(build, safeLevel);
   const mod = (key: AbilityKey) => abilityModifier(scores[key]);
   const pb = proficiencyBonus(safeLevel);
-  const feats = characterFeats(build);
+  const feats = allFeats(build, safeLevel);
+  const choices = levelChoices(build, safeLevel);
 
-  // Level 1: maximum Hit Die; later levels use the fixed average (half the die + 1).
+  // Level 1: maximum Hit Die; later levels use what was rolled, or the fixed average (half the die + 1).
   const perLevel = cls.hitDie / 2 + 1;
   const hpPerLevelBonus = (sp.hpPerLevel ?? 0) + (feats.includes("tough") ? 2 : 0);
   let hitPoints = Math.max(1, cls.hitDie + mod("con")) + hpPerLevelBonus;
-  for (let current = 2; current <= safeLevel; current += 1) hitPoints += Math.max(1, perLevel + mod("con")) + hpPerLevelBonus;
+  for (let current = 2; current <= safeLevel; current += 1) {
+    const gained = choices.find((choice) => choice.level === current)?.hp ?? perLevel;
+    hitPoints += Math.max(1, gained + mod("con")) + hpPerLevelBonus;
+  }
 
   const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
   let armorClass = 10 + mod("dex");
@@ -152,10 +204,11 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     armorNote = "Unarmored Defense";
   }
   if (equipment.shield) armorClass += 2;
+  if (equipment.armor && feats.includes("defense")) armorClass += 1;
 
   const lineage = sp.lineages?.find((item) => item.id === build.lineageId);
-  const proficient = new Set(proficientSkills(build));
-  const expertise = new Set(build.expertise.filter((skill) => proficient.has(skill)));
+  const proficient = new Set(proficientSkills(build, safeLevel));
+  const expertise = new Set([...build.expertise, ...choices.flatMap((choice) => choice.expertise ?? [])].filter((skill) => proficient.has(skill)));
   const skillValues = Object.fromEntries((Object.keys(skills) as SkillKey[]).map((skill) => {
     const isProficient = proficient.has(skill);
     const isExpert = expertise.has(skill);
