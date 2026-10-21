@@ -43,13 +43,13 @@ const copy = {
 
 const panelStyle = {
   width: "min(100%, 460px)", margin: "32px auto", padding: "clamp(22px, 5vw, 38px)",
-  border: "1px solid #bda36d", borderRadius: "4px 14px 4px 14px", background: "rgba(251, 244, 229, .94)",
-  boxShadow: "0 16px 45px rgba(54, 39, 19, .13)",
+  border: "1px solid var(--auth-border)", borderRadius: "4px 14px 4px 14px", background: "var(--auth-panel)",
+  boxShadow: "var(--auth-shadow)",
 } as const;
 
 const inputStyle = {
-  width: "100%", minHeight: 44, padding: "10px 12px", border: "1px solid #c7b58e", borderRadius: 3,
-  background: "#fffaf0", color: "#30261d",
+  width: "100%", minHeight: 44, padding: "10px 12px", border: "1px solid var(--auth-input-line)", borderRadius: 3,
+  background: "var(--auth-input)", color: "var(--ink)",
 } as const;
 
 function errorText(error: unknown, fallback: string) {
@@ -58,7 +58,7 @@ function errorText(error: unknown, fallback: string) {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label style={{ display: "grid", gap: 6, color: "#574832", fontSize: 13 }}>{label}{children}</label>;
+  return <label style={{ display: "grid", gap: 6, color: "var(--auth-label)", fontSize: 13 }}>{label}{children}</label>;
 }
 
 export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: AuthMode; locale?: Locale }) {
@@ -164,7 +164,7 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
   return (
     <section aria-labelledby="auth-title" style={panelStyle}>
       <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--serif)", margin: "8px 0 22px", color: "#30261d" }}>{title}</h1>
+      <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--serif)", margin: "8px 0 22px", color: "var(--ink)" }}>{title}</h1>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 15 }}>
         {mode === "sign-up" && <Field label={t.name}><input style={inputStyle} autoComplete="name" maxLength={100} required value={name} onChange={event => setName(event.target.value)} /></Field>}
         {(["sign-in", "sign-up", "forgot-password"].includes(mode)) && <Field label={t.email}><input style={inputStyle} type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></Field>}
@@ -174,8 +174,8 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
           <Field label={backupMode ? t.backup : t.twoFactor}><input style={inputStyle} inputMode={backupMode ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} /></Field>
           <button type="button" className="button button-quiet" onClick={() => { setBackupMode(value => !value); setCode(""); }}>{backupMode ? t.useTotp : t.backup}</button>
         </>}
-        {message && <p role="status" style={{ margin: 0, color: "#526245", lineHeight: 1.5 }}>{message}</p>}
-        {error && <p role="alert" style={{ margin: 0, color: "#9b3a29", lineHeight: 1.5 }}>{error}</p>}
+        {message && <p role="status" style={{ margin: 0, color: "var(--auth-ok)", lineHeight: 1.5 }}>{message}</p>}
+        {error && <p role="alert" style={{ margin: 0, color: "var(--auth-error)", lineHeight: 1.5 }}>{error}</p>}
         <button className="button button-primary" type="submit" disabled={busy}>
           {busy ? t.processing : mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : mode === "forgot-password" ? t.sendReset : mode === "reset-password" ? t.updatePassword : t.verify}
         </button>
@@ -298,13 +298,13 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
   return (
     <section aria-labelledby="auth-security-title" style={panelStyle}>
       <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-security-title" style={{ font: "500 27px/1.2 var(--serif)", margin: "8px 0 5px", color: "#30261d" }}>{t.settings}</h1>
-      <p style={{ color: "#746451", marginTop: 0 }}>{t.signedIn} <strong>{email}</strong></p>
+      <h1 id="auth-security-title" style={{ font: "500 27px/1.2 var(--serif)", margin: "8px 0 5px", color: "var(--ink)" }}>{t.settings}</h1>
+      <p style={{ color: "var(--muted)", marginTop: 0 }}>{t.signedIn} <strong>{email}</strong></p>
 
       <div style={{ display: "grid", gap: 18, marginTop: 24 }}>
-        <section style={{ borderTop: "1px solid #d2bd91", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px" }}>{t.passkeys}</h2>
-          {passkeys.length === 0 ? <p style={{ color: "#746451" }}>{t.noPasskeys}</p> : <ul style={{ paddingLeft: 20, display: "grid", gap: 8 }}>
+        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>{t.passkeys}</h2>
+          {passkeys.length === 0 ? <p style={{ color: "var(--muted)" }}>{t.noPasskeys}</p> : <ul style={{ paddingLeft: 20, display: "grid", gap: 8 }}>
             {passkeys.map(key => <li key={key.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
               <span>{key.name || (locale === "es" ? "Clave de acceso" : "Passkey")}</span>
               <button type="button" className="button button-quiet" disabled={busy} onClick={() => void removePasskey(key.id)}>{t.remove}</button>
@@ -313,10 +313,10 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
           <button type="button" className="button button-primary" disabled={busy} onClick={() => void addPasskey()}>{busy ? t.processing : t.addPasskey}</button>
         </section>
 
-        <section style={{ borderTop: "1px solid #d2bd91", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px" }}>2FA · TOTP</h2>
+        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>2FA · TOTP</h2>
           {twoFactorEnabled ? <>
-            <p style={{ color: "#526245" }}>{t.twoFactorOn}</p>
+            <p style={{ color: "var(--auth-ok)" }}>{t.twoFactorOn}</p>
             <Field label={t.enterPassword}><input style={inputStyle} type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} /></Field>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
               <button type="button" className="button button-quiet" disabled={busy || password.length < 12} onClick={() => void turnOffTwoFactor()}>{t.disableTwoFactor}</button>
@@ -328,16 +328,16 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
           </>}
           {totpUri && <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             <p>{t.setup}</p>
-            <code style={{ overflowWrap: "anywhere", padding: 10, background: "#efe3ca", border: "1px solid #d2bd91" }}>{new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri}</code>
+            <code style={{ overflowWrap: "anywhere", padding: 10, background: "var(--auth-code)", border: "1px solid var(--line)" }}>{new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri}</code>
             <button type="button" className="button button-quiet" onClick={() => { const key = new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri; void navigator.clipboard?.writeText(key); }}>{t.copySecret}</button>
             <Field label={t.totpCode}><input style={inputStyle} inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={event => setTotpCode(event.target.value)} /></Field>
             <button type="button" className="button button-primary" disabled={busy || totpCode.length < 6} onClick={() => void confirmTwoFactor()}>{t.confirmSetup}</button>
           </div>}
-          {backupCodes.length > 0 && <div role="status" style={{ marginTop: 12 }}><p>{t.backupCodes}</p><code style={{ display: "block", whiteSpace: "pre-wrap", padding: 10, background: "#efe3ca" }}>{backupCodes.join("\n")}</code></div>}
+          {backupCodes.length > 0 && <div role="status" style={{ marginTop: 12 }}><p>{t.backupCodes}</p><code style={{ display: "block", whiteSpace: "pre-wrap", padding: 10, background: "var(--auth-code)" }}>{backupCodes.join("\n")}</code></div>}
         </section>
 
-        <section style={{ borderTop: "1px solid #d2bd91", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px" }}>{t.changePassword}</h2>
+        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <h2 style={{ font: "500 18px var(--serif)", margin: "0 0 10px", color: "var(--ink)" }}>{t.changePassword}</h2>
           <form onSubmit={event => void changePassword(event)} style={{ display: "grid", gap: 12 }}>
             <Field label={t.currentPassword}><input style={inputStyle} type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} /></Field>
             <Field label={t.newPassword}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={event => setNewPassword(event.target.value)} /></Field>
@@ -346,8 +346,8 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
           </form>
         </section>
       </div>
-      {message && <p role="status" style={{ color: "#526245" }}>{message}</p>}
-      {error && <p role="alert" style={{ color: "#9b3a29" }}>{error}</p>}
+      {message && <p role="status" style={{ color: "var(--auth-ok)" }}>{message}</p>}
+      {error && <p role="alert" style={{ color: "var(--auth-error)" }}>{error}</p>}
       <button type="button" className="button button-quiet" style={{ marginTop: 20, width: "100%" }} onClick={onSignOut}>{t.signOut}</button>
     </section>
   );
