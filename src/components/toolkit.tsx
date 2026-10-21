@@ -8,7 +8,7 @@ import BestiaryBrowser from "@/components/bestiary-browser";
 import AdminUsers from "@/components/admin-users";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
-import { api, ApiError, type Campaign, type Character, type CharacterDraft, type Me } from "@/lib/api-client";
+import { api, ApiError, type Campaign, type Character, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
@@ -47,6 +47,28 @@ function findLocalData(accountId: string): LocalImport {
   return { characters: [...characters.values()], campaigns };
 }
 
+const inviteKey = "grimoire.invite.v1";
+
+/** Invite token from `?invite=` (kept in sessionStorage so it survives sign-up and approval). */
+function takePendingInvite(): string | null {
+  try {
+    const url = new URL(window.location.href);
+    const fromUrl = url.searchParams.get("invite");
+    if (fromUrl) {
+      window.sessionStorage.setItem(inviteKey, fromUrl);
+      url.searchParams.delete("invite");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+    return window.sessionStorage.getItem(inviteKey);
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingInvite() {
+  try { window.sessionStorage.removeItem(inviteKey); } catch { /* nothing stored */ }
+}
+
 const importDoneKey = (accountId: string) => `grimoire.users.${accountId}.imported.v1`;
 
 export default function Toolkit() {
@@ -72,6 +94,10 @@ export default function Toolkit() {
   const [creatureName, setCreatureName] = useState("");
   const [creatureXp, setCreatureXp] = useState(100);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [invite, setInvite] = useState<InvitePreview | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState("");
 
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
@@ -95,6 +121,7 @@ export default function Toolkit() {
     setThemeReady(true);
     setLocaleReady(true);
   }, []);
+  useEffect(() => { setInviteToken(takePendingInvite()); }, []);
   const reloadData = useCallback(async () => {
     const [characterData, campaignData] = await Promise.all([
       api<{ characters: Character[] }>("/api/characters"),
@@ -134,6 +161,17 @@ export default function Toolkit() {
       .finally(() => { if (!cancelled) setMeLoadedFor(accountId); });
     return () => { cancelled = true; };
   }, [authSession.isPending, accountId, reloadData]);
+
+  useEffect(() => {
+    if (!inviteToken || me?.status !== "approved") return;
+    let cancelled = false;
+    setInviteError("");
+    api<{ invite: InvitePreview }>(`/api/invites/${encodeURIComponent(inviteToken)}`)
+      .then((data) => { if (!cancelled) setInvite(data.invite); })
+      .catch(() => { if (!cancelled) { setInvite(null); setInviteError(t("invite.invalid")); clearPendingInvite(); setInviteToken(null); } });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteToken, me?.status]);
 
   useEffect(() => {
     if (authSession.isPending || !accountId) return;
@@ -200,6 +238,8 @@ export default function Toolkit() {
   }
   if (dataLoadedFor !== creatureStorageKey) return loading;
 
+  const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
+
   const currentUser = me;
   const ownCharacters = characters.filter((character) => character.editable);
   const title = t(`nav.${view}`);
@@ -212,6 +252,30 @@ export default function Toolkit() {
   async function deleteCharacter(id: string) {
     await api(`/api/characters/${id}`, { method: "DELETE" });
     await reloadData();
+  }
+
+  async function acceptInvite() {
+    if (!inviteToken) return;
+    setInviteBusy(true);
+    setInviteError("");
+    try {
+      await api(`/api/invites/${encodeURIComponent(inviteToken)}`, { method: "POST" });
+      clearPendingInvite();
+      setInviteToken(null);
+      setInvite(null);
+      await reloadData();
+      setView("campaigns");
+    } catch {
+      setInviteError(t("invite.error"));
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  function declineInvite() {
+    clearPendingInvite();
+    setInviteToken(null);
+    setInvite(null);
   }
 
   function finishImport() {
@@ -253,13 +317,19 @@ export default function Toolkit() {
         <button className={view === "account" ? "active" : ""} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
         {me.role === "admin" && <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
       </nav>
-      <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.signedInAs", { name: me.name, role: t(`role.${me.role}`) })}</p></div>
+      <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t("nav.signedInAs", { name: me.name, role: t(`role.${me.role}`) })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
 
     <section className="workspace">
       <header className="workspace-header"><div className="mobile-brand">✳ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
+        <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         <span className="edition-badge">{t("common.edition")}</span></header>
+      {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true">⚑</span>
+        {invite ? <p><b>{t("invite.title", { campaign: invite.campaignName })}</b> {invite.alreadyMember ? t("invite.already", { owner: invite.ownerName }) : t("invite.description", { owner: invite.ownerName })}</p>
+          : <p>{inviteError}</p>}
+        <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
+          <button className="button button-quiet" disabled={inviteBusy} onClick={invite ? declineInvite : () => setInviteError("")}>{t(invite ? "invite.decline" : "invite.dismiss")}</button></div></div>}
       {view === "home" && <div className="page-content">
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length })}</p>
           <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
