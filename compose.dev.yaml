@@ -1,0 +1,44 @@
+# Solo para desarrollo local: PostgreSQL publicado únicamente en 127.0.0.1 y las migraciones de Liquibase.
+# No sustituye a compose.yaml, que es el de producción (PostgreSQL sin puertos, tras una red interna).
+# Lee POSTGRES_PASSWORD (y opcionalmente POSTGRES_USER y POSTGRES_DB) de tu .env.
+#
+#   docker compose -f compose.dev.yaml up -d db
+#   docker compose -f compose.dev.yaml run --rm migrate
+name: grimoire-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-grimoire}
+      POSTGRES_USER: ${POSTGRES_USER:-grimoire}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Pon POSTGRES_PASSWORD en tu .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: liquibase/liquibase:4.33.0
+    profiles: [migration]
+    command: update
+    environment:
+      LIQUIBASE_SEARCH_PATH: /liquibase/changelog
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: db.changelog-master.yaml
+      LIQUIBASE_COMMAND_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-grimoire}
+      LIQUIBASE_COMMAND_USERNAME: ${POSTGRES_USER:-grimoire}
+      LIQUIBASE_COMMAND_PASSWORD: ${POSTGRES_PASSWORD:?Pon POSTGRES_PASSWORD en tu .env}
+    volumes:
+      - ./database/changelog:/liquibase/changelog:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_dev_data:
