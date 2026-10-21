@@ -1,7 +1,7 @@
 /**
  * Fixed-window request limiter kept in this process's memory, no dependencies.
  *
- * Scope: only the data API routes (/api/characters, /api/campaigns, /api/creatures, /api/import), keyed by
+ * Scope: only the data API routes (/api/characters, /api/campaigns, /api/creatures, /api/homebrew, /api/import), keyed by
  * signed-in user. Sign-in, sign-up and password reset are already limited by better-auth (see `rateLimit`
  * in auth.ts), so they are not repeated here.
  *
@@ -17,7 +17,7 @@ export interface RateLimitPolicy {
   windowMs: number;
 }
 
-/** Create/update/delete on characters, campaigns, creatures, encounters and roster. */
+/** Create/update/delete on characters, campaigns, creatures, homebrew monsters, encounters and roster. */
 export const WRITE_LIMIT: RateLimitPolicy = { name: "write", max: 60, windowMs: 60_000 };
 /** Invite links are bearer tokens for joining a campaign: keep minting them slow. */
 export const INVITE_LIMIT: RateLimitPolicy = { name: "invite", max: 10, windowMs: 60_000 };
