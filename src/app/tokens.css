@@ -1,7 +1,8 @@
 /*
  * Grimoire design tokens: the single source of truth for colour and type.
  * Imported first in layout.tsx. Parchment pages, iron-gall ink, stat-block crimson and gilt.
- * Alegreya stands in for the manuals' small caps and stat-block sans.
+ * Alegreya stands in for the manuals' small caps and stat-block sans; the faces are
+ * self-hosted by next/font in layout.tsx, which sets the --f-* variables used below.
  *
  *   --crimson        accent: primary actions, active states, links
  *   --crimson-fill   solid fills behind light text (darker than --crimson in dark mode)
@@ -9,8 +10,6 @@
  *   --leather-deep   sidebar and banner base
  *   --surface        panels and cards, one step above --paper
  */
-@import url("https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@400;500;700&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Alegreya+Sans+SC:wght@500;700&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400;1,700&display=swap");
-
 :root {
   --ink: #2b1d14;
   --paper: #ebddbf;
@@ -22,10 +21,13 @@
   --gilt: #b58a3a;
   --leather-deep: #2c1b13;
 
-  --font-display: "Alegreya SC", "Alegreya", Georgia, serif;
-  --font-body: "Alegreya", Georgia, serif;
-  --font-label: "Alegreya Sans SC", "Alegreya Sans", sans-serif;
-  --font-statblock: "Alegreya Sans", "Trebuchet MS", sans-serif;
+  --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
+  --font-body: var(--f-alegreya), Georgia, serif;
+  --font-label: var(--f-alegreya-sans-sc), var(--f-alegreya-sans), sans-serif;
+  --font-statblock: var(--f-alegreya-sans), "Trebuchet MS", sans-serif;
+
+  /* Floor for on-screen text: Alegreya runs small, so nothing renders below this. */
+  --text-xs: 12px;
 }
 
 /* Dungeon by torchlight. */

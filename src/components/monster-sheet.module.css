@@ -16,7 +16,7 @@
     var(--sb-paper);
   border-block: 5px solid var(--sb-edge);
   box-shadow: 0 0 0 1px rgba(146, 38, 16, .18), 0 12px 28px rgba(43, 24, 10, .2);
-  font-family: "Alegreya Sans", "Trebuchet MS", sans-serif;
+  font-family: var(--font-statblock);
 }
 .frame::before, .frame::after {
   content: "";
@@ -39,21 +39,21 @@
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 .header { padding: 0; text-align: left; }
-.eyebrow { margin: 0 0 4px; color: var(--sb-faint); font: 500 12px/1.3 "Alegreya Sans SC", "Alegreya Sans", sans-serif; letter-spacing: .04em; }
-.name { margin: 0; color: var(--sb-red); font: 700 clamp(25px, 4.4vw, 34px)/1.05 "Alegreya SC", Georgia, serif; letter-spacing: .01em; }
-.kind { margin: 3px 0 0; color: var(--sb-ink); font: italic 14px "Alegreya", Georgia, serif; }
+.eyebrow { margin: 0 0 4px; color: var(--sb-faint); font: 500 12px/1.3 "Alegreya Sans SC", var(--font-statblock); letter-spacing: .04em; }
+.name { margin: 0; color: var(--sb-red); font: 700 clamp(25px, 4.4vw, 34px)/1.05 var(--font-display); letter-spacing: .01em; }
+.kind { margin: 3px 0 0; color: var(--sb-ink); font: italic 14px var(--font-body); }
 
 .quickStats { display: grid; gap: 2px; margin: 10px 0 0; }
 .quickStats div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 0; color: var(--sb-red); }
-.quickStats span { color: var(--sb-red); font: 700 14px "Alegreya Sans", sans-serif; letter-spacing: 0; text-transform: none; }
-.quickStats strong { color: var(--sb-red); font: 400 14px "Alegreya Sans", sans-serif; }
+.quickStats span { color: var(--sb-red); font: 700 14px var(--font-statblock); letter-spacing: 0; text-transform: none; }
+.quickStats strong { color: var(--sb-red); font: 400 14px var(--font-statblock); }
 .quickStats small { color: var(--sb-red); font-size: 13px; }
 
 .section { margin-top: 10px; }
 .abilities { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; color: var(--sb-red); }
 .ability { padding: 4px 2px; text-align: center; border: 0; background: transparent; }
-.ability span { display: block; color: var(--sb-red); font: 700 13px "Alegreya Sans", sans-serif; letter-spacing: .02em; text-transform: none; }
-.ability b { display: inline; margin: 0; font: 400 14px "Alegreya Sans", sans-serif; }
+.ability span { display: block; color: var(--sb-red); font: 700 13px var(--font-statblock); letter-spacing: .02em; text-transform: none; }
+.ability b { display: inline; margin: 0; font: 400 14px var(--font-statblock); }
 .ability small { margin-left: 3px; color: var(--sb-red); font-size: 13px; }
 .section:has(.abilities) .sectionTitle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -66,18 +66,18 @@
   padding-bottom: 2px;
   color: var(--sb-red);
   border-bottom: 1px solid var(--sb-red);
-  font: 400 20px "Alegreya SC", Georgia, serif;
+  font: 400 20px var(--font-display);
   letter-spacing: .02em;
   text-transform: none;
 }
-.trait { margin: 6px 0 0; font: 14px/1.5 "Alegreya Sans", sans-serif; }
-.trait strong { color: var(--sb-ink); font: italic 700 14px "Alegreya Sans", sans-serif; }
+.trait { margin: 6px 0 0; font: 14px/1.5 var(--font-statblock); }
+.trait strong { color: var(--sb-ink); font: italic 700 14px var(--font-statblock); }
 .trait p { display: inline; margin: 0; white-space: pre-line; }
-.source { margin: 18px 0 0; color: var(--sb-faint); font: 12px "Alegreya Sans SC", sans-serif; text-align: center; letter-spacing: .03em; }
-.legal { margin: 5px auto 0; max-width: 620px; color: var(--sb-faint); font: 11px/1.45 "Alegreya", Georgia, serif; text-align: center; }
+.source { margin: 18px 0 0; color: var(--sb-faint); font: 12px var(--font-label); text-align: center; letter-spacing: .03em; }
+.legal { margin: 5px auto 0; max-width: 620px; color: var(--sb-faint); font: var(--text-xs)/1.45 var(--font-body); text-align: center; }
 .legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
-.loading, .error, .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--sb-edge, #c9952e); color: #4b3a2b; background: #fbf1dc; font: italic 14px "Alegreya", Georgia, serif; }
+.loading, .error, .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--sb-edge, #c9952e); color: #4b3a2b; background: #fbf1dc; font: italic 14px var(--font-body); }
 .loading { text-align: left; }
 @keyframes pulse { 50% { opacity: .6; } }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
