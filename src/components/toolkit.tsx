@@ -11,10 +11,18 @@ import { authClient } from "@/lib/auth-client";
 import { api, ApiError, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
+import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
 import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
+
+/** Each view has its own URL (see src/app/(app)); Toolkit stays mounted in the shared layout. */
+const viewPaths: Record<View, string> = { home: "/", characters: "/characters", campaigns: "/campaigns", encounters: "/encounters", account: "/account", admin: "/admin" };
+function viewFromPath(pathname: string): View {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return (Object.keys(viewPaths) as View[]).find((candidate) => viewPaths[candidate] === normalized) ?? "home";
+}
 type Theme = "light" | "dark";
 
 function readSaved<T>(key: string, fallback: T): T {
@@ -91,7 +99,9 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
   const [importBusy, setImportBusy] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [view, setView] = useState<View>("home");
+  const router = useRouter();
+  const view = viewFromPath(usePathname());
+  const setView = (next: View) => { if (next !== view) router.push(viewPaths[next]); };
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<Theme>("light");
   const [themeReady, setThemeReady] = useState(false);
@@ -198,6 +208,18 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+  useEffect(() => {
+    // Next re-applies the static metadata title whenever a navigation settles, so keep ours in place.
+    const wanted = `${translate(locale, `nav.${view}`)} | Grimoire`;
+    const apply = () => { if (document.title !== wanted) document.title = wanted; };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    return () => observer.disconnect();
+  }, [locale, view]);
+  useEffect(() => {
+    if (view === "admin" && me && me.role !== "admin") router.replace("/");
+  }, [view, me, router]);
   useEffect(() => {
     if (!themeReady) return;
     document.documentElement.dataset.theme = theme;
