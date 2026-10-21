@@ -63,7 +63,7 @@ export interface AdminUser {
 }
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string, readonly path?: string) {
     super(message);
   }
 }
@@ -79,13 +79,17 @@ export async function api<T = void>(path: string, init: { method?: string; body?
   });
   if (!response.ok) {
     let message = response.statusText;
+    let code: string | undefined;
+    let path: string | undefined;
     try {
-      const data = await response.json() as { error?: string };
+      const data = await response.json() as { error?: string; code?: string; path?: string };
       if (data.error) message = data.error;
+      code = data.code;
+      path = data.path;
     } catch {
       // Keep the status text when the body isn't JSON.
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, code, path);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }

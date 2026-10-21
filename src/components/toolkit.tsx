@@ -6,6 +6,7 @@ import EncounterBuilder from "@/components/encounter-builder";
 import CampaignManager from "@/components/campaign-manager";
 import BestiaryBrowser from "@/components/bestiary-browser";
 import AdminUsers from "@/components/admin-users";
+import DataBackup from "@/components/data-backup";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
 import { api, ApiError, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
@@ -151,6 +152,12 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     setCharacters(characterData.characters);
     setCampaigns(campaignData.campaigns);
   }, []);
+
+  const reloadAfterRestore = useCallback(async () => {
+    await reloadData();
+    const data = await api<{ creatures: CatalogCreature[] }>("/api/creatures");
+    setOwnCreatures(data.creatures.map(toCreature));
+  }, [reloadData]);
 
   useEffect(() => {
     if (authSession.isPending) return;
@@ -451,6 +458,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       {view === "account" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
         <AuthPanel locale={locale} googleEnabled={googleEnabled} />
+        <DataBackup locale={locale} onRestored={reloadAfterRestore} />
       </main>}
 
       {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>
