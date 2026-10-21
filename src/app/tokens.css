@@ -9,6 +9,8 @@
  *   --gilt           secondary accent: rules, highlights, ornaments
  *   --leather-deep   sidebar and banner base
  *   --surface        panels and cards, one step above --paper
+ *   --gilt-text      gilt that is dark enough to carry text (--gilt itself is for rules and ornaments)
+ *   --control-line   border of form fields, at least 3:1 against the panels they sit on (WCAG 1.4.11)
  */
 :root {
   --ink: #2b1d14;
@@ -19,6 +21,8 @@
   --crimson: #922610;
   --crimson-fill: #922610;
   --gilt: #b58a3a;
+  --gilt-text: #7a5a1c;
+  --control-line: #85694a;
   --leather-deep: #2c1b13;
 
   --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
@@ -40,6 +44,8 @@
   --crimson: #e0715a;
   --crimson-fill: #a8321c;
   --gilt: #d8aa55;
+  --gilt-text: #d8aa55;
+  --control-line: #8a7258;
   --leather-deep: #120c09;
   color-scheme: dark;
 }

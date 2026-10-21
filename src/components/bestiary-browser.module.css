@@ -16,7 +16,7 @@
 .creature.active { border-color: #8e3d2e; background: #eedac0; box-shadow: inset 3px 0 #8e3d2e; }
 .sigle { flex: 0 0 24px; color: #987441; font-size: 20px; text-align: center; }
 .creatureName { display: block; min-width: 0; overflow: hidden; font: 700 14px var(--font-body); text-overflow: ellipsis; white-space: nowrap; }
-.creatureName small { display: block; margin-top: 3px; overflow: hidden; color: #83725b; font: var(--text-xs) var(--font-label); text-overflow: ellipsis; }
+.creatureName small { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font: var(--text-xs) var(--font-label); text-overflow: ellipsis; }
 .action { flex: 0 0 auto; margin-left: auto; color: #805035; font: var(--text-xs) var(--font-body); white-space: nowrap; }
 .action b { margin-left: 5px; font-size: 15px; }
 .status, .empty, .error { padding: 22px 15px; color: #594832; border: 1px dashed #b59a69; background: rgba(245,236,217,.68); font: italic 14px var(--font-body); text-align: center; }

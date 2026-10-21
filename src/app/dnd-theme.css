@@ -359,3 +359,15 @@ body { background-image: var(--grain), var(--mottle),
   .builder-actions .button { flex: 1 1 140px; }
   .editor-panel .form-grid, .three-columns { grid-template-columns: 1fr; }
 }
+
+/* Form fields: borders must reach 3:1 (WCAG 1.4.11). Module and theme rules set their own
+   borders at higher specificity, so this one has to win outright. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea) { border-color: var(--control-line) !important; }
+
+.skip-link { position: absolute; left: 12px; top: -48px; z-index: 20; padding: 10px 14px; background: var(--crimson-fill); color: #fff3df; font: 600 14px var(--font-body); text-decoration: none; transition: top .15s; }
+.skip-link:focus { top: 12px; }
+#main:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
