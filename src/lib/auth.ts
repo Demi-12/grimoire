@@ -13,7 +13,6 @@ const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
   .split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
 
 /** Without SMTP (e.g. a fresh home server) accounts work but password reset by email is off. */
-const emailConfigured = Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
 
 /** "Continue with Google" is offered only when both credentials are set. */
 export const googleConfigured = Boolean(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim());

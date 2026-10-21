@@ -277,7 +277,6 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
 
   const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
 
-  const currentUser = me;
   const ownCharacters = characters.filter((character) => character.editable);
   const title = t(`nav.${view}`);
 
