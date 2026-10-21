@@ -54,7 +54,7 @@ pnpm test
 pnpm build
 ```
 
-Son las mismas que ejecuta el CI. `pnpm build` muestra un aviso de `BETTER_AUTH_SECRET` si no lo tienes exportado en la terminal; no es un fallo.
+Son las mismas que ejecuta el CI.
 
 ### Problemas habituales
 
