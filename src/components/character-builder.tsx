@@ -7,21 +7,12 @@ import { translate, type Locale } from "@/lib/i18n";
 import type { Campaign, Character, CharacterDraft } from "@/lib/api-client";
 import CharacterWizard, { describeBuild, type WizardResult } from "@/components/character-wizard";
 import LevelUp, { type LevelUpResult } from "@/components/level-up";
-import { attackList, deriveSheet, type CharacterBuild, type DerivedSheet } from "@/lib/character-sheet";
-import { alignments, backgrounds, classes, findBackground, findClass, findSpecies, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
+import CharacterSheetView from "@/components/character-sheet-view";
+import { attackList } from "@/lib/character-sheet";
+import { alignments, backgrounds, classes, findClass, findSpecies, say, skillKeys, species as speciesList, standardLanguages, type Text } from "@/lib/dnd2024";
 import { featInfo } from "@/lib/levelup-data";
 import { MAX_LEVEL, unlockedFeatures } from "@/lib/levelup";
-
-const signed = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
-/** Starting gear chosen in the creator, without the coin entries. */
-function startingItems(build: CharacterBuild, locale: Locale): string[] {
-  const cls = findClass(build.classId);
-  const bg = findBackground(build.backgroundId);
-  const options = [cls?.equipment.find((option) => option.id === build.classEquipment), bg?.equipment.find((option) => option.id === build.backgroundEquipment)];
-  return options.flatMap((option) => option?.items ?? []).filter((item) => !/ GP$/.test(item.en)).map((item) => say(item, locale));
-}
-
-const sheetFor = (character: Character): DerivedSheet | null => character.build ? deriveSheet(character.build, character.level) : null;
+import { sheetFor, signed, startingItems } from "@/lib/character-view";
 
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 const standardArray: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
@@ -119,7 +110,7 @@ function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
 }
 
 /** CRUD for the signed-in user's characters, stored in PostgreSQL through the API. */
-export default function CharacterBuilder({ locale, characters, campaigns, onSave, onDelete }: {
+export default function CharacterBuilder({ locale, characters, campaigns, onSave, onDelete, allCharacters, selectedId, onSelect }: {
   locale: Locale;
   /** Characters the user owns (editable). */
   characters: Character[];
@@ -127,6 +118,11 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   campaigns: Campaign[];
   onSave: (draft: CharacterDraft, id?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  /** Every character the user can see (their own plus those of their campaigns), for the full-sheet view. */
+  allCharacters?: Character[];
+  /** Character whose full sheet is open (from the URL), and how to open or close one. */
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
 }) {
   const [editing, setEditing] = useState<Character | undefined>();
   const [showEditor, setShowEditor] = useState(false);
@@ -205,8 +201,20 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     window.setTimeout(() => window.print(), 50);
   }
 
+  const viewing = selectedId ? (allCharacters ?? characters).find((record) => record.id === selectedId) : undefined;
+  const own = viewing ? characters.find((record) => record.id === viewing.id) : undefined;
+  // While a sheet is open the list stays in the page (the print sheet lives in its cards) but is hidden on screen.
+  const listClass = selectedId ? " screen-hidden" : "";
+
   return <section aria-labelledby="characters-title">
-    <div className="section-heading"><div><h2 id="characters-title">{translate(locale, "character.title")}</h2>
+    {selectedId && onSelect && (viewing
+      ? <CharacterSheetView character={viewing} campaignName={campaignName(viewing.campaignId)} locale={locale}
+          onBack={() => onSelect(null)} onExport={() => exportSheet(viewing)}
+          onEdit={own?.editable ? () => { onSelect(null); startEdit(own); } : undefined}
+          onLevelUp={own?.editable && own.build ? () => { onSelect(null); startLevelUp(own); } : undefined} />
+      : <div className="empty-state"><h2>{translate(locale, "character.notFoundTitle")}</h2><p>{translate(locale, "character.notFoundDescription")}</p>
+          <button type="button" className="button button-primary" onClick={() => onSelect(null)}>‹ {translate(locale, "character.backToList")}</button></div>)}
+    <div className={`section-heading${listClass}`}><div><h2 id="characters-title">{translate(locale, "character.title")}</h2>
       <p>{translate(locale, "character.description")}</p></div>
       {!showEditor && !wizard && !levelingUp && <div className="builder-actions">
         <button className="button button-quiet" onClick={() => setWizard({ quick: true })}>{translate(locale, "character.quickButton")}</button>
@@ -219,9 +227,9 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
       onCancel={() => setLevelingUp(null)} onSave={(result) => void saveLevelUp(levelingUp, result)} />}
     {showEditor && <CharacterEditor key={editing?.id ?? "new"} character={editing} campaigns={campaigns} locale={locale} onSave={save} onCancel={() => { setShowEditor(false); setEditing(undefined); }} />}
     {error && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
-    {characters.length === 0 && !showEditor && !wizard && !levelingUp ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
+    {characters.length === 0 && !showEditor && !wizard && !levelingUp && !selectedId ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
       <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.createFirst")}</button></div> :
-      <div className="character-grid">{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
+      <div className={`character-grid${listClass}`}>{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
         <div className="character-card-top"><span className="avatar-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><span className="level-pill">{translate(locale, "character.levelPill", { level: character.level })}</span></div>
         <h3>{character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
         {campaignName(character.campaignId) && <p className="character-subtitle">⚑ {campaignName(character.campaignId)}</p>}
@@ -282,6 +290,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
           <span>{translate(locale, `ability.${key}`).slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><b>{character.scores[key]}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
         {character.notes && <p className="character-notes">{character.notes}</p>}
         <div className="character-card-footer"><span>{translate(locale, "character.proficiencyShort")} <b>+{proficiencyBonus(character.level)}</b></span><div>
+          {onSelect && <button className="small-action" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
           <button className="small-action export-action" type="button" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
           {character.build && character.level < MAX_LEVEL && <button className="small-action" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
           <button className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
