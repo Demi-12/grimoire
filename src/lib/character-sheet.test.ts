@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { backgrounds, species } from "./dnd2024";
 import { deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
 
 const fighter: CharacterBuild = {
@@ -64,3 +65,25 @@ describe("derived sheet", () => {
     expect(stepIssues(fighter, 6)).toEqual([]);
   });
 });
+
+describe("2024 catalog", () => {
+  it("offers the 16 Player's Handbook backgrounds, each with sane data", () => {
+    expect(backgrounds).toHaveLength(16);
+    for (const bg of backgrounds) {
+      expect(new Set(bg.abilities).size).toBe(3);
+      expect(new Set(bg.skills).size).toBe(2);
+      expect(bg.equipment.map((option) => option.id)).toEqual(["A", "B"]);
+      expect(bg.equipment[1].gold).toBe(50);
+      expect(bg.feat === "magicInitiate").toBe(!!bg.featList);
+    }
+    expect(new Set(backgrounds.map((bg) => bg.id)).size).toBe(16);
+    expect(species).toHaveLength(10);
+  });
+
+  it("Tough adds 2 Hit Points per level", () => {
+    const farmer: CharacterBuild = { ...fighter, backgroundId: "farmer", bonusAbilities: ["str", "con"], speciesFeat: undefined };
+    expect(deriveSheet(farmer, 1)!.hitPoints).toBe(12 + 2);
+    expect(deriveSheet(farmer, 3)!.hitPoints).toBe(12 + 2 * 8 + 3 * 2);
+  });
+});
+

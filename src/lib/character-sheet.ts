@@ -132,7 +132,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
 
   // Level 1: maximum Hit Die; later levels use the fixed average (half the die + 1).
   const perLevel = cls.hitDie / 2 + 1;
-  const hpPerLevelBonus = sp.hpPerLevel ?? 0;
+  const hpPerLevelBonus = (sp.hpPerLevel ?? 0) + (feats.includes("tough") ? 2 : 0);
   let hitPoints = Math.max(1, cls.hitDie + mod("con")) + hpPerLevelBonus;
   for (let current = 2; current <= safeLevel; current += 1) hitPoints += Math.max(1, perLevel + mod("con")) + hpPerLevelBonus;
 
