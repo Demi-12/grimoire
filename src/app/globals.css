@@ -471,7 +471,7 @@ body { font-variant-emoji: text; }
 @media (prefers-reduced-motion:reduce){.skeleton::after{animation:none;display:none}.spinner{animation-duration:1.6s}}
 /* Header controls: theme, language and edition share one height, radius, border and type */
 .workspace-header .header-controls{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
-.workspace-header .header-control,.workspace-header .edition-badge{box-sizing:border-box;height:34px;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;font:500 11px/1 var(--font-serif);letter-spacing:.04em;color:var(--ink)}
+.workspace-header .header-control,.workspace-header .edition-badge{box-sizing:border-box;height:34px;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;font:500 12px/1 var(--font-serif);letter-spacing:.04em;color:var(--ink)}
 .workspace-header .header-control,.workspace-header .header-control option{background:var(--paper);padding:0 12px;cursor:pointer;gap:7px}
 .workspace-header .header-control:hover{border-color:var(--gilt)}
 .workspace-header .header-control:focus-visible{outline:2px solid var(--gilt);outline-offset:2px}
@@ -495,7 +495,7 @@ body { font-variant-emoji: text; }
   .workspace-header .mobile-brand{white-space:nowrap;font-size:12px;letter-spacing:.12em;margin-right:auto}
   .workspace-header .header-controls{margin-left:0}
   .workspace-header .header-control,.workspace-header .header-admin,.workspace-header .header-signout{box-sizing:border-box;height:32px;min-height:32px;min-width:32px;padding:0 8px;justify-content:center;border-radius:6px;display:inline-flex;align-items:center;margin:0}
-  .workspace-header select.header-control{max-width:none;padding:0 6px;font-size:11px}
+  .workspace-header select.header-control{max-width:none;padding:0 6px;font-size:12px}
 }
 
 /* Desktop: most type is set in small px values, so scale the whole UI up on wide screens. */

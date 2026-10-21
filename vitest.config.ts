@@ -11,4 +11,6 @@ export default defineConfig({
       "server-only": path("./tests/stubs/server-only.ts"),
     },
   },
+  // Playwright specs in e2e/ run with `pnpm test:e2e`, not vitest.
+  test: { exclude: ["e2e/**", "node_modules/**", ".next/**"] },
 });

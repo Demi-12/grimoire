@@ -63,6 +63,28 @@ Son las mismas que ejecuta el CI.
 - **`port is already allocated` al levantar la base de datos:** ya hay un PostgreSQL usando el puerto 5432. Páralo o cambia el puerto publicado en `compose.dev.yaml`, y usa ese mismo puerto en `DATABASE_URL`.
 - **No puedo iniciar sesión tras cambiar de puerto o de dirección:** actualiza `BETTER_AUTH_URL` y reinicia `pnpm dev`; si abres la app desde otra URL (por ejemplo, la IP de tu LAN), añádela a `BETTER_AUTH_TRUSTED_ORIGINS`.
 
+## Lint y pruebas
+
+```sh
+pnpm lint        # ESLint (eslint-config-next)
+pnpm typecheck
+pnpm test        # pruebas unitarias (vitest)
+```
+
+### Pruebas e2e de interfaz (Playwright)
+
+Las pruebas de `e2e/` abren la app compilada en Chromium, simulan toda la API con `page.route('**/api/**')` (no hace falta base de datos) y, para cada ruta (`/`, `/characters`, `/campaigns`, `/encounters`, `/account`, `/admin`), en anchos de 320, 360, 390 y 1280 px, en tema claro y oscuro y con un usuario admin, comprueban: sin scroll horizontal, cabecera sin desbordes, icono del botón de tema visible, ningún texto por debajo de 12 px y accesibilidad con axe (contraste de color y landmarks).
+
+```sh
+pnpm build
+pnpm exec playwright install chromium   # solo la primera vez
+pnpm test:e2e
+```
+
+Si ya tienes un Chromium instalado, usa `PLAYWRIGHT_CHROMIUM_PATH=/ruta/a/chromium pnpm test:e2e` en lugar de instalar el navegador. Playwright arranca `pnpm start` en el puerto 3100 con un `BETTER_AUTH_SECRET` ficticio (si ya hay algo escuchando ahí, lo reutiliza; recuerda recompilar con `pnpm build` tras tocar el código). El informe HTML de un fallo en CI se descarga como artefacto del job.
+
+Las violaciones de accesibilidad que ya existían están listadas en `e2e/known-a11y.ts`; el test solo falla con violaciones nuevas. Corrige una en la app y borra su línea de esa lista.
+
 ## Secretos: regla del proyecto
 
 - No guardar credenciales, tokens, claves privadas, contraseñas ni datos de producción en Git, issues o logs.

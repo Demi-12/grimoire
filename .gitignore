@@ -22,3 +22,5 @@ pnpm-debug.log*
 
 # Server-local Compose settings (ports, extra services)
 compose.override.yaml
+playwright-report/
+test-results/
