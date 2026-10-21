@@ -53,7 +53,7 @@
 @media(max-width:650px){
   .workspace-header{gap:7px}
   .theme-toggle{min-height:32px;padding:0 7px;gap:4px;font-size:var(--text-xs)}
-  .theme-toggle span{display:none}
+  .theme-toggle .theme-label{display:none}
   .workspace-header label select{max-width:82px;padding-inline:5px;font-size:var(--text-xs)}
   .edition-badge{padding:5px 6px;font-size:var(--text-xs);letter-spacing:.04em}
   .mobile-brand{font-size:var(--text-xs);letter-spacing:.07em;white-space:nowrap}
@@ -155,7 +155,7 @@ body {
 .edition-dot { background: #aa813e; box-shadow: 0 0 0 3px rgba(170,129,62,.14); }
 .workspace-header { color: #766449; border-color: #d0bd96; }
 .edition-badge { color: #785d32; border-color: #bda36d; }
-.mobile-brand { color: #604928; }
+.mobile-brand { color: var(--crimson); }
 
 .welcome-banner {
   background: radial-gradient(ellipse at 78% 48%, #41443a 0, #2b2e28 42%, #22251f 100%);
@@ -407,6 +407,8 @@ body { font-variant-emoji: text; }
   .page-content{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
   .workspace-header{gap:8px;padding:0 14px}
   .workspace-header .edition-badge{display:none}
+  /* On the narrowest phones the wordmark yields to the controls. */
+  @media (max-width: 340px) { .mobile-brand .brand-word{display:none} }
   .header-signout{margin-left:0;padding:6px 8px;font-size:var(--text-xs);white-space:nowrap}
   .header-admin{display:inline-flex;align-items:center;gap:4px;position:relative;border:1px solid var(--line);background:transparent;border-radius:3px;color:inherit;cursor:pointer;min-height:32px;padding:0 9px;font-size:14px}
   .header-admin.active{background:#e3e4d8;color:var(--leather-deep)}
@@ -479,6 +481,7 @@ body { font-variant-emoji: text; }
 :root[data-theme="dark"] .workspace-header .edition-badge{border-color:#4a4334;color:#c4b18a}
 @media (max-width: 650px) {
   .workspace-header .header-controls{gap:6px}
+  .workspace-header .edition-badge{display:none}
   .workspace-header .header-control{height:32px;padding:0 9px}
   .workspace-header .theme-label{display:none}
   .workspace-header select.header-control{max-width:84px;padding:0 4px}

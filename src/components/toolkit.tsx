@@ -389,7 +389,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     </aside>
 
     <section className="workspace">
-      <header className="workspace-header"><div className="mobile-brand">✳︎ GRIMOIRE</div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+      <header className="workspace-header"><div className="mobile-brand">✳︎ <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
         {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true">♛</span></button>}
         <button type="button" className="header-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button>
