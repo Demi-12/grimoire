@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { dataErrorResponse, jsonError, readJson, requireUser } from "@/lib/access";
+import { dataErrorResponse, jsonError, rateLimit, readJson, requireUser } from "@/lib/access";
 import { deleteHomebrew, readHomebrewForUser, setHomebrewLocked, updateHomebrew } from "@/lib/data";
 import { isHomebrewId, parseHomebrewInput } from "@/lib/homebrew";
+import { WRITE_LIMIT } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ export async function GET(_request: Request, { params }: Context) {
 export async function PUT(request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   if (!isHomebrewId(id)) return jsonError(404, "Not found.");
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return jsonError(413, "That monster is too large.");
@@ -34,6 +37,8 @@ export async function PUT(request: Request, { params }: Context) {
 export async function PATCH(request: Request, { params }: Context) {
   const user = await requireUser(["admin"]);
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   if (!isHomebrewId(id)) return jsonError(404, "Not found.");
   const body = await readJson(request);
@@ -45,6 +50,8 @@ export async function PATCH(request: Request, { params }: Context) {
 export async function DELETE(_request: Request, { params }: Context) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  const limited = rateLimit(user, WRITE_LIMIT);
+  if (limited) return limited;
   const { id } = await params;
   if (!isHomebrewId(id)) return jsonError(404, "Not found.");
   const result = await deleteHomebrew(user, id);
