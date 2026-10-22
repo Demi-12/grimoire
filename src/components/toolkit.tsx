@@ -9,7 +9,7 @@ import AdminUsers from "@/components/admin-users";
 import DataBackup from "@/components/data-backup";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
-import { api, ApiError, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
+import { api, ApiError, type AdminUser, type Campaign, type Character, type CatalogCreature, type CharacterDraft, type InvitePreview, type Me } from "@/lib/api-client";
 import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { usePathname, useRouter } from "next/navigation";
@@ -98,10 +98,11 @@ function toCreature(item: CatalogCreature): Creature {
   return { id: item.id, name: item.name, xp: item.xp, source: item.source, roleTags: item.roleTags as Creature["roleTags"], monsterSlug: item.monsterSlug };
 }
 
-export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boolean }) {
+export default function Toolkit() {
   const authSession = authClient.useSession();
   const accountId = authSession.data?.user.id;
   const [me, setMe] = useState<Me | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [meLoadedFor, setMeLoadedFor] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [localImport, setLocalImport] = useState<LocalImport | null>(null);
@@ -188,6 +189,11 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           } catch {
             if (!cancelled) setCatalogError("load");
           }
+          if (user.role === "admin") {
+            api<{ users: AdminUser[] }>("/api/admin/users")
+              .then((data) => { if (!cancelled) setPendingCount(data.users.filter((item) => item.status === "pending").length); })
+              .catch(() => undefined);
+          }
           const done = user.preferences?.legacyImported ?? true;
           const local = done ? null : findLocalData(user.id);
           setLocalImport(local && (local.characters.length || local.campaigns.length || local.creatures.length) ? local : null);
@@ -272,19 +278,20 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     <label className="header-select"><span className="sr-only">{t("common.language")}</span><select aria-label={t("common.language")} className="header-control" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
   </div>;
 
-  // Everyone must sign in; blocked accounts only see a notice.
+  // Everyone must sign in; new accounts wait for an admin before they see any shared data.
   if (!accountId || !me || me.status !== "approved") {
     const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
     return <main className="gate-shell min-h-screen bg-paper text-ink">
       <header className="gate-header"><span className="gate-brand">✳︎ GRIMOIRE</span>{controls}</header>
       {loadError ? <section className="gate-card" role="alert"><h1>{t("gate.errorTitle")}</h1><p>{t("gate.errorDescription")}</p>
         <button className="button button-primary" onClick={() => window.location.reload()}>{t("gate.retry")}</button></section>
-      : !accountId || !me ? <><p className="gate-intro">{t("gate.intro")}</p><AuthPanel locale={locale} googleEnabled={googleEnabled} /></>
+      : !accountId || !me ? <><p className="gate-intro">{t("gate.intro")}</p><AuthPanel locale={locale} /></>
       : <section className="gate-card" aria-labelledby="gate-title">
-        <p className="eyebrow"><span />{t("gate.blockedKicker")}</p>
-        <h1 id="gate-title">{t("gate.blockedTitle")}</h1>
-        <p>{t("gate.blockedDescription")}</p>
+        <p className="eyebrow"><span />{t(me.status === "blocked" ? "gate.blockedKicker" : "gate.pendingKicker")}</p>
+        <h1 id="gate-title">{t(me.status === "blocked" ? "gate.blockedTitle" : "gate.pendingTitle", { name: me.name })}</h1>
+        <p>{t(me.status === "blocked" ? "gate.blockedDescription" : "gate.pendingDescription")}</p>
         <div className="gate-actions">
+          {me.status === "pending" && <button className="button button-primary" onClick={() => window.location.reload()}>{t("gate.check")}</button>}
           <button className="button button-quiet" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         </div>
       </section>}
@@ -399,7 +406,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
         <button className={view === "campaigns" ? "active" : ""} aria-current={view === "campaigns" ? "page" : undefined} onClick={() => setView("campaigns")}><span aria-hidden="true"><Icon name="campaigns" /></span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
         <button className={view === "encounters" ? "active" : ""} aria-current={view === "encounters" ? "page" : undefined} onClick={() => setView("encounters")}><span aria-hidden="true"><Icon name="encounters" /></span>{t("nav.encounters")}</button>
         <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => setView("account")}><span aria-hidden="true"><Icon name="account" /></span>{t("nav.account")}</button>
-        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{t("nav.admin")}</button>}
+        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
@@ -407,7 +414,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
     <div className="workspace">
       <header className="workspace-header"><div className="mobile-brand">✳︎ <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
-        {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span></button>}
+        {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
         <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>
         <span className="edition-badge">{t("common.edition")}</span></header>
       {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true"><Icon name="campaigns" /></span>
@@ -467,13 +474,13 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
 
       {view === "account" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
-        <AuthPanel locale={locale} googleEnabled={googleEnabled} />
+        <AuthPanel locale={locale} />
         <DataBackup locale={locale} onRestored={reloadAfterRestore} />
       </main>}
 
       {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("admin.kicker")}</p><h1>{t("nav.admin")}</h1><p className="title-description">{t("admin.description")}</p></div></div>
-        <AdminUsers me={me} locale={locale} />
+        <AdminUsers me={me} locale={locale} onPendingCount={setPendingCount} />
       </main>}
       <footer className="app-footer"><span>{t("footer.brand")}</span><span>{t("footer.rules")}</span></footer>
     </div>

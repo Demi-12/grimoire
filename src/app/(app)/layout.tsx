@@ -1,5 +1,4 @@
 import Toolkit from "@/components/toolkit";
-import { googleConfigured } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,5 +8,5 @@ export const dynamic = "force-dynamic";
  * The pages below render nothing themselves.
  */
 export default function AppLayout() {
-  return <Toolkit googleEnabled={googleConfigured} />;
+  return <Toolkit />;
 }

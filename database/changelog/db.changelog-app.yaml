@@ -235,3 +235,27 @@ databaseChangeLog:
             sql: |
               DROP TABLE IF EXISTS "homebrew_monster_campaign";
               DROP TABLE IF EXISTS "homebrew_monster";
+
+  - changeSet:
+      id: users-004-signup-approval
+      author: grimoire
+      comment: >-
+        Sign-ups wait for an admin again. Existing accounts keep their status; new ones start as pending
+        (the owners in GRIMOIRE_ADMIN_EMAILS are approved by the sign-up hook).
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user" DROP CONSTRAINT "user_status_check";
+              ALTER TABLE "user"
+                ALTER COLUMN "status" SET DEFAULT 'pending',
+                ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('pending', 'approved', 'blocked'));
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "user" DROP CONSTRAINT "user_status_check";
+              UPDATE "user" SET "status" = 'approved' WHERE "status" = 'pending';
+              ALTER TABLE "user"
+                ALTER COLUMN "status" SET DEFAULT 'approved',
+                ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('approved', 'blocked'));
