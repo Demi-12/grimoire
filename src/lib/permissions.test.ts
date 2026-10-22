@@ -19,8 +19,9 @@ describe("parseAdminEmails", () => {
 });
 
 describe("campaign permissions", () => {
-  it("lets any unblocked account open a campaign", () => {
+  it("lets any approved account open a campaign", () => {
     expect(canCreateCampaign({ status: "approved" })).toBe(true);
+    expect(canCreateCampaign({ status: "pending" })).toBe(false);
     expect(canCreateCampaign({ status: "blocked" })).toBe(false);
   });
 

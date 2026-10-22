@@ -35,12 +35,13 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 }
 
 /**
- * Require an unblocked account (optionally with one of `roles`) for a route handler. Returns the
+ * Require an approved account (optionally with one of `roles`) for a route handler. Returns the
  * user, or an error response to return as-is: `if (user instanceof NextResponse) return user;`
  */
 export async function requireUser(roles?: SiteRole[]): Promise<AppUser | NextResponse> {
   const user = await getCurrentUser();
   if (!user) return jsonError(401, "Sign in to continue.");
+  if (user.status === "pending") return jsonError(403, "Your account is waiting for approval.");
   if (user.status !== "approved") return jsonError(403, "Your account has been blocked.");
   if (roles && !roles.includes(user.role)) return jsonError(403, "You don't have permission for that.");
   return user;

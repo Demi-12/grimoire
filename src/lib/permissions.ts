@@ -5,7 +5,7 @@
 
 // Site-wide: admins manage accounts. DM/player is not an account property but a per-campaign role.
 export const siteRoles = ["admin", "user"] as const;
-export const accountStatuses = ["approved", "blocked"] as const;
+export const accountStatuses = ["pending", "approved", "blocked"] as const;
 export const campaignRoles = ["dm", "player"] as const;
 
 export type SiteRole = (typeof siteRoles)[number];
@@ -29,7 +29,7 @@ export function parseAdminEmails(raw: string | undefined): Set<string> {
   return new Set((raw ?? "").split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
 
-/** Anyone can open a campaign (becoming its DM) or join someone else's as a player. */
+/** Any approved account can open a campaign (becoming its DM) or join someone else's as a player. */
 export function canCreateCampaign(user: Pick<AppUser, "status">): boolean {
   return user.status === "approved";
 }
