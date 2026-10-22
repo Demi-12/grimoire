@@ -244,7 +244,7 @@ describe("feature effects", () => {
   });
 
   it("lists features from the tracked subclass only", () => {
-    const names = (build: CharacterBuild) => unlockedFeatures(build, 7).map((name) => name.en);
+    const names = (build: CharacterBuild) => unlockedFeatures(build, 7).map((feature) => feature.name.en);
     expect(names(fighter)).toContain("Additional Fighting Style");
     expect(names({ ...fighter, useSubclass: false, subclassId: "battleMaster" })).not.toContain("Additional Fighting Style");
   });

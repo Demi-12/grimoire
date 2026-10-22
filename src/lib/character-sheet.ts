@@ -178,8 +178,7 @@ export function grantedEffects(build: CharacterBuild, level: number): GrantedEff
   const sp = findSpecies(build.speciesId);
   const granted: GrantedEffect[] = [];
   const add = (source: Text, effects: Effect[] | undefined) => { for (const effect of effects ?? []) granted.push({ source, effect }); };
-  if (cls) add(cls.name, cls.effects);
-  if (sp) add(sp.name, sp.effects);
+  for (const feature of [...(cls?.features ?? []), ...(sp?.traits ?? [])]) add(feature.name, feature.effects);
   for (let current = 2; current <= level; current += 1) {
     const gained = featuresAt(build, current);
     for (const feature of [...gained.class, ...gained.subclass]) add(feature.name, feature.effects);

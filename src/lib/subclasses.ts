@@ -6,7 +6,7 @@
 import { findClass, type ClassId, type Text } from "./dnd2024";
 import type { Progression } from "./levelup-data";
 
-// Features of tracked Player's Handbook subclasses are written with `feature` from levelup-data.ts (see docs/subclass-features.md).
+// Features of tracked Player's Handbook subclasses are written with `feature` from dnd2024.ts (see docs/subclass-features.md).
 
 const t = (en: string, es: string): Text => ({ en, es });
 

@@ -15,6 +15,7 @@ import { sampleCreatures, type Creature } from "@/lib/rules";
 import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
 import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
+import { Icon } from "./icons";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
 
@@ -248,7 +249,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
 
   const loading = <main className="app-shell min-h-screen bg-paper text-ink" aria-busy="true">
     <aside className="sidebar" aria-hidden="true"><div className="skeleton-shell-nav">{[0, 1, 2, 3, 4].map((item) => <Skeleton key={item} height={34} />)}</div></aside>
-    <section className="workspace">
+    <div className="workspace">
       <SkeletonRegion label={locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"} className="page-content">
         <div className="skeleton-grid">
           <Skeleton width="38%" height={38} /><Skeleton width="55%" height={14} />
@@ -256,7 +257,7 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           {[0, 1, 2].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="45%" height={14} /></div></div>)}
         </div>
       </SkeletonRegion>
-    </section>
+    </div>
   </main>;
   if (authSession.isPending || (accountId && meLoadedFor !== accountId)) return loading;
 
@@ -393,23 +394,23 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
       <button className="brand" onClick={() => setView("home")}><span>✳︎</span><b>GRIMOIRE</b></button>
       <div className="sidebar-caption">{t("nav.workspace")}</div>
       <nav className="side-nav" aria-label={t("nav.aria")}>
-        <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><span aria-hidden="true">⌂</span>{t("nav.home")}</button>
-        <button className={view === "characters" ? "active" : ""} aria-current={view === "characters" ? "page" : undefined} onClick={() => setView("characters")}><span aria-hidden="true">♙</span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
-        <button className={view === "campaigns" ? "active" : ""} aria-current={view === "campaigns" ? "page" : undefined} onClick={() => setView("campaigns")}><span aria-hidden="true">⚑</span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
-        <button className={view === "encounters" ? "active" : ""} aria-current={view === "encounters" ? "page" : undefined} onClick={() => setView("encounters")}><span aria-hidden="true">⚔︎</span>{t("nav.encounters")}</button>
-        <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => setView("account")}><span aria-hidden="true">⚿</span>{t("nav.account")}</button>
-        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true">♛</span>{t("nav.admin")}</button>}
+        <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><span aria-hidden="true"><Icon name="home" /></span>{t("nav.home")}</button>
+        <button className={view === "characters" ? "active" : ""} aria-current={view === "characters" ? "page" : undefined} onClick={() => setView("characters")}><span aria-hidden="true"><Icon name="characters" /></span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
+        <button className={view === "campaigns" ? "active" : ""} aria-current={view === "campaigns" ? "page" : undefined} onClick={() => setView("campaigns")}><span aria-hidden="true"><Icon name="campaigns" /></span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
+        <button className={view === "encounters" ? "active" : ""} aria-current={view === "encounters" ? "page" : undefined} onClick={() => setView("encounters")}><span aria-hidden="true"><Icon name="encounters" /></span>{t("nav.encounters")}</button>
+        <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => setView("account")}><span aria-hidden="true"><Icon name="account" /></span>{t("nav.account")}</button>
+        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{t("nav.admin")}</button>}
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
 
-    <section className="workspace">
+    <div className="workspace">
       <header className="workspace-header"><div className="mobile-brand">✳︎ <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
-        {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true">♛</span></button>}
+        {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span></button>}
         <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>
         <span className="edition-badge">{t("common.edition")}</span></header>
-      {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true">⚑</span>
+      {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true"><Icon name="campaigns" /></span>
         {invite ? <p><b>{t("invite.title", { campaign: invite.campaignName })}</b> {invite.alreadyMember ? t("invite.already", { owner: invite.ownerName }) : t("invite.description", { owner: invite.ownerName })}</p>
           : <p>{inviteError}</p>}
         <div>{invite && <button className="button button-primary" disabled={inviteBusy} onClick={() => void acceptInvite()}>{inviteBusy && <Spinner />}{t(inviteBusy ? "common.saving" : "invite.accept")}</button>}
@@ -426,10 +427,10 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
           </div>
         </header>
         <section className="tool-grid" aria-label={t("home.toolbox")}>
-          <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true">♙</span><strong>{t("nav.characters")}</strong><b>{ownCharacters.length}</b><small>{t("home.tool.characters")}</small></button>
-          <button className="tool-tile" onClick={() => setView("campaigns")}><span className="tool-glyph" aria-hidden="true">⚑</span><strong>{t("home.campaigns")}</strong><b>{campaigns.length}</b><small>{t("home.tool.campaigns")}</small></button>
-          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true">⚔︎</span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
-          <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true">⚿</span><strong>{t("nav.account")}</strong><b className="tool-status">✓</b><small>{t("home.tool.accountOn")}</small></button>
+          <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true"><Icon name="characters" /></span><strong>{t("nav.characters")}</strong><b>{ownCharacters.length}</b><small>{t("home.tool.characters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("campaigns")}><span className="tool-glyph" aria-hidden="true"><Icon name="campaigns" /></span><strong>{t("home.campaigns")}</strong><b>{campaigns.length}</b><small>{t("home.tool.campaigns")}</small></button>
+          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true"><Icon name="encounters" /></span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true"><Icon name="account" /></span><strong>{t("nav.account")}</strong><b className="tool-status">✓</b><small>{t("home.tool.accountOn")}</small></button>
         </section>
         <section className="desk-panel">
           <div className="desk-panel-head"><h2>{t("home.recent")}</h2>{ownCharacters.length > 4 && <button className="small-action" onClick={() => setView("characters")}>{t("home.seeAll", { count: ownCharacters.length })}</button>}</div>
@@ -475,6 +476,6 @@ export default function Toolkit({ googleEnabled = false }: { googleEnabled?: boo
         <AdminUsers me={me} locale={locale} />
       </main>}
       <footer className="app-footer"><span>{t("footer.brand")}</span><span>{t("footer.rules")}</span></footer>
-    </section>
+    </div>
   </div>;
 }

@@ -69,6 +69,9 @@ export interface EquipmentOption {
   shield?: boolean;
 }
 
+/** A class feature or species trait: its official name, our own one-line summary (not rules text) and the mechanics the app applies (see effects.ts). */
+export interface Feature { name: Text; tip: Text; effects?: Effect[] }
+
 export type ClassId =
   | "barbarian" | "bard" | "cleric" | "druid" | "fighter" | "monk"
   | "paladin" | "ranger" | "rogue" | "sorcerer" | "warlock" | "wizard";
@@ -85,19 +88,20 @@ export interface ClassData {
   armor: Text;
   weapons: Text;
   tools?: Text;
-  /** Mechanics of the level 1 features (see effects.ts). */
-  effects?: Effect[];
   spellcasting?: { ability: AbilityKey; cantrips: number; prepared: number; slots: Text };
   weaponMasteries?: number;
   /** Rogues gain Expertise in two skills at level 1. */
   expertiseAtLevel1?: number;
-  features: Text[];
+  features: Feature[];
   subclass: Text;
   equipment: EquipmentOption[];
   summary: Text;
 }
 
 const t = (en: string, es: string): Text => ({ en, es });
+export const feature = (en: string, es: string, tipEn: string, tipEs: string, effects?: Effect[]): Feature =>
+  ({ name: t(en, es), tip: t(tipEn, tipEs), ...(effects ? { effects } : {}) });
+const f = feature;
 const gp = (amount: number) => t(`${amount} GP`, `${amount} po`);
 const fullCasterSlots = t("2 level 1 slots", "2 espacios de nivel 1");
 
@@ -107,8 +111,12 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"],
     armor: t("Light and Medium armor, Shields", "Armadura ligera y media, escudos"),
     weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 2,
-    effects: [{ kind: "unarmoredDefense", add: ["con"] }],
-    features: [t("Rage", "Furia"), t("Unarmored Defense", "Defensa sin armadura"), t("Weapon Mastery", "Maestría con armas")],
+    features: [
+      f("Rage", "Furia", "Bonus action: extra damage with Strength attacks, resistance to bludgeoning, piercing and slashing damage, and advantage on Strength checks and saves. No spellcasting while raging.", "Acción adicional: daño extra con ataques de Fuerza, resistencia al daño contundente, perforante y cortante, y ventaja en pruebas y salvaciones de Fuerza. No puedes lanzar conjuros en furia."),
+      f("Unarmored Defense", "Defensa sin armadura", "Without armor, your AC is 10 + Dexterity + Constitution modifiers; a shield still adds its bonus.", "Sin armadura, tu CA es 10 + modificadores de Destreza y Constitución; el escudo sigue sumando.",
+        [{ kind: "unarmoredDefense", add: ["con"] }]),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+    ],
     subclass: t("Path of the Berserker", "Senda del berserker"),
     summary: t("A fierce warrior fueled by primal rage.", "Un guerrero feroz impulsado por una furia primigenia."),
     equipment: [
@@ -122,7 +130,10 @@ export const classes: ClassData[] = [
     armor: t("Light armor", "Armadura ligera"), weapons: t("Simple weapons", "Armas sencillas"),
     tools: t("Three Musical Instruments", "Tres instrumentos musicales"),
     spellcasting: { ability: "cha", cantrips: 2, prepared: 4, slots: fullCasterSlots },
-    features: [t("Bardic Inspiration", "Inspiración bárdica"), t("Spellcasting", "Lanzamiento de conjuros")],
+    features: [
+      f("Bardic Inspiration", "Inspiración bárdica", "Bonus action: give an ally within 60 feet a d6 to add to a d20 test they fail. Uses equal to your Charisma modifier per Long Rest.", "Acción adicional: das a un aliado a 60 pies un d6 para sumar a una prueba de d20 que falle. Tantos usos como tu modificador de Carisma por descanso largo."),
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast bard spells with Charisma, using a musical instrument as focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de bardo con Carisma, usando un instrumento musical como canalizador; recuperas los espacios de conjuro tras un descanso largo."),
+    ],
     subclass: t("College of Lore", "Colegio del Saber"),
     summary: t("An inspiring performer whose words and music weave magic.", "Un artista inspirador cuya música y palabras tejen magia."),
     equipment: [
@@ -135,7 +146,10 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["history", "insight", "medicine", "persuasion", "religion"],
     armor: t("Light and Medium armor, Shields", "Armadura ligera y media, escudos"), weapons: t("Simple weapons", "Armas sencillas"),
     spellcasting: { ability: "wis", cantrips: 3, prepared: 4, slots: fullCasterSlots },
-    features: [t("Spellcasting", "Lanzamiento de conjuros"), t("Divine Order", "Orden divina")],
+    features: [
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast cleric spells with Wisdom, using a holy symbol as focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de clérigo con Sabiduría, usando un símbolo sagrado como canalizador; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Divine Order", "Orden divina", "Choose Protector (Heavy armor and Martial weapons) or Thaumaturge (an extra cantrip and your Wisdom bonus on Arcana and Religion checks).", "Eliges Protector (armadura pesada y armas marciales) o Taumaturgo (un truco más y tu bonificador de Sabiduría en pruebas de Arcanos y Religión)."),
+    ],
     subclass: t("Life Domain", "Dominio de la Vida"),
     summary: t("A priestly champion who wields divine magic.", "Un campeón sacerdotal que empuña magia divina."),
     equipment: [
@@ -149,7 +163,11 @@ export const classes: ClassData[] = [
     armor: t("Light armor, Shields", "Armadura ligera, escudos"), weapons: t("Simple weapons", "Armas sencillas"),
     tools: t("Herbalism Kit", "Útiles de herborista"),
     spellcasting: { ability: "wis", cantrips: 2, prepared: 4, slots: fullCasterSlots },
-    features: [t("Spellcasting", "Lanzamiento de conjuros"), t("Druidic", "Druídico"), t("Primal Order", "Orden primordial")],
+    features: [
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast druid spells with Wisdom, using a druidic focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de druida con Sabiduría, usando un canalizador druídico; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Druidic", "Druídico", "You know the secret language of druids and always have Speak with Animals prepared.", "Conoces el idioma secreto de los druidas y siempre tienes preparado Hablar con los animales."),
+      f("Primal Order", "Orden primordial", "Choose Magician (an extra cantrip and your Wisdom bonus on Arcana and Nature checks) or Warden (Martial weapons and Medium armor).", "Eliges Mago (un truco más y tu bonificador de Sabiduría en pruebas de Arcanos y Naturaleza) o Guardián (armas marciales y armadura media)."),
+    ],
     subclass: t("Circle of the Land", "Círculo de la Tierra"),
     summary: t("A priest of the old faith wielding the powers of nature.", "Sacerdote de la fe antigua que domina los poderes de la naturaleza."),
     equipment: [
@@ -162,7 +180,11 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "persuasion", "perception", "survival"],
     armor: t("Light, Medium and Heavy armor, Shields", "Armadura ligera, media y pesada, escudos"),
     weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 3,
-    features: [t("Fighting Style", "Estilo de combate"), t("Second Wind", "Tomar aliento"), t("Weapon Mastery", "Maestría con armas")],
+    features: [
+      f("Fighting Style", "Estilo de combate", "Gain a Fighting Style feat of your choice, such as Archery or Defense.", "Ganas una dote de estilo de combate a tu elección, como Arquería o Defensa."),
+      f("Second Wind", "Tomar aliento", "Bonus action: regain 1d10 + your Fighter level in hit points. Two uses; one returns on a Short Rest, all on a Long Rest.", "Acción adicional: recuperas 1d10 + tu nivel de guerrero en puntos de golpe. Dos usos; recuperas uno con un descanso corto y todos con uno largo."),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+    ],
     subclass: t("Champion", "Campeón"),
     summary: t("A master of martial combat, skilled with many weapons and armor.", "Maestro del combate marcial, diestro con armas y armaduras."),
     equipment: [
@@ -176,8 +198,11 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"],
     armor: t("None", "Ninguna"), weapons: t("Simple weapons and Martial weapons with the Light property", "Armas sencillas y marciales con la propiedad Ligera"),
     tools: t("One Artisan's Tools or Musical Instrument", "Unas herramientas de artesano o un instrumento musical"),
-    effects: [{ kind: "unarmoredDefense", add: ["wis"] }],
-    features: [t("Martial Arts", "Artes marciales"), t("Unarmored Defense", "Defensa sin armadura")],
+    features: [
+      f("Martial Arts", "Artes marciales", "Unarmed strikes and Monk weapons can use Dexterity and deal your Martial Arts die (d6), and you can make an unarmed strike as a bonus action.", "Tus golpes sin armas y armas de monje pueden usar Destreza y hacer tu dado de artes marciales (d6), y puedes dar un golpe sin armas como acción adicional."),
+      f("Unarmored Defense", "Defensa sin armadura", "Without armor or a shield, your AC is 10 + Dexterity + Wisdom modifiers.", "Sin armadura ni escudo, tu CA es 10 + modificadores de Destreza y Sabiduría.",
+        [{ kind: "unarmoredDefense", add: ["wis"] }]),
+    ],
     subclass: t("Warrior of the Open Hand", "Guerrero de la Mano Abierta"),
     summary: t("A martial artist who channels inner power through body and mind.", "Un artista marcial que canaliza su poder interior."),
     equipment: [
@@ -191,7 +216,11 @@ export const classes: ClassData[] = [
     armor: t("Light, Medium and Heavy armor, Shields", "Armadura ligera, media y pesada, escudos"),
     weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 2,
     spellcasting: { ability: "cha", cantrips: 0, prepared: 2, slots: t("2 level 1 slots", "2 espacios de nivel 1") },
-    features: [t("Lay On Hands", "Imposición de manos"), t("Spellcasting", "Lanzamiento de conjuros"), t("Weapon Mastery", "Maestría con armas")],
+    features: [
+      f("Lay On Hands", "Imposición de manos", "A pool of healing equal to 5 × your Paladin level. Bonus action: touch a creature to restore hit points, or spend 5 to remove the Poisoned condition. Refills on a Long Rest.", "Una reserva de curación igual a 5 × tu nivel de paladín. Acción adicional: tocas a una criatura para curarla, o gastas 5 para quitarle el estado envenenado. Se recupera con un descanso largo."),
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast paladin spells with Charisma, using a holy symbol as focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de paladín con Carisma, usando un símbolo sagrado como canalizador; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+    ],
     subclass: t("Oath of Devotion", "Juramento de Devoción"),
     summary: t("A holy warrior bound to a sacred oath.", "Un guerrero sagrado ligado a un juramento."),
     equipment: [
@@ -205,7 +234,11 @@ export const classes: ClassData[] = [
     armor: t("Light and Medium armor, Shields", "Armadura ligera y media, escudos"),
     weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 2,
     spellcasting: { ability: "wis", cantrips: 0, prepared: 2, slots: t("2 level 1 slots", "2 espacios de nivel 1") },
-    features: [t("Spellcasting", "Lanzamiento de conjuros"), t("Favored Enemy", "Enemigo predilecto"), t("Weapon Mastery", "Maestría con armas")],
+    features: [
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast ranger spells with Wisdom, using a druidic focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de explorador con Sabiduría, usando un canalizador druídico; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Favored Enemy", "Enemigo predilecto", "You always have Hunter's Mark prepared and can cast it twice per Long Rest without a spell slot.", "Siempre tienes preparado Marca del cazador y puedes lanzarlo dos veces por descanso largo sin gastar espacio."),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+    ],
     subclass: t("Hunter", "Cazador"),
     summary: t("A wandering warrior imbued with primal magic.", "Un guerrero errante imbuido de magia primigenia."),
     equipment: [
@@ -219,7 +252,12 @@ export const classes: ClassData[] = [
     armor: t("Light armor", "Armadura ligera"),
     weapons: t("Simple weapons and Martial weapons with the Finesse or Light property", "Armas sencillas y marciales con la propiedad Sutil o Ligera"),
     tools: t("Thieves' Tools", "Herramientas de ladrón"), weaponMasteries: 2, expertiseAtLevel1: 2,
-    features: [t("Expertise", "Pericia"), t("Sneak Attack", "Ataque furtivo"), t("Thieves' Cant", "Jerga de ladrones"), t("Weapon Mastery", "Maestría con armas")],
+    features: [
+      f("Expertise", "Pericia", "Double your proficiency bonus in two skills you are proficient in.", "Duplicas tu bonificador por competencia en dos habilidades que domines."),
+      f("Sneak Attack", "Ataque furtivo", "Once per turn, deal an extra 1d6 damage with a Finesse or ranged weapon if you have advantage or an ally is next to the target.", "Una vez por turno, haces 1d6 de daño extra con un arma sutil o a distancia si tienes ventaja o un aliado está junto al objetivo."),
+      f("Thieves' Cant", "Jerga de ladrones", "You know the secret mix of jargon and signs rogues use, plus one more language of your choice.", "Conoces la mezcla secreta de jerga y señas de los pícaros, y un idioma más a tu elección."),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+    ],
     subclass: t("Thief", "Ladrón"),
     summary: t("A dexterous expert in stealth and subterfuge.", "Experto diestro en sigilo y subterfugio."),
     equipment: [
@@ -232,7 +270,10 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"],
     armor: t("None", "Ninguna"), weapons: t("Simple weapons", "Armas sencillas"),
     spellcasting: { ability: "cha", cantrips: 4, prepared: 2, slots: fullCasterSlots },
-    features: [t("Spellcasting", "Lanzamiento de conjuros"), t("Innate Sorcery", "Hechicería innata")],
+    features: [
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast sorcerer spells with Charisma, using an arcane focus; your spell slots come back after a Long Rest.", "Lanzas conjuros de hechicero con Carisma, usando un canalizador arcano; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Innate Sorcery", "Hechicería innata", "Bonus action: for 1 minute, +1 to your spell save DC and advantage on Sorcerer spell attacks. Twice per Long Rest.", "Acción adicional: durante 1 minuto, +1 a la CD de tus conjuros y ventaja en los ataques de conjuro de hechicero. Dos veces por descanso largo."),
+    ],
     subclass: t("Draconic Sorcery", "Hechicería dracónica"),
     summary: t("A spellcaster whose magic flows from an innate source.", "Un lanzador cuya magia brota de un origen innato."),
     equipment: [
@@ -245,7 +286,10 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"],
     armor: t("Light armor", "Armadura ligera"), weapons: t("Simple weapons", "Armas sencillas"),
     spellcasting: { ability: "cha", cantrips: 2, prepared: 2, slots: t("1 Pact Magic slot (level 1)", "1 espacio de Magia del pacto (nivel 1)") },
-    features: [t("Eldritch Invocations", "Invocaciones sobrenaturales"), t("Pact Magic", "Magia del pacto")],
+    features: [
+      f("Eldritch Invocations", "Invocaciones sobrenaturales", "Pick an invocation, such as Pact of the Blade or Armor of Shadows, that grants a new power; you learn more as you level.", "Eliges una invocación, como Pacto del filo o Armadura de sombras, que te da un poder nuevo; aprendes más al subir de nivel."),
+      f("Pact Magic", "Magia del pacto", "Cast warlock spells with Charisma; your few spell slots are always your highest level and come back after a Short Rest.", "Lanzas conjuros de brujo con Carisma; tus pocos espacios siempre son del nivel más alto y se recuperan con un descanso corto."),
+    ],
     subclass: t("Fiend Patron", "Patrón Infernal"),
     summary: t("An occultist whose power comes from a pact with an otherworldly being.", "Un ocultista cuyo poder nace de un pacto con un ser de otro mundo."),
     equipment: [
@@ -258,7 +302,11 @@ export const classes: ClassData[] = [
     skillCount: 2, skillOptions: ["arcana", "history", "insight", "investigation", "medicine", "nature", "religion"],
     armor: t("None", "Ninguna"), weapons: t("Simple weapons", "Armas sencillas"),
     spellcasting: { ability: "int", cantrips: 3, prepared: 4, slots: fullCasterSlots },
-    features: [t("Spellcasting", "Lanzamiento de conjuros"), t("Ritual Adept", "Adepto de rituales"), t("Arcane Recovery", "Recuperación arcana")],
+    features: [
+      f("Spellcasting", "Lanzamiento de conjuros", "Cast wizard spells with Intelligence from your spellbook; your spell slots come back after a Long Rest.", "Lanzas conjuros de mago con Inteligencia desde tu libro de conjuros; recuperas los espacios de conjuro tras un descanso largo."),
+      f("Ritual Adept", "Adepto de rituales", "Cast any Ritual spell in your spellbook as a ritual without having it prepared.", "Lanzas como ritual cualquier conjuro con la etiqueta Ritual de tu libro, aunque no lo tengas preparado."),
+      f("Arcane Recovery", "Recuperación arcana", "Once per day after a Short Rest, regain spell slots whose levels add up to half your Wizard level (rounded up).", "Una vez al día tras un descanso corto, recuperas espacios de conjuro cuyos niveles sumen la mitad de tu nivel de mago (redondeando hacia arriba)."),
+    ],
     subclass: t("Evoker", "Evocador"),
     summary: t("A scholarly magic-user who studies the arcane.", "Un estudioso de la magia que domina lo arcano."),
     equipment: [
@@ -462,25 +510,32 @@ export interface SpeciesData {
   size: Text;
   speed: number;
   darkvision?: number;
-  traits: Text[];
+  traits: Feature[];
   lineageLabel?: Text;
   lineages?: Lineage[];
   /** Number of extra skills chosen from the given list (empty = any). */
   skillChoice?: { count: number; options: SkillKey[] };
   /** Human Versatile: choose an origin feat. */
   originFeat?: boolean;
-  /** Mechanics of the species traits (see effects.ts). */
-  effects?: Effect[];
 }
 
 export const species: SpeciesData[] = [
   {
     id: "aasimar", name: t("Aasimar", "Aasimar"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
-    traits: [t("Celestial Resistance", "Resistencia celestial"), t("Healing Hands", "Manos curativas"), t("Light Bearer", "Portador de luz"), t("Celestial Revelation (level 3)", "Revelación celestial (nivel 3)")],
+    traits: [
+      f("Celestial Resistance", "Resistencia celestial", "Resistance to necrotic and radiant damage.", "Resistencia al daño necrótico y radiante."),
+      f("Healing Hands", "Manos curativas", "Magic action: touch a creature to heal it a number of d4 equal to your proficiency bonus. Once per Long Rest.", "Acción mágica: tocas a una criatura y la curas tantos d4 como tu bonificador por competencia. Una vez por descanso largo."),
+      f("Light Bearer", "Portador de luz", "You know the Light cantrip; Charisma is your spellcasting ability for it.", "Conoces el truco Luz; lo lanzas con Carisma."),
+      f("Celestial Revelation (level 3)", "Revelación celestial (nivel 3)", "Bonus action: transform for 1 minute (spectral wings, a frightening aura or searing light) and deal extra radiant damage once per turn. Once per Long Rest.", "Acción adicional: te transformas durante 1 minuto (alas espectrales, un aura aterradora o luz abrasadora) y haces daño radiante extra una vez por turno. Una vez por descanso largo."),
+    ],
   },
   {
     id: "dragonborn", name: t("Dragonborn", "Dracónido"), size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
-    traits: [t("Breath Weapon", "Arma de aliento"), t("Damage Resistance", "Resistencia al daño"), t("Draconic Flight (level 5)", "Vuelo dracónico (nivel 5)")],
+    traits: [
+      f("Breath Weapon", "Arma de aliento", "Replace one attack with a 15-foot cone or 30-foot line of your ancestry's damage (1d10, Dexterity save halves it). Uses equal to your proficiency bonus per Long Rest.", "Sustituyes un ataque por un cono de 15 pies o una línea de 30 pies del daño de tu ascendencia (1d10, salvación de Destreza para la mitad). Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Damage Resistance", "Resistencia al daño", "Resistance to the damage type of your draconic ancestry.", "Resistencia al tipo de daño de tu ascendencia dracónica."),
+      f("Draconic Flight (level 5)", "Vuelo dracónico (nivel 5)", "Bonus action: sprout spectral wings and gain a fly speed for 10 minutes. Once per Long Rest.", "Acción adicional: te salen alas espectrales y ganas velocidad de vuelo durante 10 minutos. Una vez por descanso largo."),
+    ],
     lineageLabel: t("Draconic Ancestry", "Ascendencia dracónica"),
     lineages: [
       ["black", "Black", "Negro", "Acid", "Ácido"], ["blue", "Blue", "Azul", "Lightning", "Relámpago"], ["brass", "Brass", "Latón", "Fire", "Fuego"],
@@ -489,12 +544,20 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
   },
   {
-    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120, effects: [{ kind: "hpPerLevel", amount: 1 }],
-    traits: [t("Dwarven Resilience", "Resistencia enana"), t("Dwarven Toughness", "Dureza enana"), t("Stonecunning", "Afinidad con la piedra")],
+    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
+    traits: [
+      f("Dwarven Resilience", "Resistencia enana", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
+      f("Dwarven Toughness", "Dureza enana", "+1 hit point maximum per level (already counted on this sheet).", "+1 punto de golpe máximo por nivel (ya incluido en esta ficha).", [{ kind: "hpPerLevel", amount: 1 }]),
+      f("Stonecunning", "Afinidad con la piedra", "Bonus action: gain 60-foot tremorsense for 10 minutes while on or touching stone. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: ganas sentido de la vibración a 60 pies durante 10 minutos si estás sobre piedra o la tocas. Tantos usos como tu bonificador por competencia por descanso largo."),
+    ],
   },
   {
     id: "elf", name: t("Elf", "Elfo"), size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
-    traits: [t("Fey Ancestry", "Linaje feérico"), t("Keen Senses", "Sentidos agudos"), t("Trance", "Trance")],
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Keen Senses", "Sentidos agudos", "Proficiency in Insight, Perception or Survival.", "Competencia en Perspicacia, Percepción o Supervivencia."),
+      f("Trance", "Trance", "You don't need to sleep; 4 hours of meditative trance give you the benefits of a Long Rest.", "No necesitas dormir; 4 horas de trance meditativo te dan los beneficios de un descanso largo."),
+    ],
     lineageLabel: t("Elven Lineage", "Linaje élfico"),
     lineages: [
       { id: "drow", name: t("Drow", "Drow"), detail: t("Darkvision 120 ft.", "Visión en la oscuridad 120 pies"), darkvision: 120 },
@@ -505,7 +568,9 @@ export const species: SpeciesData[] = [
   },
   {
     id: "gnome", name: t("Gnome", "Gnomo"), size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
-    traits: [t("Gnomish Cunning", "Astucia gnoma")],
+    traits: [
+      f("Gnomish Cunning", "Astucia gnoma", "Advantage on Intelligence, Wisdom and Charisma saving throws.", "Ventaja en las salvaciones de Inteligencia, Sabiduría y Carisma."),
+    ],
     lineageLabel: t("Gnomish Lineage", "Linaje gnomo"),
     lineages: [
       { id: "forest", name: t("Forest Gnome", "Gnomo de los bosques"), detail: t("Minor Illusion, Speak with Animals", "Ilusión menor, Hablar con los animales") },
@@ -514,29 +579,50 @@ export const species: SpeciesData[] = [
   },
   {
     id: "goliath", name: t("Goliath", "Goliat"), size: t("Medium", "Mediano"), speed: 35,
-    traits: [t("Large Form (level 5)", "Forma grande (nivel 5)"), t("Powerful Build", "Complexión poderosa")],
+    traits: [
+      f("Large Form (level 5)", "Forma grande (nivel 5)", "Bonus action: become Large for 10 minutes, with advantage on Strength checks and +10 feet of speed. Once per Long Rest.", "Acción adicional: pasas a tamaño grande durante 10 minutos, con ventaja en pruebas de Fuerza y +10 pies de velocidad. Una vez por descanso largo."),
+      f("Powerful Build", "Complexión poderosa", "Advantage on checks to end the Grappled condition, and you count as one size larger for carrying capacity.", "Ventaja en pruebas para terminar el estado agarrado, y cuentas como un tamaño mayor para la capacidad de carga."),
+    ],
     lineageLabel: t("Giant Ancestry", "Ascendencia gigante"),
     lineages: [
-      ["cloud", "Cloud's Jaunt", "Paso de las nubes"], ["fire", "Fire's Burn", "Quemadura de fuego"], ["frost", "Frost's Chill", "Gélido de escarcha"],
-      ["hill", "Hill's Tumble", "Derribo de colina"], ["stone", "Stone's Endurance", "Aguante de piedra"], ["storm", "Storm's Thunder", "Trueno de tormenta"],
-    ].map(([id, en, es]) => ({ id, name: t(en, es) })),
+      ["cloud", "Cloud's Jaunt", "Paso de las nubes", "Bonus action: teleport up to 30 feet", "Acción adicional: te teletransportas hasta 30 pies"],
+      ["fire", "Fire's Burn", "Quemadura de fuego", "+1d10 fire damage when you hit", "+1d10 de daño de fuego al impactar"],
+      ["frost", "Frost's Chill", "Gélido de escarcha", "+1d6 cold damage and −10 feet speed to the target when you hit", "+1d6 de daño de frío y −10 pies de velocidad al objetivo al impactar"],
+      ["hill", "Hill's Tumble", "Derribo de colina", "Knock a Large or smaller target Prone when you hit", "Derribas a un objetivo grande o menor al impactar"],
+      ["stone", "Stone's Endurance", "Aguante de piedra", "Reaction: reduce damage taken by 1d12 + Constitution", "Reacción: reduces el daño recibido en 1d12 + Constitución"],
+      ["storm", "Storm's Thunder", "Trueno de tormenta", "Reaction: deal 1d8 thunder damage to a creature that damages you", "Reacción: haces 1d8 de daño de trueno a quien te daña"],
+    ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(`${den} (proficiency bonus uses per Long Rest)`, `${des} (tantos usos como tu bonificador por competencia por descanso largo)`) })),
   },
   {
     id: "halfling", name: t("Halfling", "Mediano"), size: t("Small", "Pequeño"), speed: 30,
-    traits: [t("Brave", "Valiente"), t("Halfling Nimbleness", "Agilidad mediana"), t("Luck", "Suerte"), t("Naturally Stealthy", "Sigiloso por naturaleza")],
+    traits: [
+      f("Brave", "Valiente", "Advantage on saves to avoid or end the Frightened condition.", "Ventaja en salvaciones para evitar o terminar el estado asustado."),
+      f("Halfling Nimbleness", "Agilidad mediana", "You can move through the space of any creature larger than you.", "Puedes atravesar el espacio de cualquier criatura más grande que tú."),
+      f("Luck", "Suerte", "When you roll a 1 on a d20 test, reroll it and use the new roll.", "Cuando sacas un 1 en una prueba de d20, repites la tirada y usas el nuevo resultado."),
+      f("Naturally Stealthy", "Sigiloso por naturaleza", "You can try to hide behind a creature at least one size larger than you.", "Puedes intentar esconderte detrás de una criatura al menos un tamaño mayor que tú."),
+    ],
   },
   {
     id: "human", name: t("Human", "Humano"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
-    traits: [t("Resourceful", "Ingenioso"), t("Skillful", "Hábil"), t("Versatile", "Versátil")],
+    traits: [
+      f("Resourceful", "Ingenioso", "You gain Heroic Inspiration whenever you finish a Long Rest.", "Ganas Inspiración heroica cada vez que terminas un descanso largo."),
+      f("Skillful", "Hábil", "Proficiency in one extra skill of your choice.", "Competencia en una habilidad adicional a tu elección."),
+      f("Versatile", "Versátil", "You gain an Origin feat of your choice.", "Ganas una dote de origen a tu elección."),
+    ],
     skillChoice: { count: 1, options: [] }, originFeat: true,
   },
   {
     id: "orc", name: t("Orc", "Orco"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
-    traits: [t("Adrenaline Rush", "Subidón de adrenalina"), t("Relentless Endurance", "Aguante incansable")],
+    traits: [
+      f("Adrenaline Rush", "Subidón de adrenalina", "Dash as a bonus action and gain temporary hit points equal to your proficiency bonus. Uses equal to your proficiency bonus per Short or Long Rest.", "Corres como acción adicional y ganas puntos de golpe temporales iguales a tu bonificador por competencia. Tantos usos como ese bonificador por descanso corto o largo."),
+      f("Relentless Endurance", "Aguante incansable", "When you drop to 0 hit points without being killed outright, you drop to 1 instead. Once per Long Rest.", "Cuando caes a 0 puntos de golpe sin morir en el acto, te quedas a 1. Una vez por descanso largo."),
+    ],
   },
   {
     id: "tiefling", name: t("Tiefling", "Tiflin"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
-    traits: [t("Otherworldly Presence", "Presencia de otro mundo")],
+    traits: [
+      f("Otherworldly Presence", "Presencia de otro mundo", "You know the Thaumaturgy cantrip, cast with the same ability as your Fiendish Legacy spells.", "Conoces el truco Taumaturgia, que lanzas con la misma característica que los conjuros de tu legado infernal."),
+    ],
     lineageLabel: t("Fiendish Legacy", "Legado infernal"),
     lineages: [
       { id: "abyssal", name: t("Abyssal", "Abisal"), detail: t("Poison resistance", "Resistencia al veneno") },

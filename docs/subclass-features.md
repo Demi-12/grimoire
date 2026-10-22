@@ -1,6 +1,6 @@
 # Rasgos de subclase y efectos
 
-Cada rasgo de clase o subclase es un `Feature` (`src/lib/levelup-data.ts`): nombre oficial, un resumen de una línea escrito por nosotros y, si cambia algo en la ficha, una lista de `effects`. El motor (`grantedEffects` en `src/lib/character-sheet.ts`) reúne los efectos de la clase, la subclase, la especie y las dotes, y:
+Cada rasgo de clase, subclase o especie es un `Feature` (`src/lib/dnd2024.ts`): nombre oficial, un resumen de una línea escrito por nosotros y, si cambia algo en la ficha, una lista de `effects`. El motor (`grantedEffects` en `src/lib/character-sheet.ts`) reúne los efectos de la clase, la subclase, la especie y las dotes, y:
 
 - la ficha (`deriveSheet`) aplica los modificadores: `hpPerLevel`, `unarmoredDefense`, `acBonus`, `initiativeBonus` y `saveProficiency`;
 - la subida de nivel (`levelUpSteps` en `src/lib/levelup.ts`) convierte las elecciones en pasos: `chooseSkills`, `chooseExpertise` y `chooseFightingStyle`. Lo elegido se guarda en `LevelUpChoice` (`skills`, `expertise`, `fightingStyle`).
@@ -9,7 +9,7 @@ Un rasgo sin efectos solo se muestra (reacciones, "una vez por turno"…). Si un
 
 ## Añadir una subclase del Manual del Jugador
 
-Las subclases están en `subclassCatalog` (`src/lib/subclasses.ts`). Para que Grimoire siga sus rasgos, se pasa `features` por nivel como último argumento de `s(…)`, escritos con `feature` (`import { feature as f } from "./levelup-data"`):
+Las subclases están en `subclassCatalog` (`src/lib/subclasses.ts`). Para que Grimoire siga sus rasgos, se pasa `features` por nivel como último argumento de `s(…)`, escritos con `feature` (`import { feature as f } from "./dnd2024"`):
 
 ```ts
 s("wildHeart", "Path of the Wild Heart", "Senda del Corazón Salvaje", "…", "…", false, {

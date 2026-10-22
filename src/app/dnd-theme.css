@@ -398,3 +398,20 @@ body { background-image: var(--grain), var(--mottle),
 
 /* Kept in the DOM for printing (the PDF sheet lives in the character cards) but not shown on screen. */
 @media screen { .screen-hidden { display: none !important; } }
+
+/* SVG nav icons (components/icons.tsx) size to the glyph slot they replace. */
+.icon { display: block; flex: none; }
+.side-nav button > span, .header-admin > span { display: inline-grid; place-items: center; }
+
+/* Option cards in the narrow encounter column: three across leaves long names ("Mi catálogo",
+   "Moderada") spilling out of their cards, so below ~380px they become a stacked list. */
+.encounter-controls { container: controls / inline-size; }
+.difficulty-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.difficulty-option { min-width: 0; overflow-wrap: anywhere; }
+@container controls (max-width: 380px) {
+  .difficulty-options { grid-template-columns: minmax(0, 1fr); }
+  .difficulty-option { grid-template-columns: 8px minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 2px; padding: 10px 12px; }
+  .difficulty-option small { grid-column: 2; }
+  .source-options .difficulty-option { grid-template-columns: minmax(0, 1fr); }
+  .source-options .difficulty-option small { grid-column: 1; }
+}

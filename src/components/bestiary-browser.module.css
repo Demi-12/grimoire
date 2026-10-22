@@ -29,6 +29,7 @@
 .sheet { margin-top: 24px; scroll-margin-top: 20px; }
 :global(:root[data-theme="dark"]) .explorer { --b-ink: #eee4d1; --b-paper: #28251f; color: #eee4d1; }
 :global(:root[data-theme="dark"]) .header h2 { color: #f0dfc2; }
+:global(:root[data-theme="dark"]) .kicker { color: var(--crimson); }
 :global(:root[data-theme="dark"]) .header>p:last-child, :global(:root[data-theme="dark"]) .controls label span, :global(:root[data-theme="dark"]) .resultsHeader { color: #c1ae8e; }
 :global(:root[data-theme="dark"]) .controls { border-color: #665638; background: rgba(40,37,31,.82); }
 :global(:root[data-theme="dark"]) .controls input, :global(:root[data-theme="dark"]) .controls select { color: #eee4d1; border-color: #665638; background: #211f1a; }
