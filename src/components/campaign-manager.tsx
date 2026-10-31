@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Spinner } from "./skeleton";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
@@ -39,7 +40,7 @@ const text = {
     viewSheet: "View sheet", removeHero: "Take out of campaign", error: "That change couldn't be saved. Try again.",
     nameRequired: "Enter a campaign name.",
     invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone who opens the link and signs in joins as a player. Links expire after 7 days.",
-    journal: "Encounter journal",
+    journal: "Encounter journal", map: "Battle map",
     copyLink: "Copy link", copied: "Copied", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ${owner} is calling you to the table! Join the campaign "${c}" on Grimoire, build your hero and roll initiative.\n\n🎲 Your invitation (valid 7 days):`, revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
@@ -61,7 +62,7 @@ const text = {
     viewSheet: "Ver ficha", removeHero: "Sacar de la campaña", error: "No se pudo guardar el cambio. Inténtalo de nuevo.",
     nameRequired: "Escribe un nombre para la campaña.",
     invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien abra el enlace e inicie sesión se une como jugador. Los enlaces caducan a los 7 días.",
-    journal: "Diario de encuentros",
+    journal: "Diario de encuentros", map: "Mapa de batalla",
     copyLink: "Copiar enlace", copied: "Copiado", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ¡${owner} te convoca a la mesa! Únete a la campaña «${c}» en Grimoire, crea a tu héroe y prepárate para tirar iniciativa.\n\n🎲 Tu invitación (válida 7 días):`, revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
   },
@@ -149,6 +150,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
                 {campaign.description && <p className={styles.description}>{campaign.description}</p>}
               </div>
               <div className={styles.actions}>
+                {campaign.myRole && <Link className={styles.mapLink} href={`/map/${encodeURIComponent(campaign.id)}`}>{t.map}</Link>}
                 {campaign.canManage && <button type="button" className={styles.quietButton} onClick={() => { setEditingId(campaign.id); setEditName(campaign.name); setEditDescription(campaign.description); setError(""); }}>{t.rename}</button>}
                 {canDelete && <button type="button" className={styles.deleteButton} disabled={busy} onClick={() => { if (window.confirm(t.deleteConfirm(campaign.name))) void run(() => api(`/api/campaigns/${campaign.id}`, { method: "DELETE" })); }}>{t.remove}</button>}
                 {!campaign.isOwner && campaign.myRole && <button type="button" className={styles.quietButton} disabled={busy} onClick={() => { if (window.confirm(t.leaveConfirm(campaign.name))) void run(() => api(`/api/campaigns/${campaign.id}/members/${me.id}`, { method: "DELETE" })); }}>{t.leave}</button>}

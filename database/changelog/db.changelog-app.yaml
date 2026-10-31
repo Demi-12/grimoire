@@ -259,3 +259,24 @@ databaseChangeLog:
               ALTER TABLE "user"
                 ALTER COLUMN "status" SET DEFAULT 'approved',
                 ADD CONSTRAINT "user_status_check" CHECK ("status" IN ('approved', 'blocked'));
+
+  - changeSet:
+      id: data-006-battle-maps
+      author: grimoire
+      comment: >-
+        One shared battle map per campaign (grid size and tokens as JSON). Every member can see it;
+        players move their own heroes, DMs place monsters and may keep them hidden from players.
+        Changes are announced to open map streams with NOTIFY on the grimoire_battle_map channel.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "battle_map" (
+                "campaignId" UUID PRIMARY KEY REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                "state" JSONB NOT NULL CHECK (octet_length("state"::text) <= 60000),
+                "version" INTEGER NOT NULL DEFAULT 0,
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS "battle_map";
