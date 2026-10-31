@@ -23,7 +23,6 @@
 .features span { font-size: 12px; line-height: 1.5; color: var(--muted); }
 .ahead { margin: 14px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
 .callout { margin: 14px 0 0; padding: 10px 14px; border: 1px dashed var(--crimson); background: var(--paper); font-size: 13px; color: var(--ink); }
-.customName { margin-top: 14px; max-width: 360px; }
 
 .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
 .abilityPick { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }

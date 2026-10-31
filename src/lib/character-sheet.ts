@@ -189,6 +189,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     const gained = choices.find((choice) => choice.level === current)?.hp ?? perLevel;
     hitPoints += Math.max(1, gained + mod("con")) + hpPerLevelBonus;
   }
+  if (feats.includes("fortitude")) hitPoints += 40;
 
   const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
   let armorClass = 10 + mod("dex");
@@ -232,7 +233,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     armorClass,
     armorNote,
     initiative: mod("dex") + (feats.includes("alert") ? pb : 0),
-    speed: lineage?.speed ?? sp.speed,
+    speed: (lineage?.speed ?? sp.speed) + (feats.includes("speedy") ? 10 : 0) + (feats.includes("speed") ? 30 : 0),
     darkvision: lineage?.darkvision ?? sp.darkvision,
     passivePerception: 10 + skillValues.perception.bonus,
     saves,

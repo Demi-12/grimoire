@@ -1,7 +1,6 @@
 /**
- * Every subclass in the 2024 Player's Handbook, four per class, so players can pick theirs from a list.
- * Only the SRD subclass (CC-BY-4.0) has its features tracked in levelup-data.ts; the others are names
- * plus a one-line pitch written in our own words, since their rules text isn't openly licensed.
+ * Every subclass in the 2024 Player's Handbook, four per class. Players always pick one from this list.
+ * Features live in levelup-data.ts (the SRD subclass) and subclass-features.ts (the rest); pitches are our own words.
  */
 import { findClass, type ClassId, type Text } from "./dnd2024";
 
@@ -11,7 +10,7 @@ export interface SubclassInfo {
   id: string;
   name: Text;
   pitch: Text;
-  /** Published in the free SRD 5.2, with features tracked by Grimoire. */
+  /** Published in the free SRD 5.2; stored on the build as `useSubclass` rather than `subclassId`. */
   srd?: boolean;
 }
 
@@ -96,6 +95,12 @@ export const subclassCatalog: Record<ClassId, SubclassInfo[]> = {
 /** Subclasses for a class, with the SRD one first. */
 export const subclassesFor = (classId: ClassId): SubclassInfo[] =>
   [...(subclassCatalog[classId] ?? [])].sort((a, b) => Number(!!b.srd) - Number(!!a.srd));
+
+/** Any subclass of the class by id, SRD one included. */
+export const findSubclass = (classId: ClassId, id: string | undefined | null): SubclassInfo | undefined =>
+  id ? subclassCatalog[classId]?.find((entry) => entry.id === id) : undefined;
+
+export const srdSubclassId = (classId: ClassId): string => subclassCatalog[classId].find((entry) => entry.srd)!.id;
 
 /** A Player's Handbook subclass that isn't the class's SRD one. */
 export const findBookSubclass = (classId: ClassId, id: string | undefined): SubclassInfo | undefined =>

@@ -13,8 +13,8 @@ import {
   validBaseScores, type AbilityMethod, type CharacterBuild,
 } from "@/lib/character-sheet";
 import { featInfo } from "@/lib/levelup-data";
-import { subclassLabel, unlockedFeatures } from "@/lib/levelup";
-import { findBookSubclass, subclassesFor } from "@/lib/subclasses";
+import { chosenSubclassId, subclassLabel, unlockedFeatures } from "@/lib/levelup";
+import { findSubclass, subclassesFor } from "@/lib/subclasses";
 import styles from "./character-wizard.module.css";
 
 export interface WizardResult {
@@ -42,8 +42,7 @@ const copy = {
     classIntro: "Your class is the heart of your adventurer: it sets your Hit Points, proficiencies and core features.",
     level: "Starting level", hitDie: "Hit Die", primary: "Primary ability", saves: "Saving throws", armor: "Armor training",
     weapons: "Weapons", tools: "Tools", features: "Level 1 features", skillsPick: (n: number) => `Choose ${n} skills`,
-    anySkill: "any skill", subclass: "Subclass (level 3)", noSubclass: "None / another (write it in the notes)", srdTag: "SRD", bookTag: "Player's Handbook",
-    subclassNote: "Only the SRD subclass has its abilities on the sheet; for the others, use your book.",
+    anySkill: "any skill", subclass: "Subclass (level 3)", pickSubclass: "Choose a subclass", srdTag: "SRD", bookTag: "Player's Handbook",
     spellcasting: "Spellcasting", cantrips: "Cantrips", prepared: "Prepared spells", masteries: (n: number) => `Weapon Mastery with ${n} kinds of weapons`,
     backgroundIntro: "Your background tells where you came from. In the 2024 rules it grants the ability score increases, an Origin feat, two skills and a tool.",
     abilitiesLabel: "Ability increases", feat: "Origin feat", skills: "Skill proficiencies", tool: "Tool proficiency",
@@ -79,8 +78,7 @@ const copy = {
     classIntro: "La clase es el corazón de tu aventurero: define sus puntos de golpe, competencias y rasgos principales.",
     level: "Nivel inicial", hitDie: "Dado de golpe", primary: "Característica principal", saves: "Tiradas de salvación", armor: "Entrenamiento con armaduras",
     weapons: "Armas", tools: "Herramientas", features: "Rasgos de nivel 1", skillsPick: (n: number) => `Elige ${n} habilidades`,
-    anySkill: "cualquier habilidad", subclass: "Subclase (nivel 3)", noSubclass: "Ninguna / otra (anótala en las notas)", srdTag: "SRD", bookTag: "Manual del Jugador",
-    subclassNote: "Solo la subclase del SRD tiene sus rasgos en la ficha; para las demás, usa tu libro.",
+    anySkill: "cualquier habilidad", subclass: "Subclase (nivel 3)", pickSubclass: "Elige una subclase", srdTag: "SRD", bookTag: "Manual del Jugador",
     spellcasting: "Lanzamiento de conjuros", cantrips: "Trucos", prepared: "Conjuros preparados", masteries: (n: number) => `Maestría con ${n} tipos de armas`,
     backgroundIntro: "El trasfondo cuenta de dónde vienes. En las reglas de 2024 otorga los aumentos de característica, una dote de origen, dos habilidades y una herramienta.",
     abilitiesLabel: "Aumentos de característica", feat: "Dote de origen", skills: "Competencias en habilidades", tool: "Competencia con herramienta",
@@ -176,7 +174,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const last = c.steps.length - 1;
 
   function chooseClass(classId: ClassId) {
-    update({ classId, classSkills: [], expertise: [], classEquipment: "A", subclassId: undefined, ...(build.subclassId ? { useSubclass: true } : {}),
+    update({ classId, classSkills: [], expertise: [], classEquipment: "A", useSubclass: true, subclassId: undefined, customSubclass: undefined,
       ...(build.abilityMethod === "standard" ? { baseScores: suggestedAssignment(STANDARD_ARRAY, classId) } : {}) });
   }
   function chooseBackground(backgroundId: BackgroundId) {
@@ -263,16 +261,15 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           <div className={styles.inline}>
             <label className={styles.field}>{c.level}<input type="number" min={1} max={20} value={level} onChange={(event) => setLevel(Math.min(20, Math.max(1, Math.floor(Number(event.target.value) || 1))))} /></label>
             {level >= 3 && <label className={styles.field}>{c.subclass}<select
-              value={build.useSubclass ? "srd" : findBookSubclass(build.classId, build.subclassId)?.id ?? ""}
+              value={chosenSubclassId(build) ?? ""}
               onChange={(event) => {
-                const value = event.target.value;
-                update({ useSubclass: value === "srd", subclassId: value && value !== "srd" ? value : undefined, ...(value ? { customSubclass: undefined } : {}) });
+                const picked = findSubclass(build.classId, event.target.value);
+                if (picked) update({ useSubclass: !!picked.srd, subclassId: picked.srd ? undefined : picked.id, customSubclass: undefined });
               }}>
-              {subclassesFor(build.classId).map((entry) => <option key={entry.id} value={entry.srd ? "srd" : entry.id}>{say(entry.name, locale)} ({entry.srd ? c.srdTag : c.bookTag})</option>)}
-              <option value="">{c.noSubclass}</option>
+              {!chosenSubclassId(build) && <option value="" disabled>{c.pickSubclass}</option>}
+              {subclassesFor(build.classId).map((entry) => <option key={entry.id} value={entry.id}>{say(entry.name, locale)} ({entry.srd ? c.srdTag : c.bookTag})</option>)}
             </select></label>}
           </div>
-          {level >= 3 && <p className={styles.note}>{c.subclassNote}</p>}
         </div>
       </>}
 
