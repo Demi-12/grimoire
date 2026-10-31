@@ -1,5 +1,16 @@
-/** D&D 5e SRD monster API adapter (2024 preferred, 2014 fallback). No API key or client secret is used. */
-export type MonsterEdition = "2024" | "2014";
+/** Browser side of the bestiary: stat block types and calls to our /api/monsters routes, which read Open5e. */
+
+/** Book a stat block comes from, as Open5e reports it. */
+export type MonsterSource = {
+  key: string;
+  name: string;
+  publisher?: string;
+  /** Open5e game system key: "5e-2024", "5e-2014" or "a5e". */
+  system?: string;
+  url?: string;
+  /** License keys, e.g. "cc-by-40" or "ogl-10a". */
+  licenses?: string[];
+};
 
 export type MonsterAction = {
   name?: string;
@@ -39,23 +50,27 @@ export type MonsterStatBlock = {
   special_abilities?: MonsterAction[];
   actions?: MonsterAction[];
   reactions?: MonsterAction[];
+  bonus_actions?: MonsterAction[];
   legendary_actions?: MonsterAction[];
+  /** Absolute image URL, when the book has an illustration. */
   image?: string;
-  /** Ruleset the stat block came from, added by our API route. */
-  edition?: MonsterEdition;
-  /** Set instead of `edition` when the stat block is a homebrew monster. */
+  /** Book the stat block comes from. */
+  source?: MonsterSource;
+  /** Set instead of `source` when the stat block is a homebrew monster. */
   homebrew?: { ownerName: string };
 };
 
-export type MonsterListEntry = { index: string; name: string; url?: string };
-export type MonsterCatalog = { count: number; edition?: MonsterEdition; results: MonsterListEntry[] };
+export type MonsterListEntry = { index: string; name: string; cr?: number; type?: string; source?: string };
+/** A book in the bestiary and how many of its creatures are listed. */
+export type SourceSummary = { key: string; name: string; publisher?: string; count: number };
+export type MonsterCatalog = { count: number; sources: SourceSummary[]; results: MonsterListEntry[] };
 
-/** Tactical tags inferred from SRD stat block data; the upstream API does not provide these labels. */
+/** Tactical tags inferred from stat block data; Open5e does not provide these labels. */
 export type MonsterRole = "frontline" | "damage" | "support" | "control" | "scouting";
 
 export function inferMonsterRoles(monster: MonsterStatBlock): MonsterRole[] {
   const roles = new Set<MonsterRole>();
-  const actions = [...(monster.special_abilities ?? []), ...(monster.actions ?? []), ...(monster.reactions ?? [])];
+  const actions = [...(monster.special_abilities ?? []), ...(monster.actions ?? []), ...(monster.bonus_actions ?? []), ...(monster.reactions ?? [])];
   const actionText = actions.map((action) => `${action.name ?? ""} ${textValue(action.desc)}`).join(" ").toLowerCase();
   const ac = typeof monster.armor_class === "number"
     ? monster.armor_class
@@ -84,13 +99,14 @@ export class MonsterApiError extends Error {
   }
 }
 
-/** Retrieves the API's compact monster index, optionally filtered by challenge rating upstream. */
+/** One page of the bestiary, filtered by challenge rating, book and name. */
 export async function fetchMonsterCatalog(
-  options: { challengeRating?: string; search?: string; page?: number; limit?: number } = {},
+  options: { challengeRating?: string; source?: string; search?: string; page?: number; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<MonsterCatalog> {
   const params = new URLSearchParams();
   if (options.challengeRating) params.set("challenge_rating", options.challengeRating);
+  if (options.source) params.set("source", options.source);
   if (options.search?.trim()) params.set("search", options.search.trim());
   if (options.page) params.set("page", String(options.page));
   if (options.limit) params.set("limit", String(options.limit));
@@ -106,15 +122,16 @@ export async function fetchMonsterCatalog(
 
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== "object") throw new MonsterApiError("The monster index returned an unexpected response.");
-  const catalog = payload as { count?: unknown; edition?: unknown; results?: unknown };
+  const catalog = payload as { count?: unknown; sources?: unknown; results?: unknown };
   if (!Array.isArray(catalog.results)) throw new MonsterApiError("The monster index returned an unexpected response.");
   const results = catalog.results.filter((entry): entry is MonsterListEntry =>
     !!entry && typeof entry === "object"
     && typeof (entry as MonsterListEntry).index === "string"
     && typeof (entry as MonsterListEntry).name === "string",
   );
-  const edition = catalog.edition === "2024" || catalog.edition === "2014" ? catalog.edition : undefined;
-  return { count: typeof catalog.count === "number" ? catalog.count : results.length, edition, results };
+  const sources = Array.isArray(catalog.sources) ? catalog.sources.filter((entry): entry is SourceSummary =>
+    !!entry && typeof entry === "object" && typeof (entry as SourceSummary).key === "string" && typeof (entry as SourceSummary).name === "string") : [];
+  return { count: typeof catalog.count === "number" ? catalog.count : results.length, sources, results };
 }
 
 /** Fetches through our same-origin route so browsers do not depend on the provider's CORS policy. */
@@ -136,26 +153,26 @@ export async function fetchMonster(slug: string, signal?: AbortSignal): Promise<
   return data as MonsterStatBlock;
 }
 
-/** Human-readable SRD label for an edition. */
-export function srdLabel(edition?: MonsterEdition) {
-  return edition === "2014" ? "SRD 5.1 · 2014" : "SRD 5.2 · 2024";
+/** Short label for where a stat block comes from: the book's name. */
+export function sourceLabel(source?: Pick<MonsterSource, "name"> | string) {
+  return typeof source === "string" ? source : source?.name ?? "Open5e";
 }
 
-/** Compact SRD monster entry served by /api/monsters/catalog. */
-export type SrdMonster = { index: string; name: string; cr: number; xp: number; type: string; size: string; roles: MonsterRole[] };
+/** Compact monster entry served by /api/monsters/catalog; `source` is the book's name. */
+export type CatalogMonster = { index: string; name: string; cr: number; xp: number; type: string; size: string; roles: MonsterRole[]; source: string; sourceKey: string };
 
-export async function fetchSrdCatalog(signal?: AbortSignal): Promise<{ edition?: MonsterEdition; monsters: SrdMonster[] }> {
+export async function fetchSrdCatalog(signal?: AbortSignal): Promise<{ sources: SourceSummary[]; monsters: CatalogMonster[] }> {
   const response = await fetch("/api/monsters/catalog", { headers: { Accept: "application/json" }, signal });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new MonsterApiError(body?.error ?? "Could not load the bestiary.", response.status);
   }
-  const payload = (await response.json()) as { edition?: unknown; monsters?: unknown };
+  const payload = (await response.json()) as { sources?: unknown; monsters?: unknown };
   if (!Array.isArray(payload.monsters)) throw new MonsterApiError("The bestiary returned an unexpected response.");
-  const monsters = payload.monsters.filter((entry): entry is SrdMonster => !!entry && typeof entry === "object"
-    && typeof (entry as SrdMonster).index === "string" && typeof (entry as SrdMonster).xp === "number" && typeof (entry as SrdMonster).cr === "number");
-  const edition = payload.edition === "2024" || payload.edition === "2014" ? payload.edition : undefined;
-  return { edition, monsters };
+  const monsters = payload.monsters.filter((entry): entry is CatalogMonster => !!entry && typeof entry === "object"
+    && typeof (entry as CatalogMonster).index === "string" && typeof (entry as CatalogMonster).xp === "number" && typeof (entry as CatalogMonster).cr === "number");
+  const sources = Array.isArray(payload.sources) ? (payload.sources as SourceSummary[]) : [];
+  return { sources, monsters };
 }
 
 export function formatChallenge(cr?: number) {
