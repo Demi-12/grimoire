@@ -1,12 +1,13 @@
 /**
- * Every subclass in the 2024 Player's Handbook, four per class, so players can pick theirs from a list.
- * The SRD subclass (CC-BY-4.0) has its features in levelup-data.ts; the others are names plus a one-line
- * pitch written in our own words, and `features` once their mechanics are added (summaries, never book text).
+ * Every subclass in the 2024 Player's Handbook, four per class. Players always pick one from this list.
+ * The SRD subclass (CC-BY-4.0) has its features in levelup-data.ts and the others in subclass-features.ts;
+ * names are official, pitches and feature summaries are our own words (never book text).
  */
 import { findClass, type ClassId, type Text } from "./dnd2024";
 import type { Progression } from "./levelup-data";
+import { bookSubclassFeatures } from "./subclass-features";
 
-// Features of tracked Player's Handbook subclasses are written with `feature` from dnd2024.ts (see docs/subclass-features.md).
+// Features of the Player's Handbook subclasses are in subclass-features.ts, written with `feature` from dnd2024.ts (see docs/subclass-features.md).
 
 const t = (en: string, es: string): Text => ({ en, es });
 
@@ -23,7 +24,7 @@ export interface SubclassInfo {
 /** Whether Grimoire knows the subclass's features (and applies their effects). */
 export const subclassTracked = (entry: SubclassInfo): boolean => !!entry.srd || !!entry.features;
 
-const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false, features?: Progression): SubclassInfo =>
+const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false, features: Progression | undefined = srd ? undefined : bookSubclassFeatures[id]): SubclassInfo =>
   ({ id, name: t(en, es), pitch: t(pitchEn, pitchEs), ...(srd ? { srd } : {}), ...(features ? { features } : {}) });
 
 export const subclassCatalog: Record<ClassId, SubclassInfo[]> = {
@@ -104,6 +105,12 @@ export const subclassCatalog: Record<ClassId, SubclassInfo[]> = {
 /** Subclasses for a class, with the SRD one first. */
 export const subclassesFor = (classId: ClassId): SubclassInfo[] =>
   [...(subclassCatalog[classId] ?? [])].sort((a, b) => Number(!!b.srd) - Number(!!a.srd));
+
+/** Any subclass of the class by id, SRD one included. */
+export const findSubclass = (classId: ClassId, id: string | undefined | null): SubclassInfo | undefined =>
+  id ? subclassCatalog[classId]?.find((entry) => entry.id === id) : undefined;
+
+export const srdSubclassId = (classId: ClassId): string => subclassCatalog[classId].find((entry) => entry.srd)!.id;
 
 /** A Player's Handbook subclass that isn't the class's SRD one. */
 export const findBookSubclass = (classId: ClassId, id: string | undefined): SubclassInfo | undefined =>

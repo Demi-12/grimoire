@@ -14,6 +14,10 @@ export type Effect =
   // Modifiers: applied to the sheet from the level the feature is gained.
   /** Hit Point maximum + amount × character level (Dwarven Toughness, Tough, Draconic Resilience). */
   | { kind: "hpPerLevel"; amount: number }
+  /** Hit Point maximum + a flat amount (Boon of Fortitude). */
+  | { kind: "hpBonus"; amount: number }
+  /** Walking speed + amount in feet (Speedy, Boon of Speed). */
+  | { kind: "speedBonus"; amount: number }
   /** Without armor, AC = 10 + Dexterity + these modifiers; the best formula the character has is used. */
   | { kind: "unarmoredDefense"; add: AbilityKey[] }
   | { kind: "acBonus"; amount: number; whileArmored?: boolean }

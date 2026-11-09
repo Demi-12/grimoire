@@ -7,16 +7,17 @@ Cada rasgo de clase, subclase o especie es un `Feature` (`src/lib/dnd2024.ts`): 
 
 Un rasgo sin efectos solo se muestra (reacciones, "una vez por turno"…). Si un rasgo necesita una mecánica que aún no existe, se añade un `kind` nuevo a `Effect` en `src/lib/effects.ts`, se aplica en el motor y se cubre con un test.
 
-## Añadir una subclase del Manual del Jugador
+## Subclases del Manual del Jugador
 
-Las subclases están en `subclassCatalog` (`src/lib/subclasses.ts`). Para que Grimoire siga sus rasgos, se pasa `features` por nivel como último argumento de `s(…)`, escritos con `feature` (`import { feature as f } from "./dnd2024"`):
+Las 48 subclases están en `subclassCatalog` (`src/lib/subclasses.ts`) y se eligen siempre de esa lista. Los rasgos de las 36 que no son del SRD están en `bookSubclassFeatures` (`src/lib/subclass-features.ts`), por id de subclase y nivel, escritos con `feature` (`import { feature as f } from "./dnd2024"`); `s(…)` los asocia solo. Para cambiar o añadir un efecto se edita ese archivo:
 
 ```ts
-s("wildHeart", "Path of the Wild Heart", "Senda del Corazón Salvaje", "…", "…", false, {
-  3: [f("Animal Speaker", "Hablante animal", "Cast Beast Sense and Speak with Animals as rituals.", "Lanzas Sentido de bestia y Hablar con los animales como rituales.")],
-  6: [f("Aspect of the Wilds", "Aspecto de lo salvaje", "…", "…", [/* efectos */])],
-}),
+dance: {
+  3: [f("Dazzling Footwork", "Juego de pies deslumbrante", "…", "…", [{ kind: "unarmoredDefense", add: ["cha"] }])],
+},
 ```
+
+Las cuatro subclases de una clase ganan rasgos en los mismos niveles (lo comprueba un test).
 
 Normas:
 

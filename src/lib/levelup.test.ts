@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { deriveSheet, finalScores, type CharacterBuild } from "./character-sheet";
-import { applyLevelUp, fightingStyleOptions, levelGains, levelUpIssues, levelUpSteps, skillOptions, subclassLabel, unlockedFeatures, withSubclass } from "./levelup";
-import { classFeatures, spellProgress, subclassFeatures } from "./levelup-data";
+import { applyLevelUp, asiFeatOptions, chosenSubclassId, fightingStyleOptions, levelGains, levelUpIssues, levelUpSteps, skillOptions, subclassLabel, unlockedFeatures, withSubclass } from "./levelup";
+import { asiFeats, classFeatures, epicBoons, fightingStyles, spellProgress, subclassFeatures } from "./levelup-data";
 import { classes } from "./dnd2024";
-import { srdSubclassMatches, subclassesFor } from "./subclasses";
+import { srdSubclassMatches, subclassesFor, subclassTracked } from "./subclasses";
 
 const fighter: CharacterBuild = {
   version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
@@ -53,16 +53,16 @@ describe("hit points", () => {
 });
 
 describe("subclass", () => {
-  it("is required at level 3 and stored on the build", () => {
+  it("is required at level 3 and stored on the build; an old typed-in one still shows", () => {
     expect(levelUpIssues(fighter, 3, { level: 3 }, null)).toContain("subclass");
-    expect(levelUpIssues(fighter, 3, { level: 3 }, { kind: "custom", name: "  " })).toContain("subclass");
-    const custom = applyLevelUp(fighter, 3, { level: 3 }, { kind: "custom", name: " Battle Master " });
-    expect(custom.useSubclass).toBe(false);
-    expect(subclassLabel(custom, 3, "en")).toBe("Battle Master");
-    expect(subclassLabel(custom, 2, "en")).toBe("");
-    const srd = applyLevelUp(custom, 3, { level: 3 }, { kind: "srd" });
+    const old = { ...fighter, useSubclass: false, customSubclass: "Rune Knight" };
+    expect(subclassLabel(old, 3, "en")).toBe("Rune Knight");
+    expect(subclassLabel(old, 2, "en")).toBe("");
+    expect(chosenSubclassId(old)).toBeNull();
+    const srd = applyLevelUp(old, 3, { level: 3 }, { kind: "srd" });
     expect(srd.customSubclass).toBeUndefined();
     expect(subclassLabel(srd, 3, "en")).toBe("Champion");
+    expect(chosenSubclassId(srd)).toBe("champion");
   });
 
   it("accepts any Player's Handbook subclass of the class, but not another class's", () => {
@@ -73,7 +73,9 @@ describe("subclass", () => {
     expect(book.useSubclass).toBe(false);
     expect(book.customSubclass).toBeUndefined();
     expect(subclassLabel(book, 3, "es")).toBe("Maestro del Combate");
-    expect(levelGains(book, 3).subclassFeatures).toEqual([]);
+    expect(levelGains(book, 3).subclassFeatures.map((feature) => feature.name.en)).toEqual(["Combat Superiority", "Student of War"]);
+    expect(levelGains(book, 7).subclassFeatures.map((feature) => feature.name.en)).toEqual(["Know Your Enemy"]);
+    expect(unlockedFeatures(book, 3).map((feature) => feature.name.en)).toContain("Student of War");
     expect(subclassLabel(applyLevelUp(book, 3, { level: 3 }, { kind: "srd" }), 3, "en")).toBe("Champion");
   });
 
@@ -86,10 +88,57 @@ describe("subclass", () => {
       expect(srdSubclassMatches(cls.id), cls.id).toBe(true);
     }
   });
+
+  it("tracks the features of all 48, gained at the same levels within each class", () => {
+    for (const cls of classes) {
+      const list = subclassesFor(cls.id);
+      for (const entry of list) expect(subclassTracked(entry), entry.id).toBe(true);
+      const progressions = list.map((entry) => entry.srd ? subclassFeatures[cls.id] : entry.features!);
+      for (const [index, progression] of progressions.entries()) expect(progression[3]?.length, list[index].id).toBeGreaterThan(0);
+      expect(new Set(progressions.map((progression) => Object.keys(progression).join())).size, `${cls.id} feature levels`).toBe(1);
+    }
+  });
+
+  it("applies the effects of Player's Handbook subclass features", () => {
+    const fighter2 = { ...fighter, levelUps: [{ level: 2 }] };
+    expect(levelUpSteps(withSubclass(fighter2, { kind: "book", id: "battleMaster" }), 3)).toContain("skills");
+    expect(skillOptions(withSubclass(fighter2, { kind: "book", id: "battleMaster" }), 3)).not.toContain("arcana");
+    const ranger2 = { ...fighter2, classId: "ranger" as const, useSubclass: false, classSkills: ["survival", "stealth", "nature"] as CharacterBuild["classSkills"] };
+    expect(skillOptions(withSubclass(ranger2, { kind: "book", id: "feyWanderer" }), 3)).toEqual(["deception", "performance", "persuasion"]);
+    const dancer = { ...fighter2, classId: "bard" as const, classEquipment: "B" as const, baseScores: { str: 8, dex: 15, con: 13, int: 10, wis: 12, cha: 14 } };
+    const plain = deriveSheet(applyLevelUp(dancer, 3, { level: 3, skills: [] }, { kind: "srd" }), 3)!.armorClass;
+    const dancing = deriveSheet(applyLevelUp(dancer, 3, { level: 3 }, { kind: "book", id: "dance" }), 3)!.armorClass;
+    expect(dancing - plain).toBe(2);
+  });
 });
 
 describe("Ability Score Improvement", () => {
   const at4 = { ...fighter, levelUps: [{ level: 2 }, { level: 3 }] };
+  it("offers every Player's Handbook feat and checks armor and spellcasting prerequisites", () => {
+    expect(asiFeats.length).toBe(52);
+    expect(fightingStyles.length).toBe(10);
+    expect(epicBoons.length).toBe(12);
+    const blocked = (build: CharacterBuild, id: string) => asiFeatOptions(build, 4).find((option) => option.id === id)?.blocked;
+    expect(blocked(at4, "heavyArmorMaster")).toBe(false);
+    expect(blocked(at4, "warCaster")).toBe(true);
+    const wizard = { ...at4, classId: "wizard" as const };
+    expect(blocked(wizard, "warCaster")).toBe(false);
+    expect(blocked(wizard, "moderatelyArmored")).toBe(true);
+    const knight = applyLevelUp({ ...at4, levelUps: [{ level: 2 }] }, 3, { level: 3, skills: ["athletics"] }, { kind: "book", id: "eldritchKnight" });
+    expect(blocked(knight, "warCaster")).toBe(false);
+    const withSkilled = { ...at4, levelUps: [{ level: 2 }, { level: 3 }, { level: 4, feat: { id: "skilled" as const, skills: ["arcana", "history", "nature"] as CharacterBuild["classSkills"] } }] };
+    expect(asiFeatOptions(withSkilled, 6).find((option) => option.id === "skilled")?.blocked).toBe(false);
+  });
+
+  it("applies the Hit Point and speed bonuses of feats and boons", () => {
+    const at19 = { ...fighter, levelUps: Array.from({ length: 17 }, (_, index) => ({ level: index + 2 })) };
+    const base = deriveSheet(at19, 18)!;
+    const boon = deriveSheet({ ...at19, levelUps: [...at19.levelUps, { level: 19, feat: { id: "fortitude" as const, ability: "con" as const } }] }, 19)!;
+    expect(boon.hitPoints - deriveSheet({ ...at19, levelUps: [...at19.levelUps, { level: 19, feat: { id: "truesight" as const, ability: "con" as const } }] }, 19)!.hitPoints).toBe(40);
+    const speedy = deriveSheet({ ...at4, levelUps: [...at4.levelUps, { level: 4, feat: { id: "speedy" as const, ability: "dex" as const } }] }, 4)!;
+    expect(speedy.speed - base.speed).toBe(10);
+  });
+
   it("accepts +2 to one or +1 to two, never over 20", () => {
     expect(levelUpIssues(at4, 4, { level: 4, asi: { str: 2 } }, null)).toEqual([]);
     expect(levelUpIssues(at4, 4, { level: 4, asi: { str: 1, dex: 1 } }, null)).toEqual([]);

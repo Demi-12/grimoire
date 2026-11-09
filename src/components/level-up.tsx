@@ -6,7 +6,7 @@ import { translate, type Locale } from "@/lib/i18n";
 import { findClass, magicInitiateLists, say, skillKeys, type MagicInitiateList, type SkillKey } from "@/lib/dnd2024";
 import { deriveSheet, finalScores, hpPerLevelBonus, type CharacterBuild, type FeatPick, type LevelUpChoice } from "@/lib/character-sheet";
 import {
-  asiFeatOptions, averageHitDie, applyLevelUp, expertiseFor, expertiseOptions, fightingStyleOptions, levelGains, levelUpIssues, levelUpSteps, MAX_CUSTOM_SUBCLASS, MAX_LEVEL,
+  asiFeatOptions, averageHitDie, applyLevelUp, expertiseFor, expertiseOptions, fightingStyleOptions, levelGains, levelUpIssues, levelUpSteps, MAX_LEVEL,
   skillOptions, skillsFor, subclassLabel, withSubclass, type LevelStep, type SubclassPick,
 } from "@/lib/levelup";
 import { epicBoons, featInfo, type Feature, type LevelFeatId, type FightingStyleId } from "@/lib/levelup-data";
@@ -42,7 +42,7 @@ const copy = {
     hpAverage: "Take the average", hpAverageHelp: "A fixed number, no luck involved.", hpRoll: "Roll the die", hpRollHelp: "Could be higher or lower than average. At the table, roll a real die if you prefer.",
     recommended: "Recommended", rollFor: "Roll for me", rollLabel: (die: number) => `Result of your d${die}`, hpGain: (gain: number) => `You gain +${gain} HP this level (your Constitution modifier is included).`,
     subclassIntro: "At level 3 every class picks a subclass: a specialty that gives your character a unique style and extra abilities as they level. You can't change it later, so read the options.",
-    subclassSrd: "Free SRD · abilities tracked", subclassOther: "Another subclass (homebrew or another book)", subclassOtherHelp: "Type its name; Grimoire will show it on your sheet but won't track its abilities.", subclassName: "Subclass name",
+    subclassSrd: "Free SRD · abilities tracked",
     subclassSrdNote: "This is the subclass in the free System Reference Document.", level: "level",
     subclassBook: "Player's Handbook", subclassBookTracked: "Player's Handbook · abilities tracked", subclassBookNote: "Grimoire shows it on your sheet; look up its abilities in your book.",
     asiIntro: "Your hero improves! Choose one: raise your ability scores, or take a feat (a special talent). Scores can't go above 20.",
@@ -57,7 +57,7 @@ const copy = {
       level: "Level", hp: "Hit Points", proficiency: "Proficiency Bonus", ac: "Armor Class", scores: "Ability scores", subclass: "Subclass", feat: "Feat", style: "Fighting Style", skills: "New skills", expertise: "Expertise",
     } as Record<string, string>,
     issues: {
-      hp: "Enter the number you rolled (1 to your die size).", subclass: "Choose a subclass or write its name.", asi: "Finish your improvement or feat.", boon: "Choose an Epic Boon and the ability that gets +1.",
+      hp: "Enter the number you rolled (1 to your die size).", subclass: "Choose a subclass.", asi: "Finish your improvement or feat.", boon: "Choose an Epic Boon and the ability that gets +1.",
       fightingStyle: "Choose a Fighting Style you don't have yet.", skills: "Choose your new skills.", expertise: "Choose the skills to improve.",
     } as Record<string, string>,
     maxLevel: "This character is already at the maximum level.",
@@ -77,7 +77,7 @@ const copy = {
     hpAverage: "Tomar el promedio", hpAverageHelp: "Un número fijo, sin azar.", hpRoll: "Tirar el dado", hpRollHelp: "Puede salir más o menos que el promedio. En la mesa, tira un dado real si prefieres.",
     recommended: "Recomendado", rollFor: "Tirar por mí", rollLabel: (die: number) => `Resultado de tu d${die}`, hpGain: (gain: number) => `Ganas +${gain} PG este nivel (ya incluye tu modificador de Constitución).`,
     subclassIntro: "En el nivel 3 toda clase elige una subclase: una especialidad que da a tu personaje un estilo único y habilidades extra al subir. No se puede cambiar después, así que lee las opciones.",
-    subclassSrd: "SRD gratuito · rasgos incluidos", subclassOther: "Otra subclase (casera o de otro libro)", subclassOtherHelp: "Escribe su nombre; Grimoire la mostrará en tu ficha pero no seguirá sus habilidades.", subclassName: "Nombre de la subclase",
+    subclassSrd: "SRD gratuito · rasgos incluidos",
     subclassSrdNote: "Es la subclase del System Reference Document gratuito.", level: "nivel",
     subclassBook: "Manual del Jugador", subclassBookTracked: "Manual del Jugador · rasgos incluidos", subclassBookNote: "Grimoire la muestra en tu ficha; consulta sus rasgos en tu libro.",
     asiIntro: "¡Tu héroe mejora! Elige una opción: subir tus características o tomar una dote (un talento especial). Las características no pueden pasar de 20.",
@@ -92,7 +92,7 @@ const copy = {
       level: "Nivel", hp: "Puntos de golpe", proficiency: "Bonificador por competencia", ac: "Clase de armadura", scores: "Características", subclass: "Subclase", feat: "Dote", style: "Estilo de combate", skills: "Habilidades nuevas", expertise: "Pericia",
     } as Record<string, string>,
     issues: {
-      hp: "Escribe el resultado de tu tirada (de 1 al tamaño de tu dado).", subclass: "Elige una subclase o escribe su nombre.", asi: "Termina tu mejora o tu dote.", boon: "Elige un don épico y la característica que recibe +1.",
+      hp: "Escribe el resultado de tu tirada (de 1 al tamaño de tu dado).", subclass: "Elige una subclase.", asi: "Termina tu mejora o tu dote.", boon: "Elige un don épico y la característica que recibe +1.",
       fightingStyle: "Elige un estilo de combate que aún no tengas.", skills: "Elige tus habilidades nuevas.", expertise: "Elige las habilidades a mejorar.",
     } as Record<string, string>,
     maxLevel: "Este personaje ya está en el nivel máximo.",
@@ -117,11 +117,9 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
 
   const [hpMode, setHpMode] = useState<"average" | "roll">("average");
   const [rollText, setRollText] = useState("");
-  /** "srd", "custom" or the id of a Player's Handbook subclass. */
+  /** "srd" or the id of a Player's Handbook subclass. */
   const [subclass, setSubclass] = useState("");
-  const [customName, setCustomName] = useState("");
-  const pick = useMemo((): SubclassPick | null =>
-    subclass === "srd" ? { kind: "srd" } : subclass === "custom" ? { kind: "custom", name: customName } : subclass ? { kind: "book", id: subclass } : null, [subclass, customName]);
+  const pick = useMemo((): SubclassPick | null => subclass === "srd" ? { kind: "srd" } : subclass ? { kind: "book", id: subclass } : null, [subclass]);
   // The build with the subclass being picked, so its level 3 features (and the choices they ask for) show up.
   const target = useMemo(() => withSubclass(build, pick), [build, pick]);
   const steps = useMemo(() => levelUpSteps(target, next), [target, next]);
@@ -253,12 +251,10 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
             return <Choice key={key} selected={subclass === key} onClick={() => setSubclass(key)}><strong>{say(entry.name, locale)}</strong>
               <small>{(entry.srd ? c.subclassSrd : subclassTracked(entry) ? c.subclassBookTracked : c.subclassBook).toUpperCase()}</small><em>{say(entry.pitch, locale)}</em></Choice>;
           })}
-          <Choice selected={subclass === "custom"} onClick={() => setSubclass("custom")}><strong>{c.subclassOther}</strong><em>{c.subclassOtherHelp}</em></Choice>
         </div>
-        {pick && pick.kind !== "custom" && gains.subclassFeatures.length > 0 && <div className={styles.detail}><h3>{subclassLabel(target, next, locale)}</h3>
+        {pick && gains.subclassFeatures.length > 0 && <div className={styles.detail}><h3>{subclassLabel(target, next, locale)}</h3>
           {pick.kind === "srd" && <p className={styles.note}>{c.subclassSrdNote}</p>}<FeatureList items={gains.subclassFeatures} locale={locale} /></div>}
         {pick?.kind === "book" && !gains.subclassFeatures.length && <p className={styles.note}>{c.subclassBookNote}</p>}
-        {subclass === "custom" && <label className={`${styles.field} ${own.customName}`}>{c.subclassName}<input maxLength={MAX_CUSTOM_SUBCLASS} value={customName} onChange={(event) => setCustomName(event.target.value)} /></label>}
       </>}
 
       {current === "asi" && <>

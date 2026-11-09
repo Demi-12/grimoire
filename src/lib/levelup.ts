@@ -10,15 +10,15 @@ import {
 } from "./character-sheet";
 import {
   asiFeats, BOON_LEVEL, classScaling, epicBoons, featInfo, fightingStyles, isAsiLevel,
-  spellProgress, SUBCLASS_LEVEL, type Feature, type FightingStyleId, type LevelFeatId, type Scaling, type SpellProgress,
+  spellProgress, SUBCLASS_LEVEL, type ArmorTraining, type Feature, type FightingStyleId, type LevelFeatId, type Scaling, type SpellProgress,
 } from "./levelup-data";
-import { findBookSubclass } from "./subclasses";
+import { findBookSubclass, srdSubclassId } from "./subclasses";
 
 export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "skills" | "expertise";
-export type SubclassPick = { kind: "srd" } | { kind: "book"; id: string } | { kind: "custom"; name: string };
+/** The subclass picked at level 3: always one from the list in subclasses.ts, never typed. */
+export type SubclassPick = { kind: "srd" } | { kind: "book"; id: string };
 
 export const MAX_LEVEL = 20;
-export const MAX_CUSTOM_SUBCLASS = 60;
 
 /** How many skills a feature lets the player pick, optionally from a fixed list. */
 export interface SkillGrant { count: number; from?: SkillKey[] }
@@ -49,8 +49,13 @@ export function withSubclass(build: CharacterBuild, subclass: SubclassPick | nul
   delete next.customSubclass;
   next.useSubclass = subclass.kind === "srd";
   if (subclass.kind === "book") next.subclassId = subclass.id;
-  if (subclass.kind === "custom") next.customSubclass = subclass.name.trim().slice(0, MAX_CUSTOM_SUBCLASS);
   return next;
+}
+
+/** Id of the subclass the build has (SRD one included), or null before choosing or for an old typed-in subclass. */
+export function chosenSubclassId(build: CharacterBuild): string | null {
+  if (build.useSubclass) return srdSubclassId(build.classId);
+  return findBookSubclass(build.classId, build.subclassId)?.id ?? null;
 }
 
 /** Choice steps this level asks for, in the order the guide shows them. At level 3, pass the build `withSubclass`. */
@@ -94,15 +99,35 @@ export function expertiseOptions(build: CharacterBuild, level: number): SkillKey
   return proficientSkills(build, level - 1).filter((skill) => !already.has(skill) && (!grant.from || grant.from.includes(skill)));
 }
 
+/** Armor the character is trained with at `level`: from the class, the Valor subclass and armor feats. */
+export function armorTraining(build: CharacterBuild, level: number): Set<ArmorTraining> {
+  const text = findClass(build.classId)?.armor.en.toLowerCase() ?? "";
+  const training = new Set((["light", "medium", "heavy", "shield"] as const).filter((kind) => text.includes(kind)));
+  if (level >= SUBCLASS_LEVEL && chosenSubclassId(build) === "valor") { training.add("medium"); training.add("shield"); }
+  const feats = allFeats(build, level);
+  if (feats.includes("lightlyArmored")) { training.add("light"); training.add("shield"); }
+  if (feats.includes("moderatelyArmored")) { training.add("medium"); training.add("shield"); }
+  if (feats.includes("heavilyArmored")) training.add("heavy");
+  return training;
+}
+
+/** Whether the character has the Spellcasting or Pact Magic feature at `level`, from the class or a casting subclass. */
+export function hasSpellcasting(build: CharacterBuild, level: number): boolean {
+  if (findClass(build.classId)?.spellcasting) return true;
+  return level >= SUBCLASS_LEVEL && ["eldritchKnight", "arcaneTrickster"].includes(chosenSubclassId(build) ?? "");
+}
+
 /** Feats offered with an Ability Score Improvement, minus those the character can't take. */
 export function asiFeatOptions(build: CharacterBuild, level: number): { id: LevelFeatId; blocked: boolean }[] {
   const owned = new Set(allFeats(build, level - 1));
   const scores = finalScores(build, level - 1);
+  const armor = armorTraining(build, level - 1);
+  const casting = hasSpellcasting(build, level - 1);
   return asiFeats.map((id) => {
     const info = featInfo(id);
-    const repeatable = id === "skilled";
-    const meetsRequirement = !info.requires || info.requires.some((key) => scores[key] >= 13);
-    return { id, blocked: (owned.has(id) && !repeatable) || !meetsRequirement };
+    const meetsRequirement = (!info.requires || info.requires.some((key) => scores[key] >= 13))
+      && (!info.requiresArmor || armor.has(info.requiresArmor)) && (!info.requiresCasting || casting);
+    return { id, blocked: (owned.has(id) && !info.repeatable) || !meetsRequirement };
   });
 }
 
@@ -134,8 +159,7 @@ function asiValid(build: CharacterBuild, level: number, asi: LevelUpChoice["asi"
 
 function subclassPickValid(build: CharacterBuild, pick: SubclassPick | null): boolean {
   if (pick?.kind === "srd") return true;
-  if (pick?.kind === "book") return !!findBookSubclass(build.classId, pick.id);
-  return pick?.kind === "custom" && !!pick.name.trim();
+  return pick?.kind === "book" && !!findBookSubclass(build.classId, pick.id);
 }
 
 /** The build the level's steps are computed from: at level 3, with the picked subclass if it's valid. */
