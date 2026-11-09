@@ -4,13 +4,13 @@
  * Feature names are official; the one-line tips are our own plain-language summaries, not rules text.
  */
 import type { AbilityKey } from "./rules";
-import { originFeats, type ClassId, type FeatId, type Feature, type SkillKey, type Text } from "./dnd2024";
+import { feature, findClass, originFeats, type ClassId, type FeatId, type Feature, type SkillKey, type Text } from "./dnd2024";
+import type { Effect } from "./effects";
 
 export type { Feature };
 
 const t = (en: string, es: string): Text => ({ en, es });
-
-const f = (en: string, es: string, tipEn: string, tipEs: string): Feature => ({ name: t(en, es), tip: t(tipEn, tipEs) });
+const f = feature;
 
 export type FightingStyleId = "archery" | "defense" | "greatWeaponFighting" | "twoWeaponFighting";
 export type EpicBoonId = "combatProwess" | "dimensionalTravel" | "fate" | "irresistibleOffense" | "spellRecall" | "nightSpirit" | "truesight";
@@ -24,6 +24,7 @@ export interface FeatInfo {
   abilities?: AbilityKey[];
   /** Prerequisite: at least one of these abilities must be 13 or higher. */
   requires?: AbilityKey[];
+  effects?: Effect[];
 }
 
 const allAbilities: AbilityKey[] = ["str", "dex", "con", "int", "wis", "cha"];
@@ -36,7 +37,7 @@ export const featCatalog: Record<LevelFeatId, FeatInfo> = {
   ...originFeatInfo,
   grappler: { category: "general", name: t("Grappler", "Luchador"), abilities: ["str", "dex"], requires: ["str", "dex"], summary: t("+1 Strength or Dexterity, and you get much better at grabbing and pinning enemies.", "+1 a Fuerza o Destreza, y te vuelves mucho mejor agarrando e inmovilizando enemigos.") },
   archery: { category: "fightingStyle", name: t("Archery", "Arquería"), summary: t("+2 to attack rolls with ranged weapons.", "+2 a las tiradas de ataque con armas a distancia.") },
-  defense: { category: "fightingStyle", name: t("Defense", "Defensa"), summary: t("+1 Armor Class while you wear armor.", "+1 a la Clase de Armadura mientras llevas armadura.") },
+  defense: { category: "fightingStyle", effects: [{ kind: "acBonus", amount: 1, whileArmored: true }], name: t("Defense", "Defensa"), summary: t("+1 Armor Class while you wear armor.", "+1 a la Clase de Armadura mientras llevas armadura.") },
   greatWeaponFighting: { category: "fightingStyle", name: t("Great Weapon Fighting", "Combate con armas grandes"), summary: t("When you roll a 1 or 2 on a damage die with a two-handed weapon, treat it as a 3.", "Con un arma a dos manos, un 1 o un 2 en un dado de daño cuenta como 3.") },
   twoWeaponFighting: { category: "fightingStyle", name: t("Two-Weapon Fighting", "Combate con dos armas"), summary: t("Add your ability modifier to the damage of your extra off-hand attack.", "Suma tu modificador al daño del ataque extra con la mano torpe.") },
   combatProwess: { category: "epicBoon", abilities: allAbilities, name: t("Boon of Combat Prowess", "Don de destreza en combate"), summary: t("Once per turn, turn a missed attack into a hit.", "Una vez por turno, convierte un ataque fallado en un impacto.") },
@@ -62,33 +63,25 @@ export const BOON_LEVEL = 19;
 export const SUBCLASS_LEVEL = 3;
 export const isAsiLevel = (classId: ClassId, level: number) => asiLevels(classId).includes(level);
 
-/** Expertise a class grants at a level: how many proficient skills to double, optionally from a fixed list. */
-export interface ExpertiseGrant { count: number; from?: SkillKey[] }
 const scholarSkills: SkillKey[] = ["arcana", "history", "investigation", "medicine", "nature", "religion"];
-const expertiseTable: Partial<Record<ClassId, Record<number, ExpertiseGrant>>> = {
-  bard: { 2: { count: 2 }, 9: { count: 2 } },
-  rogue: { 6: { count: 2 } },
-  ranger: { 2: { count: 1 }, 9: { count: 2 } },
-  wizard: { 2: { count: 1, from: scholarSkills } },
-};
-export const expertiseGrant = (classId: ClassId, level: number): ExpertiseGrant | null => expertiseTable[classId]?.[level] ?? null;
-
-/** Levels where the class (or the SRD subclass) grants a Fighting Style choice. */
-export function fightingStyleLevel(classId: ClassId, level: number, srdSubclass: boolean): boolean {
-  if ((classId === "paladin" || classId === "ranger") && level === 2) return true;
-  return classId === "fighter" && srdSubclass && level === 7;
-}
+const expertise = (count: number, from?: SkillKey[]): Effect[] => [{ kind: "chooseExpertise", count, ...(from ? { from } : {}) }];
+const expertiseFeature = (count: number) => f("Expertise", "Pericia",
+  `Double your Proficiency Bonus on ${count === 1 ? "one skill" : `${count} skills`} you're proficient in.`,
+  `Duplica tu bonificador por competencia en ${count === 1 ? "una habilidad" : `${count} habilidades`} en las que eres competente.`, expertise(count));
+const fightingStyle = f("Fighting Style", "Estilo de combate", "Pick a Fighting Style, a permanent specialty with your weapons or armor.",
+  "Eliges un estilo de combate, una especialidad permanente con tus armas o armadura.", [{ kind: "chooseFightingStyle" }]);
 
 // --- Class features -------------------------------------------------------------------------------------------------
 
-type Progression = Partial<Record<number, Feature[]>>;
+export type Progression = Partial<Record<number, Feature[]>>;
 
-/** Features gained at each level (2-20). Subclass features, ASIs, Expertise and Fighting Style choices are added by the planner. */
+/** Features gained at each level (2-20). Subclass features, ASIs and Epic Boons are added by the planner. */
 export const classFeatures: Record<ClassId, Progression> = {
   barbarian: {
     2: [f("Danger Sense", "Sentido del peligro", "Advantage on Dexterity saves against effects you can see, like traps and spells.", "Ventaja en salvaciones de Destreza contra efectos que veas, como trampas y conjuros."),
       f("Reckless Attack", "Ataque temerario", "Attack with advantage this turn, but enemies get advantage against you until your next turn.", "Atacas con ventaja este turno, pero los enemigos la tienen contra ti hasta tu próximo turno.")],
-    3: [f("Primal Knowledge", "Conocimiento primigenio", "Gain another Barbarian skill; while raging you can use Strength for some skill checks.", "Ganas otra habilidad de bárbaro; en furia puedes usar Fuerza en algunas pruebas.")],
+    3: [f("Primal Knowledge", "Conocimiento primigenio", "Gain another Barbarian skill; while raging you can use Strength for some skill checks.", "Ganas otra habilidad de bárbaro; en furia puedes usar Fuerza en algunas pruebas.",
+      [{ kind: "chooseSkills", count: 1, from: findClass("barbarian")?.skillOptions }])],
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar."),
       f("Fast Movement", "Movimiento rápido", "+10 feet of speed while you aren't wearing heavy armor.", "+10 pies de velocidad si no llevas armadura pesada.")],
     7: [f("Feral Instinct", "Instinto feral", "Advantage on Initiative rolls.", "Ventaja en las tiradas de iniciativa."),
@@ -102,9 +95,10 @@ export const classFeatures: Record<ClassId, Progression> = {
     20: [f("Primal Champion", "Campeón primigenio", "Strength and Constitution each go up by 4 (maximum 25).", "Fuerza y Constitución suben 4 puntos (máximo 25).")],
   },
   bard: {
-    2: [f("Jack of All Trades", "Aprendiz de todo", "Add half your Proficiency Bonus to checks you aren't proficient in.", "Suma la mitad de tu competencia a pruebas en las que no eres competente.")],
+    2: [expertiseFeature(2), f("Jack of All Trades", "Aprendiz de todo", "Add half your Proficiency Bonus to checks you aren't proficient in.", "Suma la mitad de tu competencia a pruebas en las que no eres competente.")],
     5: [f("Font of Inspiration", "Fuente de inspiración", "You regain Bardic Inspiration after a Short or Long Rest.", "Recuperas Inspiración bárdica tras un descanso corto o largo.")],
     7: [f("Countercharm", "Contraencantamiento", "Help allies shake off being Charmed or Frightened.", "Ayuda a tus aliados a librarse de ser hechizados o asustados.")],
+    9: [expertiseFeature(2)],
     10: [f("Magical Secrets", "Secretos mágicos", "Prepare spells from any class's list, not just the Bard list.", "Prepara conjuros de la lista de cualquier clase, no solo la de bardo.")],
     18: [f("Superior Inspiration", "Inspiración superior", "Start each fight with Bardic Inspiration uses ready.", "Empiezas cada combate con usos de Inspiración bárdica disponibles.")],
     20: [f("Words of Creation", "Palabras de creación", "Learn two powerful spells that can affect extra creatures.", "Aprendes dos conjuros muy poderosos que afectan a una criatura extra.")],
@@ -154,13 +148,14 @@ export const classFeatures: Record<ClassId, Progression> = {
     10: [f("Heightened Focus", "Enfoque intensificado", "Flurry of Blows, Patient Defense and Step of the Wind get stronger.", "Ráfaga de golpes, Defensa paciente y Paso del viento mejoran."),
       f("Self-Restoration", "Autorrestauración", "End a Charmed, Frightened or Poisoned condition on yourself.", "Termina un estado de hechizado, asustado o envenenado en ti.")],
     13: [f("Deflect Energy", "Desviar energía", "Deflect Attacks now works on all damage types.", "Desviar ataques funciona ahora contra todo tipo de daño.")],
-    14: [f("Disciplined Survivor", "Superviviente disciplinado", "Proficiency in all saving throws, and spend Focus Points to reroll one.", "Competencia en todas las salvaciones; gasta enfoque para repetir una.")],
+    14: [f("Disciplined Survivor", "Superviviente disciplinado", "Proficiency in all saving throws, and spend Focus Points to reroll one.", "Competencia en todas las salvaciones; gasta enfoque para repetir una.",
+      [{ kind: "saveProficiency", abilities: ["str", "dex", "con", "int", "wis", "cha"] }])],
     15: [f("Perfect Focus", "Enfoque perfecto", "Regain Focus Points when you roll Initiative with few left.", "Recuperas Puntos de enfoque al tirar iniciativa si te quedan pocos.")],
     18: [f("Superior Defense", "Defensa superior", "Spend Focus Points to resist nearly all damage types for a minute.", "Gasta enfoque para resistir casi todo tipo de daño durante un minuto.")],
     20: [f("Body and Mind", "Cuerpo y mente", "Dexterity and Wisdom each go up by 4 (maximum 25).", "Destreza y Sabiduría suben 4 puntos (máximo 25).")],
   },
   paladin: {
-    2: [f("Paladin's Smite", "Castigo del paladín", "Always have Divine Smite ready, free once per long rest.", "Siempre tienes Castigo divino preparado, gratis una vez por descanso largo.")],
+    2: [fightingStyle, f("Paladin's Smite", "Castigo del paladín", "Always have Divine Smite ready, free once per long rest.", "Siempre tienes Castigo divino preparado, gratis una vez por descanso largo.")],
     3: [f("Channel Divinity", "Canalizar divinidad", "Spend a use for a divine effect; your subclass adds more options.", "Gasta un uso para un efecto divino; tu subclase añade más opciones.")],
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar."),
       f("Faithful Steed", "Montura fiel", "Cast Find Steed for free once per long rest.", "Lanza Encontrar montura gratis una vez por descanso largo.")],
@@ -172,9 +167,10 @@ export const classFeatures: Record<ClassId, Progression> = {
     18: [f("Aura Expansion", "Expansión del aura", "Your auras reach 30 feet instead of 10.", "Tus auras llegan a 30 pies en vez de 10.")],
   },
   ranger: {
-    2: [f("Deft Explorer", "Explorador diestro", "Gain Expertise in one skill, two languages and extra travel know-how.", "Ganas pericia en una habilidad y dos idiomas más.")],
+    2: [f("Deft Explorer", "Explorador diestro", "Gain Expertise in one skill, two languages and extra travel know-how.", "Ganas pericia en una habilidad y dos idiomas más.", expertise(1)), fightingStyle],
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar.")],
     6: [f("Roving", "Errante", "Extra speed, plus Climb and Swim speeds.", "Más velocidad y velocidades de trepar y nadar.")],
+    9: [expertiseFeature(2)],
     10: [f("Tireless", "Incansable", "Grant yourself temporary HP and shrug off exhaustion.", "Te das PG temporales y te libras del agotamiento.")],
     13: [f("Relentless Hunter", "Cazador implacable", "Taking damage can't break your concentration on Hunter's Mark.", "Recibir daño no rompe tu concentración en Marca del cazador.")],
     14: [f("Nature's Veil", "Velo de la naturaleza", "Turn invisible for a moment as a bonus action.", "Te vuelves invisible un momento con acción adicional.")],
@@ -187,11 +183,12 @@ export const classFeatures: Record<ClassId, Progression> = {
     3: [f("Steady Aim", "Puntería firme", "Give up your movement to gain advantage on your next attack (for Sneak Attack).", "Renuncia a moverte para tener ventaja en tu ataque (útil para Ataque furtivo).")],
     5: [f("Cunning Strike", "Golpe astuto", "Trade Sneak Attack dice for effects like poisoning or tripping.", "Cambia dados de Ataque furtivo por efectos como envenenar o derribar."),
       f("Uncanny Dodge", "Esquiva asombrosa", "Use your reaction to halve the damage of one attack.", "Usa tu reacción para reducir a la mitad el daño de un ataque.")],
+    6: [expertiseFeature(2)],
     7: [f("Evasion", "Evasión", "Take no damage on a successful Dexterity save against area effects, and half on a failure.", "No sufres daño si superas una salvación de Destreza contra efectos de área, y la mitad si fallas."),
       f("Reliable Talent", "Talento fiable", "Any d20 roll of 9 or lower counts as a 10 on skills you're proficient in.", "Un d20 de 9 o menos cuenta como 10 en habilidades en las que eres competente.")],
     11: [f("Improved Cunning Strike", "Golpe astuto mejorado", "Use two Cunning Strike effects on a single hit.", "Usa dos efectos de Golpe astuto en un mismo impacto.")],
     14: [f("Devious Strikes", "Golpes pérfidos", "Cunning Strike unlocks even nastier effects.", "Golpe astuto desbloquea efectos aún más crueles.")],
-    15: [f("Slippery Mind", "Mente escurridiza", "Proficiency in Wisdom and Charisma saving throws.", "Competencia en salvaciones de Sabiduría y Carisma.")],
+    15: [f("Slippery Mind", "Mente escurridiza", "Proficiency in Wisdom and Charisma saving throws.", "Competencia en salvaciones de Sabiduría y Carisma.", [{ kind: "saveProficiency", abilities: ["wis", "cha"] }])],
     18: [f("Elusive", "Elusivo", "No attack roll has advantage against you while you aren't incapacitated.", "Ninguna tirada de ataque tiene ventaja contra ti mientras no estés incapacitado.")],
     20: [f("Stroke of Luck", "Golpe de suerte", "Turn a missed attack or failed check into a success (once per rest).", "Convierte un ataque o prueba fallados en un éxito (una vez por descanso).")],
   },
@@ -214,7 +211,7 @@ export const classFeatures: Record<ClassId, Progression> = {
     20: [f("Eldritch Master", "Maestro sobrenatural", "Spend a minute to regain all your Pact Magic slots.", "Dedica un minuto a recuperar todos tus espacios de Magia de pacto.")],
   },
   wizard: {
-    2: [f("Scholar", "Erudito", "Gain Expertise in one Arcana, History, Investigation, Medicine, Nature or Religion skill.", "Ganas pericia en una de Arcanos, Historia, Investigación, Medicina, Naturaleza o Religión.")],
+    2: [f("Scholar", "Erudito", "Gain Expertise in one Arcana, History, Investigation, Medicine, Nature or Religion skill.", "Ganas pericia en una de Arcanos, Historia, Investigación, Medicina, Naturaleza o Religión.", expertise(1, scholarSkills))],
     5: [f("Memorize Spell", "Memorizar conjuro", "Swap one prepared spell for another when you finish a Short Rest.", "Cambia un conjuro preparado por otro al terminar un descanso corto.")],
     18: [f("Spell Mastery", "Maestría de conjuros", "Cast a level 1 and a level 2 spell at will, without using slots.", "Lanza un conjuro de nivel 1 y otro de nivel 2 a voluntad, sin gastar espacios.")],
     20: [f("Signature Spells", "Conjuros característicos", "Pick two level 3 spells you can cast for free once per rest.", "Elige dos conjuros de nivel 3 que lanzas gratis una vez por descanso.")],
@@ -230,7 +227,7 @@ export const subclassFeatures: Record<ClassId, Progression> = {
     14: [f("Intimidating Presence", "Presencia intimidante", "Frighten nearby enemies as a bonus action.", "Asustas a enemigos cercanos con una acción adicional.")],
   },
   bard: {
-    3: [f("Bonus Proficiencies", "Competencias adicionales", "Gain proficiency with three more skills.", "Ganas competencia en tres habilidades más."),
+    3: [f("Bonus Proficiencies", "Competencias adicionales", "Gain proficiency with three more skills.", "Ganas competencia en tres habilidades más.", [{ kind: "chooseSkills", count: 3 }]),
       f("Cutting Words", "Palabras cortantes", "Use your reaction to subtract from an enemy's roll.", "Usa tu reacción para restar a la tirada de un enemigo.")],
     6: [f("Magical Discoveries", "Descubrimientos mágicos", "Learn two spells from any class's list.", "Aprendes dos conjuros de la lista de cualquier clase.")],
     14: [f("Peerless Skill", "Habilidad sin par", "Add your Bardic Inspiration die to your own failed checks.", "Suma tu dado de Inspiración bárdica a tus propias pruebas fallidas.")],
@@ -252,7 +249,7 @@ export const subclassFeatures: Record<ClassId, Progression> = {
   fighter: {
     3: [f("Improved Critical", "Crítico mejorado", "Your weapon attacks score a critical hit on a roll of 19 or 20.", "Tus ataques con arma son críticos con 19 o 20."),
       f("Remarkable Athlete", "Atleta notable", "Better at Strength and Dexterity checks and at jumping.", "Mejor en pruebas de Fuerza y Destreza, y al saltar.")],
-    7: [f("Additional Fighting Style", "Estilo de combate adicional", "Choose a second Fighting Style.", "Eliges un segundo Estilo de combate.")],
+    7: [f("Additional Fighting Style", "Estilo de combate adicional", "Choose a second Fighting Style.", "Eliges un segundo Estilo de combate.", [{ kind: "chooseFightingStyle" }])],
     10: [f("Heroic Warrior", "Guerrero heroico", "Start each of your turns with Heroic Inspiration if you have none.", "Empiezas cada turno con Inspiración heroica si no la tienes.")],
     15: [f("Superior Critical", "Crítico superior", "Your weapon attacks now crit on 18-20.", "Tus ataques con arma son críticos con 18-20.")],
     18: [f("Survivor", "Superviviente", "Advantage on death saves and regain HP each turn when hurt.", "Ventaja en salvaciones de muerte y recuperas PG cada turno si estás herido.")],
@@ -285,7 +282,8 @@ export const subclassFeatures: Record<ClassId, Progression> = {
     17: [f("Thief's Reflexes", "Reflejos de ladrón", "Take two turns in the first round of combat.", "Haces dos turnos en la primera ronda de combate.")],
   },
   sorcerer: {
-    3: [f("Draconic Resilience", "Resistencia dracónica", "More HP and natural scaly armor.", "Más PG y una armadura natural de escamas."),
+    3: [f("Draconic Resilience", "Resistencia dracónica", "More HP and natural scaly armor.", "Más PG y una armadura natural de escamas.",
+      [{ kind: "hpPerLevel", amount: 1 }, { kind: "unarmoredDefense", add: ["cha"] }]),
       f("Draconic Spells", "Conjuros dracónicos", "Always have extra dragon-themed spells prepared.", "Siempre tienes preparados conjuros extra de temática dracónica.")],
     6: [f("Elemental Affinity", "Afinidad elemental", "Boost one damage type and resist it.", "Potencias un tipo de daño y lo resistes.")],
     14: [f("Dragon Wings", "Alas de dragón", "Sprout wings and fly.", "Te salen alas y vuelas.")],
