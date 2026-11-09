@@ -41,6 +41,8 @@
 .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 .quietButton, .deleteButton, .removeHero { min-height: 28px; min-width: 28px; padding: 6px 8px; color: var(--campaign-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
 .deleteButton { color: #762b23; border-color: #c99b83; }
+.mapLink { display: inline-flex; align-items: center; min-height: 28px; padding: 6px 10px; color: #fff3df; background: var(--crimson-fill); border-radius: 2px; font: 700 var(--text-xs) var(--font-label); text-decoration: none; }
+.mapLink:hover { text-decoration: underline; }
 .renameForm { width: 100%; display: flex; gap: 7px; flex-wrap: wrap; }
 .renameForm input { flex: 1; }
 .renameForm .quietButton { color: var(--campaign-muted); background: transparent; border-color: #c9b58d; }
@@ -92,6 +94,6 @@
 
 /* Touch: every action reaches 40px on phones and touch screens. */
 @media (pointer: coarse), (max-width: 650px) {
-  .quietButton, .deleteButton, .removeHero, .addMember button, .addMember select, .addMember input { min-height: 40px; }
+  .quietButton, .deleteButton, .removeHero, .mapLink, .addMember button, .addMember select, .addMember input { min-height: 40px; }
   .removeHero { min-width: 40px; }
 }
