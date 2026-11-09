@@ -7,7 +7,7 @@
 .scopes { display: inline-flex; border: 1px solid var(--control-line); }
 .scopes button { min-height: 40px; padding: 0 14px; border: 0; border-right: 1px solid var(--control-line); background: transparent; color: var(--ink); font: 600 var(--text-xs) var(--font-label); letter-spacing: .06em; cursor: pointer; }
 .scopes button:last-child { border-right: 0; }
-.scopes button[aria-pressed="true"] { background: var(--crimson-fill); color: #fff3df; }
+.scopes button[aria-pressed="true"] { background: var(--crimson-fill); color: #ede9f5; }
 
 .list { display: grid; gap: 8px; }
 .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; width: 100%; padding: 10px 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; min-height: 44px; }

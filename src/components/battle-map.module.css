@@ -1,8 +1,8 @@
 /* Battle map page (/map/<campaign id>): its own full page, outside the toolkit shell. */
 .page, .table {
-  --map-floor: #f3e6c8;
-  --map-line: rgba(111, 89, 68, .38);
-  --map-coord: #6f5944;
+  --map-floor: #d9d2e9;
+  --map-line: rgba(83, 73, 106, .38);
+  --map-coord: #53496a;
 }
 .page {
   min-height: 100vh;
@@ -11,9 +11,9 @@
   background: var(--paper);
 }
 :global(:root[data-theme="dark"]) .page, :global(:root[data-theme="dark"]) .table {
-  --map-floor: #2a2018;
-  --map-line: rgba(189, 165, 133, .3);
-  --map-coord: #bda585;
+  --map-floor: #1e1a28;
+  --map-line: rgba(153, 141, 181, .3);
+  --map-coord: #998db5;
 }
 
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; max-width: 1400px; margin: 0 auto 14px; }
@@ -48,7 +48,7 @@
 .token { transition: transform .25s ease; cursor: default; outline: none; }
 .movable { cursor: grab; touch-action: none; }
 .dragging { transition: none; cursor: grabbing; }
-.disc, .mineDisc { stroke: rgba(20, 12, 6, .7); stroke-width: 2; }
+.disc, .mineDisc { stroke: rgba(11, 9, 17, .7); stroke-width: 2; }
 .mineDisc { stroke: #f6d27a; stroke-width: 4; }
 .hidden { opacity: .5; }
 .hidden .disc { stroke-dasharray: 6 4; }

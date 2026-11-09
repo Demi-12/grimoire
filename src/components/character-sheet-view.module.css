@@ -2,7 +2,7 @@
 .top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .banner { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--line); background: var(--surface); border-top: 4px solid var(--crimson); }
-.avatar { width: 64px; height: 64px; display: grid; place-items: center; background: var(--crimson-fill); color: #fff3df; font: 600 30px var(--font-display); box-shadow: inset 0 0 0 2px #e2b45c; }
+.avatar { width: 64px; height: 64px; display: grid; place-items: center; background: var(--crimson-fill); color: #ede9f5; font: 600 30px var(--font-display); box-shadow: inset 0 0 0 2px #e2b45c; }
 .banner h2 { margin: 0; font: 500 clamp(26px, 4vw, 36px)/1.1 var(--font-display); color: var(--ink); overflow-wrap: anywhere; }
 .sub { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

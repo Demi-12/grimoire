@@ -1,10 +1,10 @@
 /*
  * Grimoire design tokens: the single source of truth for colour and type.
- * Imported first in layout.tsx. Parchment pages, iron-gall ink, stat-block crimson and gilt.
+ * Imported first in layout.tsx. Arcane palette: indigo ink, violet accent and pale gilt on lavender vellum.
  * Alegreya stands in for the manuals' small caps and stat-block sans; the faces are
  * self-hosted by next/font in layout.tsx, which sets the --f-* variables used below.
  *
- *   --crimson        accent: primary actions, active states, links
+ *   --crimson        accent (violet; the name is historical): primary actions, active states, links
  *   --crimson-fill   solid fills behind light text (darker than --crimson in dark mode)
  *   --gilt           secondary accent: rules, highlights, ornaments
  *   --leather-deep   sidebar and banner base
@@ -13,17 +13,17 @@
  *   --control-line   border of form fields, at least 3:1 against the panels they sit on (WCAG 1.4.11)
  */
 :root {
-  --ink: #2b1d14;
-  --paper: #ebddbf;
-  --surface: #f8eeda;
-  --muted: #6f5944;
-  --line: #cdb48a;
-  --crimson: #922610;
-  --crimson-fill: #922610;
-  --gilt: #b58a3a;
-  --gilt-text: #7a5a1c;
-  --control-line: #85694a;
-  --leather-deep: #2c1b13;
+  --ink: #1e1a33;
+  --paper: #e6e3ef;
+  --surface: #f4f2fa;
+  --muted: #5b5675;
+  --line: #beb8d6;
+  --crimson: #5a2d9c;
+  --crimson-fill: #5a2d9c;
+  --gilt: #b8962e;
+  --gilt-text: #6b5313;
+  --control-line: #7a7396;
+  --leather-deep: #241a45;
 
   --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
   --font-body: var(--f-alegreya), Georgia, serif;
@@ -34,18 +34,18 @@
   --text-xs: 12px;
 }
 
-/* Dungeon by torchlight. */
+/* Wizard's tower at night. */
 :root[data-theme="dark"] {
-  --ink: #ecdcc0;
-  --paper: #16100c;
-  --surface: #211812;
-  --muted: #bda585;
-  --line: #4d3a29;
-  --crimson: #e0715a;
-  --crimson-fill: #a8321c;
-  --gilt: #d8aa55;
-  --gilt-text: #d8aa55;
-  --control-line: #8a7258;
-  --leather-deep: #120c09;
+  --ink: #e8e4f5;
+  --paper: #110e1f;
+  --surface: #1a1630;
+  --muted: #b0a8d0;
+  --line: #3a3260;
+  --crimson: #b79cf2;
+  --crimson-fill: #6a3bb8;
+  --gilt: #e0c36a;
+  --gilt-text: #e0c36a;
+  --control-line: #7f77a6;
+  --leather-deep: #0c0916;
   color-scheme: dark;
 }
