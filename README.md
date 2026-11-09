@@ -93,11 +93,11 @@ Las violaciones de accesibilidad que ya existían están listadas en `e2e/known-
 - No copiar archivos de entorno ni claves a imágenes Docker; `.dockerignore` aplica la misma exclusión que `.gitignore`.
 - El CI ejecuta Gitleaks sobre el historial del repositorio y detiene PRs con credenciales detectadas. Si se filtra alguna, hay que revocarla y rotarla; borrarla del último commit no invalida el secreto anterior.
 - PostgreSQL no publica puertos al host ni a Internet. La aplicación se conecta por la red privada de Docker.
-- El deploy se ejecuta en un runner self-hosted dentro del servidor de casa, así que no necesita secretos en GitHub ni abrir puertos: los secretos viven solo en el `.env` del servidor. Antes de levantar la nueva versión aplica las migraciones de Liquibase (ver `docs/database-migrations.md`).
+- El deploy se ejecuta en un runner self-hosted dentro del servidor de casa, así que no hace falta abrir puertos. Los secretos se pueden guardar en GitHub Actions Secrets (el deploy los escribe en el `.env` del servidor, ver [Variables del servidor desde GitHub](#variables-del-servidor-desde-github)) o directamente en ese `.env`. Antes de levantar la nueva versión aplica las migraciones de Liquibase (ver `docs/database-migrations.md`).
 
 ## Servidor y acceso público
 
-El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. Crea allí un `.env` fuera de Git con las variables de `.env.example`: PostgreSQL, `BETTER_AUTH_SECRET` (genera uno con `openssl rand -base64 32`) y `GRIMOIRE_ADMIN_EMAILS` con tu correo, `BETTER_AUTH_URL` con la URL pública exacta del toolkit (la de Cloudflare; las passkeys y las cookies dependen de ella), y opcionalmente SMTP y `CLOUDFLARE_TUNNEL_TOKEN`. Liquibase usa por defecto el mismo usuario de PostgreSQL. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
+El servidor debe tener Git, Docker Compose v2 y un checkout de este repositorio en `~/grimoire`. La configuración son las variables de `.env.example`, que el deploy escribe en un `.env` fuera de Git a partir de GitHub (ver [Variables del servidor desde GitHub](#variables-del-servidor-desde-github)) o que puedes crear a mano en el servidor: PostgreSQL, `BETTER_AUTH_SECRET` (genera uno con `openssl rand -base64 32`) y `GRIMOIRE_ADMIN_EMAILS` con tu correo, `BETTER_AUTH_URL` con la URL pública exacta del toolkit (la de Cloudflare; las passkeys y las cookies dependen de ella), y opcionalmente SMTP y `CLOUDFLARE_TUNNEL_TOKEN`. Liquibase usa por defecto el mismo usuario de PostgreSQL. Genera contraseñas aleatorias y mantén `DATABASE_URL` correctamente codificada; no reutilices credenciales. El servicio `tunnel` mantiene una conexión saliente con Cloudflare y comparte una red Docker con `app`; en el panel de Cloudflare, configura el hostname público para que llegue a `http://app:3000`. No abras puertos entrantes en el router ni publiques PostgreSQL.
 
 Los ajustes propios del servidor (por ejemplo publicar la app en la IP de la LAN) van en un `compose.override.yaml` junto al checkout, que está fuera de Git y Docker Compose combina automáticamente con `compose.yaml`; así no bloquean los deploys:
 
@@ -110,7 +110,7 @@ services:
 
 Si abres el toolkit desde varias URLs (la de la LAN y la pública), pon la principal en `BETTER_AUTH_URL` y las demás en `BETTER_AUTH_TRUSTED_ORIGINS`, separadas por comas. Con `http://` las cookies de sesión no se marcan como seguras para que el inicio de sesión funcione en la LAN; las passkeys necesitan HTTPS.
 
-El token del túnel es un secreto: guárdalo solo en el `.env` del servidor, que está excluido de Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
+El token del túnel es un secreto: guárdalo como GitHub Secret o en el `.env` del servidor, nunca en Git. Usa un túnel dedicado para este servicio y limita su hostname al toolkit.
 
 ## Cabeceras de seguridad y límites de uso
 
@@ -129,13 +129,27 @@ El workflow `Deploy` se lanza solo cuando el CI de `main` termina bien, o a mano
 3. Da acceso a Docker al usuario del runner: `sudo usermod -aG docker <usuario>` y reinicia el servicio (`sudo ./svc.sh stop && sudo ./svc.sh start`).
 4. Comprueba que en Settings → Actions → Runners aparece en verde como *Idle*.
 
-El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env`. Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`. Antes de reconstruir la app levanta `db` y aplica las migraciones de Liquibase; el `.env` necesita además las variables de Better Auth, SMTP y Liquibase de `.env.example`.
+El job pide las etiquetas `self-hosted` y `linux`, que el runner Linux tiene por defecto. El checkout de producción está en `~/grimoire` (se clona solo si no existe; se puede cambiar con la variable de repo `GRIMOIRE_DIR`) y debe contener el `.env` (o el deploy lo genera desde GitHub, ver abajo). Si el `.env` tiene `CLOUDFLARE_TUNNEL_TOKEN`, también se levanta el túnel; si no, solo `app` y `db`. Antes de reconstruir la app levanta `db` y aplica las migraciones de Liquibase; el `.env` necesita además las variables de Better Auth, SMTP y Liquibase de `.env.example`.
+
+### Variables del servidor desde GitHub
+
+Para no tener que entrar al servidor a editar el `.env`, guarda las variables en GitHub (Settings → Secrets and variables → Actions) con el mismo nombre que en `.env.example`:
+
+- **Secrets** para lo sensible: `POSTGRES_PASSWORD`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `CLOUDFLARE_TUNNEL_TOKEN`, `SMTP_USER`, `SMTP_PASSWORD`, `LIQUIBASE_DB_PASSWORD`. No se pueden volver a leer, solo sobrescribir.
+- **Variables** para el resto: `POSTGRES_DB`, `POSTGRES_USER`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `PASSKEY_RP_ID`, `GRIMOIRE_ADMIN_EMAILS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `LIQUIBASE_DB_USERNAME`.
+
+En cada deploy, las que estén definidas en GitHub sustituyen a su línea del `.env` del servidor (que se reescribe con permisos `600`); las que no, se quedan como estén, así que puedes migrar poco a poco. Para aplicar un cambio, lanza Actions → Deploy → Run workflow. Los valores no pueden llevar comillas simples ni saltos de línea.
+
+Cambiar el valor no basta en dos casos:
+
+- **`POSTGRES_PASSWORD`** solo se aplica al crear el volumen de PostgreSQL. Para rotarla, cambia antes la contraseña en la base de datos (`docker compose exec db psql -U grimoire -d grimoire`, y dentro `\password grimoire`) y después actualiza `POSTGRES_PASSWORD` y `DATABASE_URL` en GitHub y despliega.
+- **`BETTER_AUTH_SECRET`**: al cambiarlo se cierran todas las sesiones.
 
 ## Usuarios y acceso
 
 Grimoire es privado: hay que iniciar sesión para usarlo. Cualquiera puede registrarse, pero la cuenta queda **pendiente** hasta que un admin la apruebe en **Usuarios**. Mientras tanto, esa persona solo ve un aviso de espera. Se puede entrar con correo y contraseña o passkey.
 
-- **Admin del sitio:** pon tu correo en `GRIMOIRE_ADMIN_EMAILS` (en el `.env` del servidor; admite varios separados por comas). Esa cuenta se aprueba y es admin al registrarse o en su próximo acceso, también si ya existía. El admin aprueba las cuentas nuevas y puede bloquear (cierra sus sesiones y le impide entrar), cerrar sesiones o borrar cuentas, y asignar otros admins. No puede modificarse a sí mismo y siempre queda al menos un admin aprobado.
+- **Admin del sitio:** pon tu correo en `GRIMOIRE_ADMIN_EMAILS` (como variable de Actions o en el `.env` del servidor; admite varios separados por comas). Esa cuenta se aprueba y es admin al registrarse o en su próximo acceso, también si ya existía. El admin aprueba las cuentas nuevas y puede bloquear (cierra sus sesiones y le impide entrar), cerrar sesiones o borrar cuentas, y asignar otros admins. No puede modificarse a sí mismo y siempre queda al menos un admin aprobado.
 - **DM y jugador son por campaña:** quien crea una campaña es su DM; quien se une por enlace de invitación es jugador, y el DM puede ascender a co-DM. El rol es independiente en cada campaña: la misma cuenta puede ser DM en una y jugador en otra. Todas las herramientas (personajes, generador de encuentros, bestiario) están disponibles para todas las cuentas; el diario de encuentros de una campaña solo lo ven sus DMs.
 - **Campañas compartidas:** el DM crea la campaña y suma gente con enlaces de invitación o escribiendo el correo o nombre exacto de la cuenta desde su campaña (no hay lista de cuentas: solo el admin del sitio las ve, en **Usuarios**; si un nombre se repite, hay que usar el correo). Cada jugador pone sus personajes en la campaña; todos los miembros ven el grupo y el generador de encuentros puede cargar el grupo de una campaña de un clic. Solo el dueño edita su personaje; el DM puede sacarlo de la campaña. Al borrar una campaña los personajes vuelven a sus dueños.
 - **Datos anteriores:** si el navegador tenía personajes o campañas de la versión local, el resumen ofrece importarlos a la cuenta una vez.
