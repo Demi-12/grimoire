@@ -1,20 +1,24 @@
 /**
- * Level 2-20 progression for the 2024 rules, limited to what the System Reference Document 5.2
- * (CC-BY-4.0, Wizards of the Coast) publishes: the 12 classes with their SRD subclass and the SRD feats.
+ * Level 2-20 progression for the 2024 rules: the 12 classes, their SRD subclass and the feats offered when leveling.
+ * Other subclasses' features are in subclass-features.ts and the non-SRD feats in general-feats.ts.
  * Feature names are official; the one-line tips are our own plain-language summaries, not rules text.
  */
 import type { AbilityKey } from "./rules";
 import { feature, findClass, originFeats, type ClassId, type FeatId, type Feature, type SkillKey, type Text } from "./dnd2024";
 import type { Effect } from "./effects";
+import {
+  extraEpicBoons, extraFightingStyles, generalFeats, type ExtraEpicBoonId, type ExtraFightingStyleId, type GeneralFeatId,
+} from "./general-feats";
 
 export type { Feature };
 
 const t = (en: string, es: string): Text => ({ en, es });
 const f = feature;
 
-export type FightingStyleId = "archery" | "defense" | "greatWeaponFighting" | "twoWeaponFighting";
-export type EpicBoonId = "combatProwess" | "dimensionalTravel" | "fate" | "irresistibleOffense" | "spellRecall" | "nightSpirit" | "truesight";
-export type LevelFeatId = FeatId | "grappler" | FightingStyleId | EpicBoonId;
+export type FightingStyleId = "archery" | "defense" | "greatWeaponFighting" | "twoWeaponFighting" | ExtraFightingStyleId;
+export type EpicBoonId = "combatProwess" | "dimensionalTravel" | "fate" | "irresistibleOffense" | "spellRecall" | "nightSpirit" | "truesight" | ExtraEpicBoonId;
+export type LevelFeatId = FeatId | GeneralFeatId | FightingStyleId | EpicBoonId;
+export type ArmorTraining = "light" | "medium" | "heavy" | "shield";
 
 export interface FeatInfo {
   name: Text;
@@ -24,18 +28,27 @@ export interface FeatInfo {
   abilities?: AbilityKey[];
   /** Prerequisite: at least one of these abilities must be 13 or higher. */
   requires?: AbilityKey[];
+  /** Prerequisite: training with this kind of armor (or Shields). */
+  requiresArmor?: ArmorTraining;
+  /** Prerequisite: the Spellcasting or Pact Magic feature. */
+  requiresCasting?: boolean;
+  /** Can be taken more than once (with different choices). */
+  repeatable?: boolean;
+  /** What the feat changes on the sheet (see effects.ts). */
   effects?: Effect[];
 }
 
 const allAbilities: AbilityKey[] = ["str", "dex", "con", "int", "wis", "cha"];
 
 const originFeatInfo = Object.fromEntries(
-  Object.entries(originFeats).map(([id, feat]) => [id, { category: "origin", ...feat }]),
+  Object.entries(originFeats).map(([id, feat]) => [id, { category: "origin", ...(id === "skilled" || id === "magicInitiate" ? { repeatable: true } : {}), ...feat }]),
 ) as Record<FeatId, FeatInfo>;
 
 export const featCatalog: Record<LevelFeatId, FeatInfo> = {
   ...originFeatInfo,
-  grappler: { category: "general", name: t("Grappler", "Luchador"), abilities: ["str", "dex"], requires: ["str", "dex"], summary: t("+1 Strength or Dexterity, and you get much better at grabbing and pinning enemies.", "+1 a Fuerza o Destreza, y te vuelves mucho mejor agarrando e inmovilizando enemigos.") },
+  ...generalFeats,
+  ...extraFightingStyles,
+  ...extraEpicBoons,
   archery: { category: "fightingStyle", name: t("Archery", "Arquería"), summary: t("+2 to attack rolls with ranged weapons.", "+2 a las tiradas de ataque con armas a distancia.") },
   defense: { category: "fightingStyle", effects: [{ kind: "acBonus", amount: 1, whileArmored: true }], name: t("Defense", "Defensa"), summary: t("+1 Armor Class while you wear armor.", "+1 a la Clase de Armadura mientras llevas armadura.") },
   greatWeaponFighting: { category: "fightingStyle", name: t("Great Weapon Fighting", "Combate con armas grandes"), summary: t("When you roll a 1 or 2 on a damage die with a two-handed weapon, treat it as a 3.", "Con un arma a dos manos, un 1 o un 2 en un dado de daño cuenta como 3.") },
@@ -51,9 +64,10 @@ export const featCatalog: Record<LevelFeatId, FeatInfo> = {
 
 export const featInfo = (id: LevelFeatId): FeatInfo => featCatalog[id];
 /** Feats a character can take with an Ability Score Improvement, besides raising scores. */
-export const asiFeats: LevelFeatId[] = ["grappler", "alert", "savageAttacker", "skilled", "magicInitiate"];
-export const fightingStyles: FightingStyleId[] = ["archery", "defense", "greatWeaponFighting", "twoWeaponFighting"];
-export const epicBoons: EpicBoonId[] = ["combatProwess", "dimensionalTravel", "fate", "irresistibleOffense", "spellRecall", "nightSpirit", "truesight"];
+const byName = (a: LevelFeatId, b: LevelFeatId) => featCatalog[a].name.en.localeCompare(featCatalog[b].name.en);
+export const asiFeats: LevelFeatId[] = [...(Object.keys(generalFeats) as GeneralFeatId[]), ...(Object.keys(originFeats) as FeatId[])].sort(byName);
+export const fightingStyles: FightingStyleId[] = (["archery", "defense", "greatWeaponFighting", "twoWeaponFighting", ...Object.keys(extraFightingStyles)] as FightingStyleId[]).sort(byName);
+export const epicBoons: EpicBoonId[] = (["combatProwess", "dimensionalTravel", "fate", "irresistibleOffense", "spellRecall", "nightSpirit", "truesight", ...Object.keys(extraEpicBoons)] as EpicBoonId[]).sort(byName);
 
 // --- Levels at which a choice appears -------------------------------------------------------------------------------
 

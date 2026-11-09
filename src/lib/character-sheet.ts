@@ -187,7 +187,10 @@ export function grantedEffects(build: CharacterBuild, level: number): GrantedEff
   return granted;
 }
 
-const hpPerLevel = (effects: Effect[]) => effectsOf(effects, "hpPerLevel").reduce((sum, effect) => sum + effect.amount, 0);
+/** Sum of the `amount` of every effect of one kind. */
+const sumOf = (effects: Effect[], kind: "hpPerLevel" | "hpBonus" | "speedBonus") =>
+  effectsOf(effects, kind).reduce((sum, effect) => sum + effect.amount, 0);
+const hpPerLevel = (effects: Effect[]) => sumOf(effects, "hpPerLevel");
 
 /** Hit Points added per character level on top of the Hit Die (Dwarven Toughness, Tough, Draconic Resilience). */
 export const hpPerLevelBonus = (build: CharacterBuild, level: number): number =>
@@ -234,7 +237,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     const gained = choices.find((choice) => choice.level === current)?.hp ?? perLevel;
     hitPoints += Math.max(1, gained + mod("con"));
   }
-  hitPoints += hpPerLevel(effects) * safeLevel;
+  hitPoints += hpPerLevel(effects) * safeLevel + sumOf(effects, "hpBonus");
 
   const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
   let armorClass = 10 + mod("dex");
@@ -280,7 +283,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     armorClass,
     armorNote,
     initiative: mod("dex") + effectsOf(effects, "initiativeBonus").length * pb,
-    speed: lineage?.speed ?? sp.speed,
+    speed: (lineage?.speed ?? sp.speed) + sumOf(effects, "speedBonus"),
     darkvision: lineage?.darkvision ?? sp.darkvision,
     passivePerception: 10 + skillValues.perception.bonus,
     saves,
