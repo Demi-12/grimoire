@@ -1,9 +1,9 @@
-.journal { --j-ink: #36281f; --j-muted: #735f4b; --j-rust: #83382d; color: var(--j-ink); }
+.journal { --j-ink: #272233; --j-muted: #584e70; --j-rust: #61359a; color: var(--j-ink); }
 .note, .empty { margin: 10px 0; color: var(--j-muted); font-size: 13px; line-height: 1.5; }
 .error { margin: 10px 0; padding: 8px 10px; color: #762b23; background: rgba(131,56,45,.1); border: 1px solid #c99b83; font-size: 13px; }
 .group { margin: 14px 0 6px; color: var(--j-rust); font: 700 var(--text-xs) var(--font-label); letter-spacing: .14em; text-transform: uppercase; }
 .list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.item { padding: 12px; border: 1px solid #d5c5a4; background: rgba(255,255,255,.28); min-width: 0; }
+.item { padding: 12px; border: 1px solid #b6accd; background: rgba(255,255,255,.28); min-width: 0; }
 .played { opacity: .85; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .title { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 18px; overflow-wrap: anywhere; }
@@ -12,12 +12,12 @@
 .lines li { display: flex; gap: 8px; overflow-wrap: anywhere; }
 .lines b { font: 700 var(--text-xs) var(--font-label); min-width: 28px; }
 .lines small { color: var(--j-muted); }
-.notes { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; color: var(--j-ink); background: rgba(255,255,255,.56); border: 1px solid #c9b58d; border-radius: 2px; font: inherit; font-size: 13px; resize: vertical; }
+.notes { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; color: var(--j-ink); background: rgba(255,255,255,.56); border: 1px solid #a397bf; border-radius: 2px; font: inherit; font-size: 13px; resize: vertical; }
 .notesLabel { display: block; margin-top: 8px; color: var(--j-rust); font: 700 var(--text-xs) var(--font-label); letter-spacing: .1em; text-transform: uppercase; }
 .actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
-.btn { padding: 7px 10px; color: var(--j-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
+.btn { padding: 7px 10px; color: var(--j-rust); background: transparent; border: 1px solid #a397bf; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.primary { color: #fff5df; background: #743329; border-color: #57271f; }
+.primary { color: #ede9f5; background: #58318b; border-color: #46276e; }
 .danger { color: #762b23; border-color: #c99b83; }
 @media (max-width: 650px) {
   .actions .btn { flex: 1 1 120px; padding: 9px 10px; }

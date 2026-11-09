@@ -1,10 +1,10 @@
 /* 5e-style stat block: gilded edge bars, crimson small-caps name and tapered crimson rules. */
 .frame {
-  --sb-ink: #2b1d14;
-  --sb-paper: #fbf1dc;
-  --sb-red: #922610;
+  --sb-ink: #1c1827;
+  --sb-paper: #e9e5f2;
+  --sb-red: #592898;
   --sb-edge: #c9952e;
-  --sb-faint: #6f5640;
+  --sb-faint: #504669;
   position: relative;
   max-width: 760px;
   margin: 0 auto;
@@ -15,7 +15,7 @@
     radial-gradient(ellipse at 100% 100%, rgba(170, 120, 60, .12), transparent 60%),
     var(--sb-paper);
   border-block: 5px solid var(--sb-edge);
-  box-shadow: 0 0 0 1px rgba(146, 38, 16, .18), 0 12px 28px rgba(43, 24, 10, .2);
+  box-shadow: 0 0 0 1px rgba(89, 40, 152, .18), 0 12px 28px rgba(23, 17, 36, .2);
   font-family: var(--font-statblock);
 }
 .frame::before, .frame::after {
@@ -90,13 +90,13 @@
 
 /* Dungeon by torchlight. */
 :global(:root[data-theme="dark"]) .frame {
-  --sb-ink: #ecdcc0;
-  --sb-paper: #2a1e16;
-  --sb-red: #e0715a;
+  --sb-ink: #d1c9e3;
+  --sb-paper: #1d1927;
+  --sb-red: #bc9ae7;
   --sb-edge: #a8782a;
-  --sb-faint: #c2a888;
+  --sb-faint: #9d91b9;
   background: radial-gradient(ellipse at 20% 0%, rgba(216, 170, 85, .1), transparent 55%), var(--sb-paper);
-  box-shadow: 0 0 0 1px rgba(224, 113, 90, .2), 0 12px 28px rgba(0, 0, 0, .45);
+  box-shadow: 0 0 0 1px rgba(188, 154, 231, .2), 0 12px 28px rgba(0, 0, 0, .45);
 }
 :global(:root[data-theme="dark"]) .loading, :global(:root[data-theme="dark"]) .empty, :global(:root[data-theme="dark"]) .error {
   color: #ecdcc0; background: #2a1e16; border-color: #a8782a;
