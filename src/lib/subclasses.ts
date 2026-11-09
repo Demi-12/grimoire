@@ -1,8 +1,13 @@
 /**
  * Every subclass in the 2024 Player's Handbook, four per class. Players always pick one from this list.
- * Features live in levelup-data.ts (the SRD subclass) and subclass-features.ts (the rest); pitches are our own words.
+ * The SRD subclass (CC-BY-4.0) has its features in levelup-data.ts and the others in subclass-features.ts;
+ * names are official, pitches and feature summaries are our own words (never book text).
  */
 import { findClass, type ClassId, type Text } from "./dnd2024";
+import type { Progression } from "./levelup-data";
+import { bookSubclassFeatures } from "./subclass-features";
+
+// Features of the Player's Handbook subclasses are in subclass-features.ts, written with `feature` from dnd2024.ts (see docs/subclass-features.md).
 
 const t = (en: string, es: string): Text => ({ en, es });
 
@@ -10,12 +15,17 @@ export interface SubclassInfo {
   id: string;
   name: Text;
   pitch: Text;
-  /** Published in the free SRD 5.2; stored on the build as `useSubclass` rather than `subclassId`. */
+  /** Published in the free SRD 5.2, with features tracked by Grimoire. */
   srd?: boolean;
+  /** Features by level (3-20) with their effects, for Player's Handbook subclasses Grimoire tracks. */
+  features?: Progression;
 }
 
-const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false): SubclassInfo =>
-  ({ id, name: t(en, es), pitch: t(pitchEn, pitchEs), ...(srd ? { srd } : {}) });
+/** Whether Grimoire knows the subclass's features (and applies their effects). */
+export const subclassTracked = (entry: SubclassInfo): boolean => !!entry.srd || !!entry.features;
+
+const s = (id: string, en: string, es: string, pitchEn: string, pitchEs: string, srd = false, features: Progression | undefined = srd ? undefined : bookSubclassFeatures[id]): SubclassInfo =>
+  ({ id, name: t(en, es), pitch: t(pitchEn, pitchEs), ...(srd ? { srd } : {}), ...(features ? { features } : {}) });
 
 export const subclassCatalog: Record<ClassId, SubclassInfo[]> = {
   barbarian: [

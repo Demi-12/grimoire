@@ -3,15 +3,15 @@
 import { Skeleton, SkeletonRegion, SkeletonText } from "./skeleton";
 import { useEffect, useState } from "react";
 import { translateAbility, translateTerms } from "@/lib/monster-i18n";
-import { fetchMonster, srdLabel, type MonsterAction, type MonsterStatBlock } from "@/lib/monster-api";
+import { fetchMonster, sourceLabel, type MonsterAction, type MonsterSource, type MonsterStatBlock } from "@/lib/monster-api";
 import styles from "./monster-sheet.module.css";
 
 type Locale = "en" | "es";
 type Props = { monsterSlug?: string | null; locale?: Locale; /** Render this stat block directly (editor preview) instead of fetching one by slug. */ monster?: MonsterStatBlock };
 
 const labels = {
-  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
-  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", retry: "Reintentar", noImage: "Sin ilustración disponible", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
+  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", bonusActions: "Bonus Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
+  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", retry: "Reintentar", noImage: "Sin ilustración disponible", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", bonusActions: "Acciones adicionales", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
 } satisfies Record<Locale, Record<string, string>>;
 
 const abilityNames = { en: ["STR", "DEX", "CON", "INT", "WIS", "CHA"], es: ["FUE", "DES", "CON", "INT", "SAB", "CAR"] };
@@ -26,17 +26,26 @@ function traitList(title: string, items: MonsterAction[] | undefined) {
 
 const homebrewLabel = (locale: Locale, owner: string) => (locale === "es" ? `Homebrew · de ${owner}` : `Homebrew · by ${owner}`);
 
-const IMAGE_HOST = "https://www.dnd5eapi.co";
-
 function MonsterPortrait({ monster, label }: { monster: MonsterStatBlock; label: string }) {
   const [failed, setFailed] = useState(false);
   if (monster.image && !failed) {
-    return <figure className={styles.portrait}><img src={`${IMAGE_HOST}${monster.image}`} alt={monster.name} loading="lazy" onError={() => setFailed(true)} /></figure>;
+    return <figure className={styles.portrait}><img src={monster.image} alt={monster.name} loading="lazy" onError={() => setFailed(true)} /></figure>;
   }
   return <figure className={styles.portrait}><div className={styles.portraitFallback} role="img" aria-label={label}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3c-4.4 0-7 2.9-7 6.5 0 2 .8 3.4 2 4.4V17h2v-1.5h1V17h2v-1.5h1V17h2v-3.1c1.2-1 2-2.4 2-4.4C19 5.9 16.4 3 12 3z" /><circle cx="9.5" cy="10" r="1.2" /><circle cx="14.5" cy="10" r="1.2" /><path d="M9 20h6" /></svg>
     <span>{label}</span>
   </div></figure>;
+}
+
+const ccBy = <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a>;
+
+/** Attribution the book's license asks for, under each stat block. */
+function SourceNotice({ source }: { source?: MonsterSource }) {
+  if (source?.key === "srd-2014") return <>This work includes material from the <a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noreferrer">System Reference Document 5.1 (“SRD 5.1”)</a> by Wizards of the Coast LLC. The SRD 5.1 is licensed under {ccBy}.</>;
+  if (!source || source.key === "srd-2024") return <>This work includes material from the <a href="https://www.dndbeyond.com/srd" target="_blank" rel="noreferrer">System Reference Document 5.2 (“SRD 5.2”)</a> by Wizards of the Coast LLC, available at D&amp;D Beyond. The SRD 5.2 is licensed under {ccBy}.</>;
+  const book = source.url ? <a href={source.url} target="_blank" rel="noreferrer">{source.name}</a> : source.name;
+  const license = source.licenses?.includes("cc-by-40") ? ccBy : "the Open Game License v1.0a";
+  return <>Stat block from {book}{source.publisher ? ` (${source.publisher})` : ""}, open game content used under {license}, served by <a href="https://open5e.com" target="_blank" rel="noreferrer">Open5e</a>. Not endorsed by Wizards of the Coast.</>;
 }
 
 function formatArmorClass(value: MonsterStatBlock["armor_class"]) {
@@ -78,7 +87,7 @@ export default function MonsterSheet({ monsterSlug, locale = "en", monster: give
   ];
 
   return <article className={styles.frame} aria-label={`${monster.name} stat block`}>
-    <header className={styles.header}><p className={styles.eyebrow}>{monster.homebrew ? homebrewLabel(locale, monster.homebrew.ownerName) : `${t.source} · ${srdLabel(monster.edition)}`}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
+    <header className={styles.header}><p className={styles.eyebrow}>{monster.homebrew ? homebrewLabel(locale, monster.homebrew.ownerName) : `${t.source} · ${sourceLabel(monster.source)}`}</p><h2 className={styles.name}>{monster.name}</h2><p className={styles.kind}>{[translateTerms("size", monster.size, locale), translateTerms("type", monster.type, locale), translateTerms("alignment", monster.alignment, locale)].filter(Boolean).join(" · ")}</p></header>
     <MonsterPortrait monster={monster} label={t.noImage} />
     <div className={styles.quickStats}>
       <div><span>{t.ac}</span><strong>{ac}</strong></div>
@@ -96,15 +105,12 @@ export default function MonsterSheet({ monsterSlug, locale = "en", monster: give
     </div>
     {traitList(t.traits, monster.special_abilities)}
     {traitList(t.actions, monster.actions)}
+    {traitList(t.bonusActions, monster.bonus_actions)}
     {traitList(t.reactions, monster.reactions)}
     {traitList(t.legendary, monster.legendary_actions)}
     {monster.homebrew ? <p className={styles.legal}>{locale === "es" ? "Contenido homebrew creado por los usuarios de este servidor; no forma parte del SRD ni está avalado por Wizards of the Coast." : "Homebrew content made by users of this server; it is not part of the SRD and is not endorsed by Wizards of the Coast."}</p> : <>
-    <p className={styles.source}>{t.source} · {srdLabel(monster.edition)} · {monster.index ?? monsterSlug}</p>
-    <p className={styles.legal}>
-      {monster.edition === "2014"
-        ? <>This work includes material from the <a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noreferrer">System Reference Document 5.1 (“SRD 5.1”)</a> by Wizards of the Coast LLC. The SRD 5.1 is licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a>.</>
-        : <>This work includes material from the <a href="https://www.dndbeyond.com/srd" target="_blank" rel="noreferrer">System Reference Document 5.2 (“SRD 5.2”)</a> by Wizards of the Coast LLC, available at D&amp;D Beyond. The SRD 5.2 is licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a>.</>}
-    </p>
+    <p className={styles.source}>{t.source} · {sourceLabel(monster.source)} · {monster.index ?? monsterSlug}</p>
+    <p className={styles.legal}><SourceNotice source={monster.source} /></p>
     </>}
   </article>;
 }

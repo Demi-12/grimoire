@@ -3,41 +3,97 @@
  * The guide in components/level-up.tsx only collects choices; everything it shows about the result comes from here.
  */
 import { proficiencyBonus, type AbilityKey } from "./rules";
-import { findClass, say, type ClassId, type SkillKey, type Text } from "./dnd2024";
-import { allFeats, finalScores, levelChoices, proficientSkills, type CharacterBuild, type FeatPick, type LevelUpChoice } from "./character-sheet";
+import { findClass, say, skillKeys, type SkillKey, type Text } from "./dnd2024";
+import { effectsOf } from "./effects";
 import {
-  asiFeats, BOON_LEVEL, classFeatures, classScaling, epicBoons, expertiseGrant, featInfo, fightingStyleLevel, isAsiLevel,
-  spellProgress, SUBCLASS_LEVEL, subclassFeatures, type ArmorTraining, type ExpertiseGrant, type Feature, type LevelFeatId, type Progression, type Scaling,
-  type SpellProgress,
+  allFeats, featuresAt, finalScores, levelChoices, proficientSkills, type CharacterBuild, type FeatPick, type LevelUpChoice,
+} from "./character-sheet";
+import {
+  asiFeats, BOON_LEVEL, classScaling, epicBoons, featInfo, fightingStyles, isAsiLevel,
+  spellProgress, SUBCLASS_LEVEL, type ArmorTraining, type Feature, type FightingStyleId, type LevelFeatId, type Scaling, type SpellProgress,
 } from "./levelup-data";
-import { findBookSubclass, findSubclass, srdSubclassId } from "./subclasses";
-import { bookSubclassFeatures } from "./subclass-features";
+import { findBookSubclass, srdSubclassId } from "./subclasses";
 
-export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "expertise";
-/** Id of the subclass picked at level 3 (see subclasses.ts); always chosen from the list, never typed. */
-export type SubclassPick = string;
+export type LevelStep = "hp" | "subclass" | "asi" | "boon" | "fightingStyle" | "skills" | "expertise";
+/** The subclass picked at level 3: always one from the list in subclasses.ts, never typed. */
+export type SubclassPick = { kind: "srd" } | { kind: "book"; id: string };
 
 export const MAX_LEVEL = 20;
 
-/** Choice steps this level asks for, in the order the guide shows them. */
+/** How many skills a feature lets the player pick, optionally from a fixed list. */
+export interface SkillGrant { count: number; from?: SkillKey[] }
+/** Choices the features gained at a level ask for. Several grants of one kind at the same level add up. */
+export interface LevelGrants { skills: SkillGrant | null; expertise: SkillGrant | null; fightingStyle: boolean }
+
+function mergeGrants(grants: SkillGrant[]): SkillGrant | null {
+  if (!grants.length) return null;
+  const count = grants.reduce((sum, grant) => sum + grant.count, 0);
+  return grants.every((grant) => grant.from) ? { count, from: [...new Set(grants.flatMap((grant) => grant.from ?? []))] } : { count };
+}
+
+export function levelGrants(build: CharacterBuild, level: number): LevelGrants {
+  const gained = featuresAt(build, level);
+  const effects = [...gained.class, ...gained.subclass].flatMap((feature) => feature.effects ?? []);
+  return {
+    skills: mergeGrants(effectsOf(effects, "chooseSkills")),
+    expertise: mergeGrants(effectsOf(effects, "chooseExpertise")),
+    fightingStyle: effectsOf(effects, "chooseFightingStyle").length > 0,
+  };
+}
+
+/** The build with the subclass picked at level 3, so that subclass's level 3 features count. */
+export function withSubclass(build: CharacterBuild, subclass: SubclassPick | null): CharacterBuild {
+  if (!subclass) return build;
+  const next: CharacterBuild = { ...build };
+  delete next.subclassId;
+  delete next.customSubclass;
+  next.useSubclass = subclass.kind === "srd";
+  if (subclass.kind === "book") next.subclassId = subclass.id;
+  return next;
+}
+
+/** Id of the subclass the build has (SRD one included), or null before choosing or for an old typed-in subclass. */
+export function chosenSubclassId(build: CharacterBuild): string | null {
+  if (build.useSubclass) return srdSubclassId(build.classId);
+  return findBookSubclass(build.classId, build.subclassId)?.id ?? null;
+}
+
+/** Choice steps this level asks for, in the order the guide shows them. At level 3, pass the build `withSubclass`. */
 export function levelUpSteps(build: CharacterBuild, level: number): LevelStep[] {
   const steps: LevelStep[] = ["hp"];
   if (level === SUBCLASS_LEVEL) steps.push("subclass");
   if (level === BOON_LEVEL) steps.push("boon");
   else if (isAsiLevel(build.classId, level)) steps.push("asi");
-  if (fightingStyleLevel(build.classId, level, build.useSubclass)) steps.push("fightingStyle");
-  if (expertiseGrant(build.classId, level)) steps.push("expertise");
+  const grants = levelGrants(build, level);
+  if (grants.fightingStyle) steps.push("fightingStyle");
+  if (grants.skills) steps.push("skills");
+  if (grants.expertise) steps.push("expertise");
   return steps;
 }
 
-export const expertiseFor = (build: CharacterBuild, level: number): ExpertiseGrant | null => expertiseGrant(build.classId, level);
+export const expertiseFor = (build: CharacterBuild, level: number): SkillGrant | null => levelGrants(build, level).expertise;
+export const skillsFor = (build: CharacterBuild, level: number): SkillGrant | null => levelGrants(build, level).skills;
+
+/** Skills the character isn't proficient in yet that a feature at this level can grant. */
+export function skillOptions(build: CharacterBuild, level: number): SkillKey[] {
+  const grant = skillsFor(build, level);
+  if (!grant) return [];
+  const owned = new Set(proficientSkills(build, level - 1));
+  return skillKeys.filter((skill) => !owned.has(skill) && (!grant.from || grant.from.includes(skill)));
+}
+
+/** Fighting Styles offered, minus the ones the character already has. */
+export function fightingStyleOptions(build: CharacterBuild, level: number): { id: FightingStyleId; blocked: boolean }[] {
+  const owned = new Set(allFeats(build, level - 1));
+  return fightingStyles.map((id) => ({ id, blocked: owned.has(id) }));
+}
 
 /** Average hit points for a level before the Constitution modifier: half the die, rounded up. */
 export const averageHitDie = (hitDie: number) => hitDie / 2 + 1;
 
 /** Skills that can still receive Expertise at this level. */
 export function expertiseOptions(build: CharacterBuild, level: number): SkillKey[] {
-  const grant = expertiseGrant(build.classId, level);
+  const grant = expertiseFor(build, level);
   if (!grant) return [];
   const already = new Set<SkillKey>([...build.expertise, ...levelChoices(build, level - 1).flatMap((choice) => choice.expertise ?? [])]);
   return proficientSkills(build, level - 1).filter((skill) => !already.has(skill) && (!grant.from || grant.from.includes(skill)));
@@ -101,47 +157,51 @@ function asiValid(build: CharacterBuild, level: number, asi: LevelUpChoice["asi"
   return shape && entries.every(([key, amount]) => scores[key as AbilityKey] + amount <= 20);
 }
 
+function subclassPickValid(build: CharacterBuild, pick: SubclassPick | null): boolean {
+  if (pick?.kind === "srd") return true;
+  return pick?.kind === "book" && !!findBookSubclass(build.classId, pick.id);
+}
+
+/** The build the level's steps are computed from: at level 3, with the picked subclass if it's valid. */
+const stepBuild = (build: CharacterBuild, level: number, subclass: SubclassPick | null) =>
+  level === SUBCLASS_LEVEL && subclassPickValid(build, subclass) ? withSubclass(build, subclass) : build;
+
+/** Picks of `count` different skills, all from `options` (fewer when there aren't enough options). */
+const skillPickValid = (picked: SkillKey[], count: number, options: SkillKey[]) =>
+  new Set(picked).size === picked.length && picked.length === Math.min(count, options.length) && picked.every((skill) => options.includes(skill));
+
 /** Problems that block this level-up, as keys the guide turns into messages. Empty means ready to save. */
-export function levelUpIssues(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): string[] {
+export function levelUpIssues(original: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): string[] {
+  const build = stepBuild(original, level, subclass);
   const steps = levelUpSteps(build, level);
   const issues: string[] = [];
   const cls = findClass(build.classId);
   if (choice.hp !== undefined && (!Number.isInteger(choice.hp) || choice.hp < 1 || choice.hp > (cls?.hitDie ?? 12))) issues.push("hp");
-  if (steps.includes("subclass") && !findSubclass(build.classId, subclass)) issues.push("subclass");
+  if (steps.includes("subclass") && !subclassPickValid(build, subclass)) issues.push("subclass");
   if (steps.includes("asi")) {
     const usesAsi = Object.values(choice.asi ?? {}).some(Boolean);
     const valid = usesAsi ? !choice.feat && asiValid(build, level, choice.asi) : !!choice.feat && !featPickIssue(build, level, choice.feat, asiFeats);
     if (!valid) issues.push("asi");
   }
   if (steps.includes("boon") && (!choice.feat || featPickIssue(build, level, choice.feat, epicBoons))) issues.push("boon");
-  if (steps.includes("fightingStyle") && !choice.fightingStyle) issues.push("fightingStyle");
-  if (steps.includes("expertise")) {
-    const grant = expertiseGrant(build.classId, level);
-    const options = new Set(expertiseOptions(build, level));
-    const picked = choice.expertise ?? [];
-    if (!grant || new Set(picked).size !== Math.min(grant.count, options.size) || picked.some((skill) => !options.has(skill))) issues.push("expertise");
-  }
+  if (steps.includes("fightingStyle") && !fightingStyleOptions(build, level).some((option) => option.id === choice.fightingStyle && !option.blocked)) issues.push("fightingStyle");
+  if (steps.includes("skills") && !skillPickValid(choice.skills ?? [], skillsFor(build, level)?.count ?? 0, skillOptions(build, level))) issues.push("skills");
+  if (steps.includes("expertise") && !skillPickValid(choice.expertise ?? [], expertiseFor(build, level)?.count ?? 0, expertiseOptions(build, level))) issues.push("expertise");
   return issues;
 }
 
 /** Records a level-up on the build. Choices the level doesn't offer are dropped so stale picks can't leak in. */
-export function applyLevelUp(build: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): CharacterBuild {
+export function applyLevelUp(original: CharacterBuild, level: number, choice: LevelUpChoice, subclass: SubclassPick | null): CharacterBuild {
+  const build = level === SUBCLASS_LEVEL && subclass ? withSubclass(original, subclass) : original;
   const steps = levelUpSteps(build, level);
   const clean: LevelUpChoice = { level };
   if (choice.hp !== undefined) clean.hp = choice.hp;
   if (steps.includes("asi") && Object.values(choice.asi ?? {}).some(Boolean)) clean.asi = Object.fromEntries(Object.entries(choice.asi ?? {}).filter(([, amount]) => amount)) as LevelUpChoice["asi"];
   if ((steps.includes("asi") && !clean.asi) || steps.includes("boon")) clean.feat = choice.feat;
   if (steps.includes("fightingStyle")) clean.fightingStyle = choice.fightingStyle;
+  if (steps.includes("skills")) clean.skills = choice.skills;
   if (steps.includes("expertise")) clean.expertise = choice.expertise;
-  const next: CharacterBuild = { ...build, levelUps: [...(build.levelUps ?? []).filter((entry) => entry.level < level), clean] };
-  const picked = steps.includes("subclass") ? findSubclass(build.classId, subclass) : undefined;
-  if (picked) {
-    delete next.subclassId;
-    delete next.customSubclass;
-    next.useSubclass = !!picked.srd;
-    if (!picked.srd) next.subclassId = picked.id;
-  }
-  return next;
+  return { ...build, levelUps: [...(build.levelUps ?? []).filter((entry) => entry.level < level), clean] };
 }
 
 // --- What a level gives you ----------------------------------------------------------------------------------------
@@ -157,21 +217,10 @@ export interface LevelGains {
   prepareSpells: boolean;
 }
 
-/** Subclass id the build has chosen, SRD one included; null before choosing or for an old free-text subclass. */
-export function chosenSubclassId(build: CharacterBuild): string | null {
-  if (build.useSubclass) return srdSubclassId(build.classId);
-  return findBookSubclass(build.classId, build.subclassId)?.id ?? null;
-}
-
-/** Features of a subclass by level, or an empty progression when there is none. */
-export function subclassProgression(classId: ClassId, subclassId: string | null): Progression {
-  const subclass = findSubclass(classId, subclassId);
-  if (!subclass) return {};
-  return subclass.srd ? subclassFeatures[classId] : bookSubclassFeatures[subclass.id] ?? {};
-}
-
-/** Everything the class hands out automatically at `level`, plus the features of `subclassId` once it applies. */
-export function levelGains(classId: ClassId, level: number, subclassId: string | null): LevelGains {
+/** Everything the class and subclass hand out automatically at `level`. At level 3, pass the build `withSubclass`. */
+export function levelGains(build: CharacterBuild, level: number): LevelGains {
+  const classId = build.classId;
+  const gained = featuresAt(build, level);
   const before = classScaling(classId, level - 1);
   const after = classScaling(classId, level);
   const changed = after.filter((item: Scaling) => before.find((old) => old.key === item.key)?.value !== item.value)
@@ -180,8 +229,8 @@ export function levelGains(classId: ClassId, level: number, subclassId: string |
   const previous = spellProgress(classId, level - 1);
   const sameSlots = previous && casting && JSON.stringify(previous) === JSON.stringify(casting);
   return {
-    features: classFeatures[classId][level] ?? [],
-    subclassFeatures: level >= SUBCLASS_LEVEL ? subclassProgression(classId, subclassId)[level] ?? [] : [],
+    features: gained.class,
+    subclassFeatures: gained.subclass,
     proficiency: proficiencyBonus(level) !== proficiencyBonus(level - 1) ? { from: proficiencyBonus(level - 1), to: proficiencyBonus(level) } : null,
     scaling: changed,
     spells: casting && !sameSlots ? { before: previous, after: casting } : null,
@@ -198,14 +247,13 @@ export function subclassLabel(build: CharacterBuild, level: number, locale: "en"
   return build.customSubclass?.trim() ?? "";
 }
 
-/** Features a character has earned by `level`, with their summaries: level 1 features, class progression and subclass. */
+/** Features a character has earned by `level`, with their summaries: level 1 features, class progression and a tracked subclass. */
 export function unlockedFeatures(build: CharacterBuild, level: number): Feature[] {
   const cls = findClass(build.classId);
   const features = [...(cls?.features ?? [])];
-  const subclass = subclassProgression(build.classId, chosenSubclassId(build));
   for (let current = 2; current <= level; current += 1) {
-    features.push(...(classFeatures[build.classId][current] ?? []));
-    if (current >= SUBCLASS_LEVEL) features.push(...(subclass[current] ?? []));
+    const gained = featuresAt(build, current);
+    features.push(...gained.class, ...gained.subclass);
   }
   return features;
 }

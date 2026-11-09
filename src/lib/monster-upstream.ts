@@ -1,14 +1,16 @@
 import "server-only";
-import { inferMonsterRoles, type MonsterRole, type MonsterStatBlock } from "@/lib/monster-api";
+import { inferMonsterRoles, type MonsterRole, type SourceSummary } from "@/lib/monster-api";
+import {
+  challengeOf, legacySlugCandidates, OPEN5E_ROOT, toSource, toStatBlock, withoutSupersededCopies, type Open5eCreature,
+} from "@/lib/open5e";
 
 /**
- * Server-side access to the public D&D 5e SRD API (https://www.dnd5eapi.co).
- * The 2024 ruleset (SRD 5.2) is preferred; when its monster data is missing the
- * 2014 ruleset (SRD 5.1) is used so the bestiary keeps working.
+ * Server-side access to the Open5e API (https://open5e.com), which serves every openly licensed 5e book:
+ * the SRD 5.1 and 5.2 plus third-party bestiaries such as Tome of Beasts or the Level Up Monstrous Menagerie.
+ * The whole compact catalog is built once a day and kept in memory; single stat blocks are cached by Next.
  */
-const API_ROOT = "https://www.dnd5eapi.co/api";
-export const MONSTER_EDITIONS = ["2024", "2014"] as const;
-export type MonsterEdition = (typeof MONSTER_EDITIONS)[number];
+const API_ROOT = `${OPEN5E_ROOT}/v2`;
+const PAGE_SIZE = 200;
 
 export class UpstreamError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -17,66 +19,30 @@ export class UpstreamError extends Error {
   }
 }
 
-async function getJson(path: string, edition: MonsterEdition): Promise<{ status: number; body: unknown }> {
-  const upstream = await fetch(`${API_ROOT}/${edition}${path}`, {
+async function getJson(path: string, cache: "day" | "none" = "day"): Promise<{ status: number; body: unknown }> {
+  const upstream = await fetch(`${API_ROOT}${path}`, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
-    next: { revalidate: 86_400 },
+    signal: AbortSignal.timeout(20_000),
+    ...(cache === "day" ? { next: { revalidate: 86_400 } } : { cache: "no-store" as const }),
   });
   if (upstream.status === 404) return { status: 404, body: null };
   if (!upstream.ok) throw new UpstreamError("The monster service is temporarily unavailable.", 502);
   return { status: upstream.status, body: await upstream.json() };
 }
 
-function hasResults(body: unknown): body is { results: Array<{ index?: string; name?: string; url?: string }> } {
-  return !!body && typeof body === "object" && Array.isArray((body as { results?: unknown }).results);
+function isCreature(body: unknown): body is Open5eCreature {
+  return !!body && typeof body === "object" && typeof (body as Open5eCreature).key === "string" && typeof (body as Open5eCreature).name === "string";
 }
 
-/** Newest edition whose (cached) unfiltered monster index has entries. */
-async function preferredEdition(): Promise<MonsterEdition> {
-  for (const edition of MONSTER_EDITIONS) {
-    const { body } = await getJson("/monsters", edition);
-    if (hasResults(body) && body.results.length) return edition;
-  }
-  throw new UpstreamError("The monster service returned an unexpected index.", 502);
-}
-
-/** Monster index of the preferred edition, optionally filtered by challenge rating upstream. */
-export async function fetchMonsterIndex(challengeRating?: string) {
-  const edition = await preferredEdition();
-  const query = challengeRating ? `?challenge_rating=${encodeURIComponent(challengeRating)}` : "";
-  const { body } = await getJson(`/monsters${query}`, edition);
-  if (!hasResults(body)) throw new UpstreamError("The monster service returned an unexpected index.", 502);
-  return { edition, results: body.results };
-}
-
-/** One stat block, preferring the 2024 edition. Returns null when no edition has it. */
+/** One stat block by Open5e key. Old dnd5eapi slugs ("goblin") resolve to the SRD 5.2, then the SRD 5.1. */
 export async function fetchMonsterDetail(slug: string) {
-  for (const edition of MONSTER_EDITIONS) {
-    const { status, body } = await getJson(`/monsters/${encodeURIComponent(slug)}`, edition);
+  for (const key of legacySlugCandidates(slug)) {
+    const { status, body } = await getJson(`/creatures/${encodeURIComponent(key)}/`);
     if (status === 404) continue;
-    if (!body || typeof body !== "object" || typeof (body as { name?: unknown }).name !== "string") {
-      throw new UpstreamError("The creature API returned an unexpected response.", 502);
-    }
-    const detail: Record<string, unknown> = { ...(body as Record<string, unknown>), edition };
-    if (typeof detail.image !== "string" && edition !== "2014") {
-      const image = await legacyImage(slug);
-      if (image) detail.image = image;
-    }
-    return detail;
+    if (!isCreature(body)) throw new UpstreamError("The creature API returned an unexpected response.", 502);
+    return toStatBlock(body);
   }
   return null;
-}
-
-/** The 2014 entry often has an illustration when the 2024 one does not; best effort only. */
-async function legacyImage(slug: string): Promise<string | undefined> {
-  try {
-    const { body } = await getJson(`/monsters/${encodeURIComponent(slug)}`, "2014");
-    const image = (body as { image?: unknown } | null)?.image;
-    return typeof image === "string" ? image : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function upstreamErrorResponse(cause: unknown) {
@@ -90,7 +56,7 @@ export function upstreamErrorResponse(cause: unknown) {
   };
 }
 
-/** XP by challenge rating (SRD), used when a stat block omits its XP. */
+/** XP by challenge rating, used when a stat block omits its XP. */
 export const XP_BY_CR: Record<string, number> = {
   "0": 10, "0.125": 25, "0.25": 50, "0.5": 100, "1": 200, "2": 450, "3": 700, "4": 1100, "5": 1800, "6": 2300,
   "7": 2900, "8": 3900, "9": 5000, "10": 5900, "11": 7200, "12": 8400, "13": 10000, "14": 11500, "15": 13000,
@@ -106,10 +72,21 @@ export interface CompactMonster {
   type: string;
   size: string;
   roles: MonsterRole[];
+  /** Book name, shown next to the creature. */
+  source: string;
+  sourceKey: string;
 }
 
-const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
-let catalogCache: { at: number; promise: Promise<{ edition: MonsterEdition; monsters: CompactMonster[] }> } | undefined;
+export interface MonsterCatalogData { monsters: CompactMonster[]; sources: SourceSummary[] }
+
+/** Only what the catalog needs: Open5e trims the rest of each creature server-side. */
+const CATALOG_FIELDS = [
+  "fields=key,name,document,type,size,challenge_rating,experience_points,armor_class,hit_points,speed,actions,traits",
+  "document__fields=key,name,display_name,publisher",
+  "document__publisher__fields=name",
+  "actions__fields=name,desc,action_type",
+  "traits__fields=name,desc",
+].join("&");
 
 async function mapLimited<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
@@ -124,29 +101,59 @@ async function mapLimited<T, R>(items: T[], limit: number, task: (item: T) => Pr
   return results;
 }
 
-async function buildCatalog() {
-  const { edition, results } = await fetchMonsterIndex();
-  const monsters = await mapLimited(results, 8, async (entry) => {
-    if (!entry.index) return null;
-    try {
-      const { body } = await getJson(`/monsters/${encodeURIComponent(entry.index)}`, edition);
-      if (!body || typeof body !== "object") return null;
-      const stat = body as MonsterStatBlock;
-      const cr = typeof stat.challenge_rating === "number" ? stat.challenge_rating : Number.NaN;
-      const xp = typeof stat.xp === "number" && stat.xp > 0 ? stat.xp : XP_BY_CR[String(cr)];
-      if (!Number.isFinite(cr) || !xp) return null;
-      return { index: entry.index, name: stat.name, cr, xp, type: (stat.type ?? "").toLowerCase(), size: stat.size ?? "", roles: inferMonsterRoles(stat) };
-    } catch {
-      return null; // One failing stat block should not hide the rest of the bestiary.
-    }
-  });
-  const list = monsters.filter((monster): monster is CompactMonster => monster !== null);
-  if (!list.length) throw new UpstreamError("The monster service returned no usable stat blocks.", 502);
-  return { edition, monsters: list.sort((a, b) => a.cr - b.cr || a.name.localeCompare(b.name)) };
+function compact(creature: Open5eCreature): CompactMonster | null {
+  const cr = challengeOf(creature);
+  if (cr === undefined) return null;
+  const stat = toStatBlock(creature);
+  const xp = typeof creature.experience_points === "number" && creature.experience_points > 0 ? creature.experience_points : XP_BY_CR[String(cr)];
+  if (!xp) return null;
+  const source = toSource(creature.document);
+  return {
+    index: creature.key, name: creature.name, cr, xp, type: stat.type ?? "", size: stat.size ?? "", roles: inferMonsterRoles(stat),
+    source: source?.name ?? "Open5e", sourceKey: source?.key ?? "",
+  };
 }
 
-/** Every SRD monster with CR, XP, type and inferred roles; cached in memory for a day. */
-export function fetchMonsterCatalog() {
+type Page = { count?: unknown; results?: unknown };
+
+async function catalogPage(page: number) {
+  // Not cached by Next: pages are large and the whole catalog is kept in memory below.
+  const { body } = await getJson(`/creatures/?${CATALOG_FIELDS}&limit=${PAGE_SIZE}&page=${page}`, "none");
+  const data = body as Page | null;
+  if (!data || !Array.isArray(data.results)) throw new UpstreamError("The monster service returned an unexpected index.", 502);
+  return { count: typeof data.count === "number" ? data.count : 0, results: data.results.filter(isCreature) };
+}
+
+async function buildCatalog(): Promise<MonsterCatalogData> {
+  const first = await catalogPage(1);
+  const pages = Math.ceil(first.count / PAGE_SIZE);
+  const rest = await mapLimited(Array.from({ length: Math.max(0, pages - 1) }, (_, index) => index + 2), 4, catalogPage);
+  const creatures = [first, ...rest].flatMap((page) => page.results);
+  const listed = withoutSupersededCopies(creatures.map((creature) => ({ creature, name: creature.name, source: creature.document })))
+    .map(({ creature }) => compact(creature))
+    .filter((monster): monster is CompactMonster => monster !== null);
+  if (!listed.length) throw new UpstreamError("The monster service returned no usable stat blocks.", 502);
+
+  const sources = new Map<string, SourceSummary>();
+  for (const creature of creatures) {
+    const source = toSource(creature.document);
+    if (source && !sources.has(source.key)) sources.set(source.key, { key: source.key, name: source.name, ...(source.publisher ? { publisher: source.publisher } : {}), count: 0 });
+  }
+  for (const monster of listed) {
+    const summary = sources.get(monster.sourceKey);
+    if (summary) summary.count += 1;
+  }
+  return {
+    monsters: listed.sort((a, b) => a.cr - b.cr || a.name.localeCompare(b.name)),
+    sources: [...sources.values()].filter((source) => source.count > 0).sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+let catalogCache: { at: number; promise: Promise<MonsterCatalogData> } | undefined;
+
+/** Every Open5e creature with CR, XP, type, book and inferred roles; rebuilt at most once a day. */
+export function fetchMonsterCatalog(): Promise<MonsterCatalogData> {
   if (!catalogCache || Date.now() - catalogCache.at > CATALOG_TTL_MS) {
     const promise = buildCatalog();
     catalogCache = { at: Date.now(), promise };

@@ -1,11 +1,12 @@
 /**
  * Level-by-level features of the 2024 Player's Handbook subclasses that aren't in the SRD (the SRD ones live in
  * levelup-data.ts). Feature names follow the book; the tips are our own plain-language summaries, not rules text.
- * Keyed by the subclass id in subclasses.ts.
+ * Keyed by the subclass id in subclasses.ts, which attaches them; see docs/subclass-features.md.
  */
-import type { Feature, Progression } from "./levelup-data";
+import { feature as f, type SkillKey } from "./dnd2024";
+import type { Progression } from "./levelup-data";
 
-const f = (en: string, es: string, tipEn: string, tipEs: string): Feature => ({ name: { en, es }, tip: { en: tipEn, es: tipEs } });
+const fighterSkills: SkillKey[] = ["acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "persuasion", "perception", "survival"];
 
 export const bookSubclassFeatures: Record<string, Progression> = {
   // --- Barbarian ---------------------------------------------------------------------------------------------------
@@ -32,7 +33,8 @@ export const bookSubclassFeatures: Record<string, Progression> = {
 
   // --- Bard --------------------------------------------------------------------------------------------------------
   dance: {
-    3: [f("Dazzling Footwork", "Juego de pies deslumbrante", "Without armor or shield: AC 10 + Dexterity + Charisma, and spending Bardic Inspiration lets you make an unarmed strike that uses your inspiration die.", "Sin armadura ni escudo: CA 10 + Destreza + Carisma, y al gastar Inspiración bárdica haces un ataque sin armas que usa tu dado de inspiración.")],
+    3: [f("Dazzling Footwork", "Juego de pies deslumbrante", "Without armor or shield: AC 10 + Dexterity + Charisma, and spending Bardic Inspiration lets you make an unarmed strike that uses your inspiration die.", "Sin armadura ni escudo: CA 10 + Destreza + Carisma, y al gastar Inspiración bárdica haces un ataque sin armas que usa tu dado de inspiración.",
+      [{ kind: "unarmoredDefense", add: ["cha"] }])],
     6: [f("Inspiring Movement", "Movimiento inspirador", "When an enemy ends its turn next to you, spend Bardic Inspiration to move away and let an ally move too.", "Cuando un enemigo acaba su turno junto a ti, gastas Inspiración bárdica para alejarte y que un aliado también se mueva."),
       f("Tandem Footwork", "Pasos en tándem", "Spend Bardic Inspiration when rolling Initiative to boost yours and your allies'.", "Gasta Inspiración bárdica al tirar iniciativa para mejorar la tuya y la de tus aliados.")],
     14: [f("Leading Evasion", "Evasión compartida", "You take no damage on a successful Dexterity save, and nearby allies share the benefit.", "No recibes daño si superas una salvación de Destreza, y tus aliados cercanos también se benefician.")],
@@ -99,7 +101,8 @@ export const bookSubclassFeatures: Record<string, Progression> = {
   // --- Fighter -----------------------------------------------------------------------------------------------------
   battleMaster: {
     3: [f("Combat Superiority", "Superioridad en combate", "Learn 3 maneuvers and get 4 d8 Superiority Dice to fuel them; dice return on a Short Rest.", "Aprendes 3 maniobras y tienes 4 dados de superioridad d8 para usarlas; se recuperan en descanso corto."),
-      f("Student of War", "Estudiante de la guerra", "Gain proficiency with one artisan's tool and one Fighter skill.", "Ganas competencia con una herramienta de artesano y una habilidad de guerrero.")],
+      f("Student of War", "Estudiante de la guerra", "Gain proficiency with one artisan's tool and one Fighter skill.", "Ganas competencia con una herramienta de artesano y una habilidad de guerrero.",
+        [{ kind: "chooseSkills", count: 1, from: fighterSkills }])],
     7: [f("Know Your Enemy", "Conoce a tu enemigo", "Study a creature to learn its resistances, immunities and vulnerabilities. You also learn 2 more maneuvers and get a fifth die.", "Estudias a una criatura para conocer sus resistencias, inmunidades y vulnerabilidades. Además aprendes 2 maniobras más y ganas un quinto dado.")],
     10: [f("Improved Combat Superiority", "Superioridad en combate mejorada", "Superiority Dice become d10s. Learn 2 more maneuvers.", "Los dados de superioridad pasan a ser d10. Aprendes 2 maniobras más.")],
     15: [f("Relentless", "Implacable", "Once per turn, use a maneuver with a d8 instead of spending a die. You get a sixth die and 2 more maneuvers.", "Una vez por turno, usas una maniobra con un d8 sin gastar dado. Ganas un sexto dado y 2 maniobras más.")],
@@ -178,7 +181,8 @@ export const bookSubclassFeatures: Record<string, Progression> = {
   feyWanderer: {
     3: [f("Dreadful Strikes", "Golpes terribles", "Once per turn, your weapon hits deal extra psychic damage.", "Una vez por turno, tus golpes con arma hacen daño psíquico extra."),
       f("Fey Wanderer Spells", "Conjuros del trotamundos feérico", "Always have fey spells like Charm Person, Misty Step and Summon Fey prepared.", "Siempre tienes preparados conjuros feéricos como Hechizar persona, Paso brumoso e Invocar feérico."),
-      f("Otherworldly Glamour", "Encanto de otro mundo", "Add Wisdom to Charisma checks and gain a social skill.", "Sumas Sabiduría a tus pruebas de Carisma y ganas una habilidad social.")],
+      f("Otherworldly Glamour", "Encanto de otro mundo", "Add Wisdom to Charisma checks and gain a social skill.", "Sumas Sabiduría a tus pruebas de Carisma y ganas una habilidad social.",
+        [{ kind: "chooseSkills", count: 1, from: ["deception", "performance", "persuasion"] }])],
     7: [f("Beguiling Twist", "Giro cautivador", "Resist charm and fear, and redirect it to another creature with your reaction.", "Resistes el hechizo y el miedo, y los rediriges a otra criatura con tu reacción.")],
     11: [f("Fey Reinforcements", "Refuerzos feéricos", "Cast Summon Fey for free once per Long Rest, without concentration if you want.", "Lanzas Invocar feérico gratis una vez por descanso largo, sin concentración si quieres.")],
     15: [f("Misty Wanderer", "Trotamundos brumoso", "Cast Misty Step for free several times and bring an ally along.", "Lanzas Paso brumoso gratis varias veces y llevas a un aliado contigo.")],

@@ -5,6 +5,7 @@
  * Names are given in English and Spanish; rules text is summarized, not reproduced.
  */
 import type { AbilityKey } from "./rules";
+import type { Effect } from "./effects";
 
 export type Text = { en: string; es: string };
 
@@ -68,8 +69,8 @@ export interface EquipmentOption {
   shield?: boolean;
 }
 
-/** A class feature or species trait: its official name and our own one-line summary (not rules text). */
-export interface Feature { name: Text; tip: Text }
+/** A class feature or species trait: its official name, our own one-line summary (not rules text) and the mechanics the app applies (see effects.ts). */
+export interface Feature { name: Text; tip: Text; effects?: Effect[] }
 
 export type ClassId =
   | "barbarian" | "bard" | "cleric" | "druid" | "fighter" | "monk"
@@ -87,8 +88,6 @@ export interface ClassData {
   armor: Text;
   weapons: Text;
   tools?: Text;
-  /** Special unarmored Armor Class formula. */
-  unarmored?: "barbarian" | "monk";
   spellcasting?: { ability: AbilityKey; cantrips: number; prepared: number; slots: Text };
   weaponMasteries?: number;
   /** Rogues gain Expertise in two skills at level 1. */
@@ -100,7 +99,9 @@ export interface ClassData {
 }
 
 const t = (en: string, es: string): Text => ({ en, es });
-const f = (en: string, es: string, tipEn: string, tipEs: string): Feature => ({ name: t(en, es), tip: t(tipEn, tipEs) });
+export const feature = (en: string, es: string, tipEn: string, tipEs: string, effects?: Effect[]): Feature =>
+  ({ name: t(en, es), tip: t(tipEn, tipEs), ...(effects ? { effects } : {}) });
+const f = feature;
 const gp = (amount: number) => t(`${amount} GP`, `${amount} po`);
 const fullCasterSlots = t("2 level 1 slots", "2 espacios de nivel 1");
 
@@ -109,10 +110,11 @@ export const classes: ClassData[] = [
     id: "barbarian", name: t("Barbarian", "Bárbaro"), hitDie: 12, primary: ["str"], saves: ["str", "con"],
     skillCount: 2, skillOptions: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"],
     armor: t("Light and Medium armor, Shields", "Armadura ligera y media, escudos"),
-    weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), unarmored: "barbarian", weaponMasteries: 2,
+    weapons: t("Simple and Martial weapons", "Armas sencillas y marciales"), weaponMasteries: 2,
     features: [
       f("Rage", "Furia", "Bonus action: extra damage with Strength attacks, resistance to bludgeoning, piercing and slashing damage, and advantage on Strength checks and saves. No spellcasting while raging.", "Acción adicional: daño extra con ataques de Fuerza, resistencia al daño contundente, perforante y cortante, y ventaja en pruebas y salvaciones de Fuerza. No puedes lanzar conjuros en furia."),
-      f("Unarmored Defense", "Defensa sin armadura", "Without armor, your AC is 10 + Dexterity + Constitution modifiers; a shield still adds its bonus.", "Sin armadura, tu CA es 10 + modificadores de Destreza y Constitución; el escudo sigue sumando."),
+      f("Unarmored Defense", "Defensa sin armadura", "Without armor, your AC is 10 + Dexterity + Constitution modifiers; a shield still adds its bonus.", "Sin armadura, tu CA es 10 + modificadores de Destreza y Constitución; el escudo sigue sumando.",
+        [{ kind: "unarmoredDefense", add: ["con"] }]),
       f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
     ],
     subclass: t("Path of the Berserker", "Senda del berserker"),
@@ -195,10 +197,11 @@ export const classes: ClassData[] = [
     id: "monk", name: t("Monk", "Monje"), hitDie: 8, primary: ["dex", "wis"], saves: ["str", "dex"],
     skillCount: 2, skillOptions: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"],
     armor: t("None", "Ninguna"), weapons: t("Simple weapons and Martial weapons with the Light property", "Armas sencillas y marciales con la propiedad Ligera"),
-    tools: t("One Artisan's Tools or Musical Instrument", "Unas herramientas de artesano o un instrumento musical"), unarmored: "monk",
+    tools: t("One Artisan's Tools or Musical Instrument", "Unas herramientas de artesano o un instrumento musical"),
     features: [
       f("Martial Arts", "Artes marciales", "Unarmed strikes and Monk weapons can use Dexterity and deal your Martial Arts die (d6), and you can make an unarmed strike as a bonus action.", "Tus golpes sin armas y armas de monje pueden usar Destreza y hacer tu dado de artes marciales (d6), y puedes dar un golpe sin armas como acción adicional."),
-      f("Unarmored Defense", "Defensa sin armadura", "Without armor or a shield, your AC is 10 + Dexterity + Wisdom modifiers.", "Sin armadura ni escudo, tu CA es 10 + modificadores de Destreza y Sabiduría."),
+      f("Unarmored Defense", "Defensa sin armadura", "Without armor or a shield, your AC is 10 + Dexterity + Wisdom modifiers.", "Sin armadura ni escudo, tu CA es 10 + modificadores de Destreza y Sabiduría.",
+        [{ kind: "unarmoredDefense", add: ["wis"] }]),
     ],
     subclass: t("Warrior of the Open Hand", "Guerrero de la Mano Abierta"),
     summary: t("A martial artist who channels inner power through body and mind.", "Un artista marcial que canaliza su poder interior."),
@@ -315,8 +318,9 @@ export const classes: ClassData[] = [
 
 export type FeatId =
   | "alert" | "crafter" | "healer" | "lucky" | "magicInitiate" | "musician" | "savageAttacker" | "skilled" | "tavernBrawler" | "tough";
-export const originFeats: Record<FeatId, { name: Text; summary: Text }> = {
-  alert: { name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado.") },
+export const originFeats: Record<FeatId, { name: Text; summary: Text; effects?: Effect[] }> = {
+  alert: { name: t("Alert", "Alerta"), summary: t("Add your Proficiency Bonus to Initiative and swap Initiative with a willing ally.", "Suma tu bonificador por competencia a la iniciativa y puedes intercambiarla con un aliado."),
+    effects: [{ kind: "initiativeBonus", add: "proficiency" }] },
   crafter: { name: t("Crafter", "Artesano"), summary: t("Proficiency with three Artisan's Tools, a discount on nonmagical items and fast crafting.", "Competencia con tres herramientas de artesano, descuento en objetos no mágicos y fabricación rápida.") },
   healer: { name: t("Healer", "Sanador"), summary: t("Use a Healer's Kit to restore Hit Points to an ally and reroll low healing dice.", "Usa un botiquín de sanador para curar a un aliado y repite los dados de curación bajos.") },
   lucky: { name: t("Lucky", "Afortunado"), summary: t("Luck Points equal to your Proficiency Bonus to gain Advantage or turn an attack against you into a Disadvantage.", "Puntos de suerte igual a tu bonificador por competencia para obtener ventaja o imponer desventaja a un ataque contra ti.") },
@@ -325,7 +329,8 @@ export const originFeats: Record<FeatId, { name: Text; summary: Text }> = {
   savageAttacker: { name: t("Savage Attacker", "Atacante salvaje"), summary: t("Once per turn, roll weapon damage dice twice and use either roll.", "Una vez por turno, tira dos veces los dados de daño de un arma y elige el resultado.") },
   skilled: { name: t("Skilled", "Habilidoso"), summary: t("Gain proficiency in any combination of three skills or tools.", "Obtienes competencia en tres habilidades o herramientas a tu elección.") },
   tavernBrawler: { name: t("Tavern Brawler", "Pendenciero"), summary: t("Stronger Unarmed Strikes, reroll 1s on their damage and shove after a hit.", "Golpes sin armas más fuertes, repites los 1 en su daño y empujas tras un impacto.") },
-  tough: { name: t("Tough", "Duro"), summary: t("Your Hit Point maximum increases by twice your level.", "Tus puntos de golpe máximos aumentan el doble de tu nivel.") },
+  tough: { name: t("Tough", "Duro"), summary: t("Your Hit Point maximum increases by twice your level.", "Tus puntos de golpe máximos aumentan el doble de tu nivel."),
+    effects: [{ kind: "hpPerLevel", amount: 2 }] },
 };
 export const magicInitiateLists = { cleric: t("Cleric", "Clérigo"), druid: t("Druid", "Druida"), wizard: t("Wizard", "Mago") } as const;
 export type MagicInitiateList = keyof typeof magicInitiateLists;
@@ -512,8 +517,6 @@ export interface SpeciesData {
   skillChoice?: { count: number; options: SkillKey[] };
   /** Human Versatile: choose an origin feat. */
   originFeat?: boolean;
-  /** Dwarven Toughness: +1 HP per level. */
-  hpPerLevel?: number;
 }
 
 export const species: SpeciesData[] = [
@@ -541,10 +544,10 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
   },
   {
-    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120, hpPerLevel: 1,
+    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
     traits: [
       f("Dwarven Resilience", "Resistencia enana", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
-      f("Dwarven Toughness", "Dureza enana", "+1 hit point maximum per level (already counted on this sheet).", "+1 punto de golpe máximo por nivel (ya incluido en esta ficha)."),
+      f("Dwarven Toughness", "Dureza enana", "+1 hit point maximum per level (already counted on this sheet).", "+1 punto de golpe máximo por nivel (ya incluido en esta ficha).", [{ kind: "hpPerLevel", amount: 1 }]),
       f("Stonecunning", "Afinidad con la piedra", "Bonus action: gain 60-foot tremorsense for 10 minutes while on or touching stone. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: ganas sentido de la vibración a 60 pies durante 10 minutos si estás sobre piedra o la tocas. Tantos usos como tu bonificador por competencia por descanso largo."),
     ],
   },
