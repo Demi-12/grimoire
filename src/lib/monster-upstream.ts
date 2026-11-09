@@ -11,6 +11,11 @@ import {
  */
 const API_ROOT = `${OPEN5E_ROOT}/v2`;
 const PAGE_SIZE = 200;
+/** A single stat block is small and quick. */
+const DETAIL_TIMEOUT_MS = 20_000;
+/** Catalog pages are ~400 KB each and Open5e can take 15-30 s to serve them when several are requested at once. */
+const CATALOG_PAGE_TIMEOUT_MS = 90_000;
+const CATALOG_PAGE_ATTEMPTS = 2;
 
 export class UpstreamError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -19,10 +24,10 @@ export class UpstreamError extends Error {
   }
 }
 
-async function getJson(path: string, cache: "day" | "none" = "day"): Promise<{ status: number; body: unknown }> {
+async function getJson(path: string, cache: "day" | "none" = "day", timeoutMs = DETAIL_TIMEOUT_MS): Promise<{ status: number; body: unknown }> {
   const upstream = await fetch(`${API_ROOT}${path}`, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(timeoutMs),
     ...(cache === "day" ? { next: { revalidate: 86_400 } } : { cache: "no-store" as const }),
   });
   if (upstream.status === 404) return { status: 404, body: null };
@@ -116,12 +121,23 @@ function compact(creature: Open5eCreature): CompactMonster | null {
 
 type Page = { count?: unknown; results?: unknown };
 
-async function catalogPage(page: number) {
+async function fetchCatalogPage(page: number) {
   // Not cached by Next: pages are large and the whole catalog is kept in memory below.
-  const { body } = await getJson(`/creatures/?${CATALOG_FIELDS}&limit=${PAGE_SIZE}&page=${page}`, "none");
+  const { body } = await getJson(`/creatures/?${CATALOG_FIELDS}&limit=${PAGE_SIZE}&page=${page}`, "none", CATALOG_PAGE_TIMEOUT_MS);
   const data = body as Page | null;
   if (!data || !Array.isArray(data.results)) throw new UpstreamError("The monster service returned an unexpected index.", 502);
   return { count: typeof data.count === "number" ? data.count : 0, results: data.results.filter(isCreature) };
+}
+
+/** One slow or dropped page should not sink the whole catalog, so each page is tried more than once. */
+async function catalogPage(page: number) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchCatalogPage(page);
+    } catch (cause) {
+      if (attempt >= CATALOG_PAGE_ATTEMPTS) throw cause;
+    }
+  }
 }
 
 async function buildCatalog(): Promise<MonsterCatalogData> {
@@ -150,14 +166,31 @@ async function buildCatalog(): Promise<MonsterCatalogData> {
 }
 
 const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+/** After a failed refresh the previous catalog keeps being served and the refresh is tried again after this long. */
+const CATALOG_RETRY_MS = 5 * 60 * 1000;
 let catalogCache: { at: number; promise: Promise<MonsterCatalogData> } | undefined;
+let lastCatalog: MonsterCatalogData | undefined;
 
-/** Every Open5e creature with CR, XP, type, book and inferred roles; rebuilt at most once a day. */
+/**
+ * Every Open5e creature with CR, XP, type, book and inferred roles; rebuilt at most once a day.
+ * Once a catalog has been built it is always served from memory: refreshes run in the background and a failed one
+ * leaves the previous catalog in place instead of turning every request into a 502.
+ */
 export function fetchMonsterCatalog(): Promise<MonsterCatalogData> {
   if (!catalogCache || Date.now() - catalogCache.at > CATALOG_TTL_MS) {
-    const promise = buildCatalog();
-    catalogCache = { at: Date.now(), promise };
-    promise.catch(() => { if (catalogCache?.promise === promise) catalogCache = undefined; });
+    const entry = { at: Date.now(), promise: undefined as unknown as Promise<MonsterCatalogData> };
+    entry.promise = buildCatalog().then(
+      (catalog) => { lastCatalog = catalog; return catalog; },
+      (cause) => {
+        if (lastCatalog) {
+          if (catalogCache === entry) entry.at = Date.now() - CATALOG_TTL_MS + CATALOG_RETRY_MS;
+          return lastCatalog;
+        }
+        if (catalogCache === entry) catalogCache = undefined;
+        throw cause;
+      },
+    );
+    catalogCache = entry;
   }
-  return catalogCache.promise;
+  return lastCatalog ? Promise.resolve(lastCatalog) : catalogCache.promise;
 }

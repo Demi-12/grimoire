@@ -44,6 +44,39 @@ describe("Open5e upstream", () => {
     expect(firstUrl.searchParams.get("fields")).toContain("challenge_rating");
   });
 
+  it("retries a catalog page that times out instead of failing the whole catalog", async () => {
+    let failedOnce = false;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (!failedOnce && new URL(url).searchParams.get("page") === "2") {
+        failedOnce = true;
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }
+      return respond(url);
+    });
+    const { fetchMonsterCatalog } = await import("./monster-upstream");
+    const { monsters } = await fetchMonsterCatalog();
+    expect(failedOnce).toBe(true);
+    expect(monsters.map((monster) => monster.index)).toEqual(["srd-2024_goblin-boss", "tob_aboleth", "srd_lich"]);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => respond(String(input)));
+  });
+
+  it("keeps serving the last catalog when a refresh fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const { fetchMonsterCatalog } = await import("./monster-upstream");
+      const first = await fetchMonsterCatalog();
+      fetchMock.mockImplementation(async () => new Response("down", { status: 503 }));
+      vi.setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
+      expect(await fetchMonsterCatalog()).toBe(first);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await fetchMonsterCatalog()).toBe(first);
+    } finally {
+      vi.useRealTimers();
+      fetchMock.mockImplementation(async (input: RequestInfo | URL) => respond(String(input)));
+    }
+  });
+
   it("opens old saved slugs from the SRD 5.2, then the SRD 5.1", async () => {
     const { fetchMonsterDetail } = await import("./monster-upstream");
     const goblin = await fetchMonsterDetail("goblin");
