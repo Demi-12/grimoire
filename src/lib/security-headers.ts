@@ -4,8 +4,8 @@ import { THEME_INIT_SCRIPT } from "./theme-init";
 /** CSP source for the inline theme script in <head>: valid whatever nonce a request gets. */
 export const THEME_INIT_SCRIPT_HASH = `'sha256-${createHash("sha256").update(THEME_INIT_SCRIPT).digest("base64")}'`;
 
-/** Host that serves monster portraits (see monster-sheet.tsx). */
-const MONSTER_IMAGE_HOST = "https://www.dnd5eapi.co";
+/** Host that serves monster illustrations (Open5e, see open5e.ts). */
+const MONSTER_IMAGE_HOST = "https://api.open5e.com";
 
 /**
  * Content-Security-Policy for a page response.

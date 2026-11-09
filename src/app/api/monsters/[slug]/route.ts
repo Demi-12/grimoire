@@ -22,13 +22,13 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
     );
   }
 
-  if (!/^[a-z0-9][a-z0-9-]*$/i.test(slug)) {
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(slug)) {
     return NextResponse.json({ error: "Invalid monster identifier." }, { status: 400 });
   }
 
   try {
     const monster = await fetchMonsterDetail(slug);
-    if (!monster) return NextResponse.json({ error: "Monster not found in the SRD." }, { status: 404 });
+    if (!monster) return NextResponse.json({ error: "Monster not found." }, { status: 404 });
     return NextResponse.json(monster, {
       headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800" },
     });
