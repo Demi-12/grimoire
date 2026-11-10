@@ -186,12 +186,17 @@ export async function listCampaigns(user: AppUser): Promise<CampaignView[]> {
       ORDER BY (m."role" = 'dm') DESC, u."name"`,
     [campaigns.rows.map((row) => row.id)],
   );
+  const rosters = new Map<string, CampaignView["members"]>();
+  for (const { campaignId, userId, name, role } of members.rows) {
+    let roster = rosters.get(campaignId);
+    if (!roster) rosters.set(campaignId, roster = []);
+    roster.push({ userId, name, role });
+  }
   return campaigns.rows.map((row) => ({
     ...row,
     isOwner: row.ownerId === user.id,
     canManage: canManageCampaign(user, row),
-    members: members.rows.filter((member) => member.campaignId === row.id)
-      .map(({ userId, name, role }) => ({ userId, name, role })),
+    members: rosters.get(row.id) ?? [],
   }));
 }
 

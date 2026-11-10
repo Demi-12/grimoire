@@ -51,9 +51,11 @@ export async function requireUser(roles?: SiteRole[]): Promise<AppUser | NextRes
 export const readJson = readJsonLimited;
 
 /** Map a data-layer failure to an HTTP response. */
-export function dataErrorResponse(error: "not-found" | "forbidden" | "invalid") {
+export function dataErrorResponse(error: "not-found" | "forbidden" | "invalid" | "blocked" | "limit") {
   if (error === "not-found") return jsonError(404, "Not found.");
   if (error === "forbidden") return jsonError(403, "You don't have permission for that.");
+  if (error === "blocked") return jsonError(409, "A wall or a closed door is in the way.");
+  if (error === "limit") return jsonError(409, "That's the most this campaign can keep.");
   return jsonError(400, "That change isn't valid.");
 }
 

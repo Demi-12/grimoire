@@ -159,9 +159,13 @@ export function allFeats(build: CharacterBuild, level = 20): LevelFeatId[] {
   return [...characterFeats(build), ...levelChoices(build, level).flatMap((choice) => [choice.feat?.id, choice.fightingStyle].filter((id): id is LevelFeatId => !!id))];
 }
 
+/** Skills from the species: the ones it always grants plus the ones chosen. */
+export const speciesSkillsOf = (build: Pick<CharacterBuild, "speciesId" | "speciesSkills">): SkillKey[] =>
+  [...new Set([...(findSpecies(build.speciesId)?.skills ?? []), ...build.speciesSkills])];
+
 export function proficientSkills(build: CharacterBuild, level = 20): SkillKey[] {
   const background = findBackground(build.backgroundId);
-  return [...new Set([...(background?.skills ?? []), ...build.speciesSkills, ...build.classSkills,
+  return [...new Set([...(background?.skills ?? []), ...speciesSkillsOf(build), ...build.classSkills,
     ...(characterFeats(build).includes("skilled") ? build.featSkills : []),
     ...levelChoices(build, level).flatMap((choice) => [...(choice.feat?.id === "skilled" ? choice.feat.skills ?? [] : []), ...(choice.skills ?? [])])])];
 }
@@ -258,10 +262,12 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     armorClass = armor.base + dex;
     armorNote = armor.name.en;
   } else {
-    // Unarmored Defense, Draconic Resilience…: the best formula wins.
+    // Unarmored Defense, Draconic Resilience, Natural Armor…: the best formula wins.
     for (const { source, effect } of granted) {
-      if (effect.kind !== "unarmoredDefense") continue;
-      const value = 10 + mod("dex") + effect.add.reduce((sum, key) => sum + mod(key), 0);
+      let value: number;
+      if (effect.kind === "unarmoredDefense") value = 10 + mod("dex") + effect.add.reduce((sum, key) => sum + mod(key), 0);
+      else if (effect.kind === "naturalArmor") value = effect.base + (effect.addDex ? mod("dex") : 0);
+      else continue;
       if (value > armorClass) { armorClass = value; armorNote = source.en; }
     }
   }
@@ -352,7 +358,7 @@ export function stepIssues(build: CharacterBuild, step: number): string[] {
   if (step === 3 && !validBonuses(build)) issues.push("bonuses");
   if (step === 4 && cls) {
     // Skills already granted by the background or species can't be chosen again; the player picks another one instead.
-    const earlier = new Set<SkillKey>([...(bg?.skills ?? []), ...build.speciesSkills]);
+    const earlier = new Set<SkillKey>([...(bg?.skills ?? []), ...speciesSkillsOf(build)]);
     const options = new Set<SkillKey>(cls.skillOptions.length ? cls.skillOptions : (Object.keys(skills) as SkillKey[]));
     const classSkills = new Set(build.classSkills);
     if (classSkills.size !== cls.skillCount || build.classSkills.length !== cls.skillCount

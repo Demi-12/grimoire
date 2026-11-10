@@ -100,6 +100,87 @@ describe.skipIf(!url)("battle maps on PostgreSQL", () => {
     expect(after.ok && after.value.state.tokens.find((token) => token.id === lia.id)).toMatchObject({ x: 1, y: 1 });
   });
 
+  it("stores a background picture apart from the state and lets only DMs change it", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    expect(await mapData.setBattleMapBackground(player, campaignId, { bytes: png, mimeType: "image/png" })).toEqual({ ok: false, error: "forbidden" });
+    const set = await mapData.setBattleMapBackground(dm, campaignId, { bytes: png, mimeType: "image/png" });
+    const key = set.ok ? set.value.state.background?.key : undefined;
+    expect(key).toMatch(/^[A-Za-z0-9_-]+$/);
+    const read = await mapData.readBattleMapBackground(player, campaignId);
+    expect(read.ok && read.value).toMatchObject({ mimeType: "image/png", key });
+    expect(read.ok && read.value && Buffer.compare(read.value.image, png)).toBe(0);
+    expect(await mapData.readBattleMapBackground(stranger, campaignId)).toEqual({ ok: false, error: "not-found" });
+    const cleared = await mapData.setBattleMapBackground(dm, campaignId, null);
+    expect(cleared.ok && cleared.value.state.background).toBeUndefined();
+    expect(await mapData.readBattleMapBackground(player, campaignId)).toEqual({ ok: true, value: null });
+  });
+
+  it("with fog of war, players only receive the monsters their heroes can see", async () => {
+    const map = await mapData.readBattleMap(dm, campaignId);
+    if (!map.ok) throw new Error("read failed");
+    const lia = map.value.state.tokens.find((token) => token.kind === "hero")!;
+    const [first, second] = map.value.state.tokens.filter((token) => token.label.startsWith("Goblin"));
+    const done = await mapData.changeBattleMap(dm, campaignId, [
+      { type: "settings", fog: true },
+      { type: "move", tokenId: lia.id, x: 5, y: 8 },
+      { type: "update", tokenId: lia.id, vision: { range: 4, angle: 90 } },
+      { type: "move", tokenId: first.id, x: 5, y: 5 },
+      { type: "move", tokenId: second.id, x: 5, y: 9 },
+    ]);
+    expect(done.ok && done.value.state.tokens.filter((token) => token.kind === "monster")).toHaveLength(3);
+    const seen = await mapData.readBattleMap(player, campaignId);
+    expect(seen.ok && seen.value.state.tokens.filter((token) => token.kind === "monster").map((token) => token.id)).toEqual([first.id]);
+    const turned = await mapData.changeBattleMap(player, campaignId, [{ type: "face", tokenId: lia.id, facing: 4 }]);
+    expect(turned.ok && turned.value.state.tokens.filter((token) => token.kind === "monster").map((token) => token.id)).toEqual([second.id]);
+    await mapData.changeBattleMap(dm, campaignId, [{ type: "settings", fog: false }]);
+  });
+
+  it("saves a map with its picture and brings it back later, for DMs only", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9]);
+    await mapData.setBattleMapBackground(dm, campaignId, { bytes: png, mimeType: "image/png" });
+    await mapData.changeBattleMap(dm, campaignId, [{ type: "add-walls", walls: [{ x1: 2, y1: 0, x2: 2, y2: 5 }, { x1: 2, y1: 5, x2: 2, y2: 6, door: "closed" }] }]);
+    const before = await mapData.readBattleMap(dm, campaignId);
+    if (!before.ok) throw new Error("read failed");
+
+    expect(await mapData.createMapSave(player, campaignId, "Cripta")).toEqual({ ok: false, error: "forbidden" });
+    expect(await mapData.listMapSaves(player, campaignId)).toEqual({ ok: false, error: "forbidden" });
+    const saved = await mapData.createMapSave(dm, campaignId, "Cripta");
+    expect(saved.ok && saved.value).toMatchObject([{ name: "Cripta", walls: 2, hasBackground: true, createdByName: "dm" }]);
+    const saveId = saved.ok ? saved.value[0].id : "";
+
+    const blank = await mapData.loadMapSave(dm, campaignId, null);
+    expect(blank.ok && blank.value.state).toEqual({ cols: 20, rows: 14, tokens: [] });
+    expect(await mapData.readBattleMapBackground(player, campaignId)).toEqual({ ok: true, value: null });
+
+    expect(await mapData.loadMapSave(player, campaignId, saveId)).toEqual({ ok: false, error: "forbidden" });
+    const loaded = await mapData.loadMapSave(dm, campaignId, saveId);
+    if (!loaded.ok) throw new Error("load failed");
+    const { background: _old, ...beforeRest } = before.value.state;
+    const { background, ...loadedRest } = loaded.value.state;
+    expect(loadedRest).toEqual(beforeRest);
+    expect(background?.key).toMatch(/^[A-Za-z0-9_-]+$/);
+    const picture = await mapData.readBattleMapBackground(player, campaignId);
+    expect(picture.ok && picture.value && Buffer.compare(picture.value.image, png)).toBe(0);
+
+    const left = await mapData.deleteMapSave(dm, campaignId, saveId);
+    expect(left).toEqual({ ok: true, value: [] });
+    expect(await mapData.loadMapSave(dm, campaignId, saveId)).toEqual({ ok: false, error: "not-found" });
+  });
+
+  it("holds players back at walls on the server too", async () => {
+    const map = await mapData.readBattleMap(dm, campaignId);
+    if (!map.ok) throw new Error("read failed");
+    const lia = map.value.state.tokens.find((token) => token.kind === "hero")!;
+    await mapData.changeBattleMap(dm, campaignId, [
+      { type: "clear-walls" },
+      { type: "move", tokenId: lia.id, x: 0, y: 0 },
+      { type: "add-walls", walls: [{ x1: 1, y1: 0, x2: 1, y2: map.value.state.rows }] },
+    ]);
+    expect(await mapData.changeBattleMap(player, campaignId, [{ type: "move", tokenId: lia.id, x: 3, y: 0 }])).toEqual({ ok: false, error: "blocked" });
+    expect((await mapData.changeBattleMap(player, campaignId, [{ type: "move", tokenId: lia.id, x: 0, y: 3 }])).ok).toBe(true);
+    await mapData.changeBattleMap(dm, campaignId, [{ type: "clear-walls" }]);
+  });
+
   it("drops a hero's token when the character leaves the campaign", async () => {
     await pool.query('UPDATE "character" SET "campaignId" = NULL WHERE "id" = $1', [heroId]);
     const map = await mapData.readBattleMap(dm, campaignId);

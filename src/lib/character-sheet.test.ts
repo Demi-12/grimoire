@@ -83,6 +83,8 @@ describe("derived sheet", () => {
     expect(stepIssues({ ...fighter, classSkills: ["athletics", "survival"] }, 4)).toContain("classSkills");
     expect(stepIssues({ ...fighter, classSkills: ["survival", "survival"] }, 4)).toContain("classSkills");
     expect(stepIssues({ ...fighter, classSkills: ["perception", "arcana"] }, 4)).toContain("classSkills"); // not a Fighter skill
+    // The Eladrin already has Perception.
+    expect(stepIssues({ ...fighter, speciesId: "eladrin", speciesSkills: [], speciesFeat: undefined }, 4)).toContain("classSkills");
     const rogue: CharacterBuild = { ...fighter, classId: "rogue", classSkills: ["stealth", "acrobatics", "deception", "perception"], expertise: ["stealth", "perception"] };
     expect(stepIssues(rogue, 4)).toEqual([]);
     expect(stepIssues({ ...rogue, expertise: ["stealth", "arcana"] }, 4)).toContain("expertise");
@@ -113,7 +115,31 @@ describe("2024 catalog", () => {
       expect(bg.feat === "magicInitiate").toBe(!!bg.featList);
     }
     expect(new Set(backgrounds.map((bg) => bg.id)).size).toBe(16);
-    expect(species).toHaveLength(10);
+    expect(species.filter((sp) => sp.source === "phb2024")).toHaveLength(10);
+  });
+
+  it("adds the Eberron and Monsters of the Multiverse species with sane data", () => {
+    expect(species.length).toBeGreaterThan(30);
+    expect(new Set(species.map((sp) => sp.id)).size).toBe(species.length);
+    expect(species.map((sp) => sp.id)).toEqual(expect.arrayContaining(["changeling", "kalashtar", "khoravar", "shifter", "warforged", "tabaxi", "tortle"]));
+    for (const sp of species) {
+      expect(sp.traits.length).toBeGreaterThan(0);
+      expect([25, 30, 35, 40]).toContain(sp.speed);
+      if (sp.lineages) expect(new Set(sp.lineages.map((lineage) => lineage.id)).size).toBe(sp.lineages.length);
+      if (sp.skillChoice?.options.length) expect(sp.skillChoice.options.length).toBeGreaterThan(sp.skillChoice.count);
+    }
+  });
+
+  it("applies species mechanics: fixed skills, natural armor, initiative and AC bonuses", () => {
+    const wizard: CharacterBuild = { ...fighter, classId: "wizard", classSkills: ["arcana", "history"], speciesSkills: [], speciesFeat: undefined };
+    const human = deriveSheet({ ...wizard, speciesId: "human", speciesSkills: ["insight"] }, 1)!;
+    expect(deriveSheet({ ...wizard, speciesId: "tabaxi" }, 1)!.skills.stealth.proficient).toBe(true);
+    expect(deriveSheet({ ...wizard, speciesId: "lizardfolk" }, 1)!.armorClass).toBe(human.armorClass + 3); // 13 + Dex instead of 10 + Dex
+    expect(deriveSheet({ ...wizard, speciesId: "tortle" }, 1)!.armorClass).toBe(17);
+    expect(deriveSheet({ ...wizard, speciesId: "warforged" }, 1)!.armorClass).toBe(human.armorClass + 1);
+    expect(deriveSheet({ ...wizard, speciesId: "harengon" }, 1)!.initiative).toBe(human.initiative + 2);
+    expect(deriveSheet({ ...wizard, speciesId: "genasi", lineageId: "air" }, 1)!.speed).toBe(35);
+    expect(stepIssues({ ...wizard, speciesId: "kenku", speciesSkills: ["arcana"] }, 2)).toContain("speciesSkills");
   });
 
   it("Tough adds 2 Hit Points per level", () => {
