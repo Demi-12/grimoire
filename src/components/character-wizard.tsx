@@ -145,12 +145,12 @@ function defaultBonusAbilities(background: BackgroundData, cls: ClassData | unde
  * A roll made in the creator but not saved yet. Kept in the browser so closing the creator, cancelling or reloading the page
  * brings back the same dice instead of a fresh roll; it is cleared once a character keeps it.
  */
-const PENDING_ROLL_KEY = "grimoire.pendingRoll.v1";
+const PENDING_ROLL_ITEM = "grimoire.pendingRoll.v1";
 type PendingRoll = { pool: number[]; dice: number[][] };
 
 function readPendingRoll(): PendingRoll | undefined {
   try {
-    const raw = typeof window === "undefined" ? null : window.localStorage.getItem(PENDING_ROLL_KEY);
+    const raw = typeof window === "undefined" ? null : window.localStorage.getItem(PENDING_ROLL_ITEM);
     const value = raw ? JSON.parse(raw) as PendingRoll : undefined;
     const die = (n: unknown) => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 6;
     if (value && Array.isArray(value.pool) && Array.isArray(value.dice) && value.pool.length === 6 && value.dice.length === 6
@@ -162,8 +162,8 @@ function readPendingRoll(): PendingRoll | undefined {
 
 function writePendingRoll(roll: PendingRoll | null) {
   try {
-    if (roll) window.localStorage.setItem(PENDING_ROLL_KEY, JSON.stringify(roll));
-    else window.localStorage.removeItem(PENDING_ROLL_KEY);
+    if (roll) window.localStorage.setItem(PENDING_ROLL_ITEM, JSON.stringify(roll));
+    else window.localStorage.removeItem(PENDING_ROLL_ITEM);
   } catch { /* storage blocked: the roll still lives in the build until the creator closes */ }
 }
 
