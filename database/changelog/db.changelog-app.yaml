@@ -302,3 +302,30 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP TABLE IF EXISTS "battle_map_background";
+
+  - changeSet:
+      id: data-008-battle-map-saves
+      author: grimoire
+      comment: >-
+        Saved battle maps of a campaign: a copy of the whole map (grid, tokens, walls and doors, fog and what was
+        explored) and of its background picture, so a DM can put a map away mid-session and bring it back another
+        day. Only DMs list, save, load and delete them; at most 20 per campaign (checked by the app).
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "battle_map_save" (
+                "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                "campaignId" UUID NOT NULL REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                "name" TEXT NOT NULL CHECK (char_length("name") BETWEEN 1 AND 60),
+                "state" JSONB NOT NULL CHECK (octet_length("state"::text) <= 60000),
+                "image" BYTEA CHECK ("image" IS NULL OR octet_length("image") BETWEEN 1 AND 5000000),
+                "mimeType" TEXT CHECK ("mimeType" IN ('image/png', 'image/jpeg', 'image/webp', 'image/gif')),
+                "createdBy" TEXT REFERENCES "user" ("id") ON DELETE SET NULL,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CHECK (("image" IS NULL) = ("mimeType" IS NULL))
+              );
+              CREATE INDEX "battle_map_save_campaign_idx" ON "battle_map_save" ("campaignId", "createdAt");
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS "battle_map_save";

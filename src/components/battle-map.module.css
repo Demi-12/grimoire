@@ -133,3 +133,23 @@
 .vision select { min-height: 32px; padding: 4px 6px; color: var(--ink); background: var(--paper); border: 1px solid var(--control-line); font-size: 13px; }
 .boardOptions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
 .backgroundPreview { display: block; width: 100%; max-height: 140px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); }
+
+/* Walls and doors. A wide transparent line under each one makes it easy to tap. */
+.walls, .wallsErasing { pointer-events: none; }
+.wallPick { pointer-events: auto; cursor: pointer; outline: none; }
+.wallHit { stroke: transparent; stroke-width: 16; stroke-linecap: round; }
+.wall { stroke: #1b1622; stroke-width: 6; stroke-linecap: round; }
+.doorClosed { stroke: #a8620f; stroke-width: 9; stroke-linecap: butt; }
+.doorOpen { stroke: #a8620f; stroke-width: 4; stroke-dasharray: 6 5; stroke-linecap: butt; }
+.wallsErasing .wallPick:hover .wall, .wallsErasing .wallPick:hover .doorClosed, .wallsErasing .wallPick:hover .doorOpen { stroke: #c0392b; }
+.wallPick:hover .doorClosed, .wallPick:hover .doorOpen, .wallPick:focus-visible .doorClosed, .wallPick:focus-visible .doorOpen { stroke: var(--gilt); }
+.wallPick:focus-visible .wallHit { stroke: var(--gilt); stroke-opacity: .35; }
+.wallPreview { pointer-events: none; }
+.wallPreview line { stroke: var(--gilt); stroke-width: 6; stroke-dasharray: 10 6; stroke-linecap: round; }
+.wallPreview circle { fill: var(--gilt); }
+.passThrough { pointer-events: none; }
+.memory { fill: #0b0911; fill-opacity: .62; pointer-events: none; }
+.memoryDm { fill: #0b0911; fill-opacity: .25; pointer-events: none; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tools small { color: var(--muted); font: 500 13px var(--font-label); }
+.tools [aria-pressed="true"] { color: #fff; background: var(--crimson); border-color: var(--crimson); }
