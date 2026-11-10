@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { backgrounds, classes, species, weaponTable } from "./dnd2024";
-import { attackList, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
+import { attackList, deriveSheet, duplicatesBackgroundFeat, finalScores, pointBuySpent, roll4d6DropLowest, rollAbilityPool, stepIssues, validBaseScores, validBonuses, type CharacterBuild } from "./character-sheet";
 
 const fighter: CharacterBuild = {
   version: 1, classId: "fighter", useSubclass: true, backgroundId: "soldier", speciesId: "human",
@@ -29,6 +29,18 @@ describe("2024 ability scores", () => {
   it("rolls 4d6 dropping the lowest die", () => {
     const dice = [0.99, 0.99, 0.99, 0];
     expect(roll4d6DropLowest(() => dice.shift() ?? 0)).toBe(18);
+  });
+
+  it("keeps the four dice of each of the six rolls", () => {
+    const { pool, dice } = rollAbilityPool(() => 0.5); // every die shows 4
+    expect(pool).toEqual([12, 12, 12, 12, 12, 12]);
+    expect(dice).toHaveLength(6);
+    for (const [index, roll] of dice.entries()) expect(roll[0] + roll[1] + roll[2]).toBe(pool[index]);
+  });
+
+  it("asks for the roll before validating rolled scores", () => {
+    expect(stepIssues({ ...fighter, abilityMethod: "rolled", rolledPool: undefined }, 3)).toEqual(["roll"]);
+    expect(stepIssues({ ...fighter, abilityMethod: "rolled", rolledPool: [15, 14, 13, 12, 10, 8] }, 3)).toEqual([]);
   });
 });
 
@@ -63,6 +75,32 @@ describe("derived sheet", () => {
     expect(stepIssues({ ...fighter, classSkills: ["perception"] }, 4)).toContain("classSkills");
     expect(stepIssues({ ...fighter, speciesId: "elf", speciesSkills: [] }, 2)).toEqual(expect.arrayContaining(["lineage", "speciesSkills"]));
     expect(stepIssues(fighter, 6)).toEqual([]);
+  });
+
+  it("rejects skills granted twice or Expertise in a skill the character lacks", () => {
+    expect(stepIssues(fighter, 4)).toEqual([]);
+    // Athletics already comes from the Soldier background.
+    expect(stepIssues({ ...fighter, classSkills: ["athletics", "survival"] }, 4)).toContain("classSkills");
+    expect(stepIssues({ ...fighter, classSkills: ["survival", "survival"] }, 4)).toContain("classSkills");
+    expect(stepIssues({ ...fighter, classSkills: ["perception", "arcana"] }, 4)).toContain("classSkills"); // not a Fighter skill
+    // The Eladrin already has Perception.
+    expect(stepIssues({ ...fighter, speciesId: "eladrin", speciesSkills: [], speciesFeat: undefined }, 4)).toContain("classSkills");
+    const rogue: CharacterBuild = { ...fighter, classId: "rogue", classSkills: ["stealth", "acrobatics", "deception", "perception"], expertise: ["stealth", "perception"] };
+    expect(stepIssues(rogue, 4)).toEqual([]);
+    expect(stepIssues({ ...rogue, expertise: ["stealth", "arcana"] }, 4)).toContain("expertise");
+    const skilled: CharacterBuild = { ...fighter, backgroundId: "noble", featSkills: ["arcana", "medicine", "stealth"] };
+    expect(stepIssues(skilled, 4)).toEqual([]);
+    expect(stepIssues({ ...skilled, featSkills: ["arcana", "medicine", "perception"] }, 4)).toContain("featSkills");
+  });
+
+  it("does not let the Human take the background's Origin feat again", () => {
+    const criminal: CharacterBuild = { ...fighter, backgroundId: "criminal", bonusAbilities: ["dex", "con"] };
+    expect(duplicatesBackgroundFeat(criminal)).toBe(true); // Alert twice
+    expect(stepIssues(criminal, 2)).toContain("duplicateFeat");
+    expect(stepIssues({ ...criminal, speciesFeat: "tough" }, 2)).toEqual([]);
+    const acolyte: CharacterBuild = { ...fighter, backgroundId: "acolyte", speciesFeat: "magicInitiate", magicInitiateList: "cleric" };
+    expect(duplicatesBackgroundFeat(acolyte)).toBe(true);
+    expect(duplicatesBackgroundFeat({ ...acolyte, magicInitiateList: "wizard" })).toBe(false);
   });
 });
 

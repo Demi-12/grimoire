@@ -1,0 +1,2 @@
+# False positive: the localStorage item name for a pending dice roll ("grimoire.pendingRoll.v1"), not a secret. The constant was renamed in the next commit.
+f656b6459debfe0483f074f723c0da78e9637062:src/components/character-wizard.tsx:generic-api-key:148
