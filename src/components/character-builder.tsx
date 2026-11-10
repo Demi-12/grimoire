@@ -218,8 +218,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
           onLevelUp={own?.editable && own.build ? () => { onSelect(null); startLevelUp(own); } : undefined} />
       : <div className="empty-state"><h2>{translate(locale, "character.notFoundTitle")}</h2><p>{translate(locale, "character.notFoundDescription")}</p>
           <button type="button" className="button button-primary" onClick={() => onSelect(null)}>‹ {translate(locale, "character.backToList")}</button></div>)}
-    <div className={`section-heading${listClass}`}><div><h2 id="characters-title">{translate(locale, "character.title")}</h2>
-      <p>{translate(locale, "character.description")}</p></div>
+    <div className={`section-heading builder-toolbar${listClass}`}>
       {!showEditor && !wizard && !levelingUp && <div className="builder-actions">
         <button className="button button-quiet" onClick={() => setWizard({ quick: true })}>{translate(locale, "character.quickButton")}</button>
         <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.newButton")}</button>

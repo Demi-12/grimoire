@@ -436,7 +436,7 @@ export default function Toolkit() {
         <section className="tool-grid" aria-label={t("home.toolbox")}>
           <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true"><Icon name="characters" /></span><strong>{t("nav.characters")}</strong><b>{ownCharacters.length}</b><small>{t("home.tool.characters")}</small></button>
           <button className="tool-tile" onClick={() => setView("campaigns")}><span className="tool-glyph" aria-hidden="true"><Icon name="campaigns" /></span><strong>{t("home.campaigns")}</strong><b>{campaigns.length}</b><small>{t("home.tool.campaigns")}</small></button>
-          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true"><Icon name="encounters" /></span><strong>{t("nav.encounters")}</strong><b>{creatures.length}</b><small>{t("home.tool.encounters")}</small></button>
+          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true"><Icon name="encounters" /></span><strong>{t("nav.encounters")}</strong><b>{ownCreatures.length}</b><small>{t("home.tool.encounters")}</small></button>
           <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true"><Icon name="account" /></span><strong>{t("nav.account")}</strong><b className="tool-status">✓</b><small>{t("home.tool.accountOn")}</small></button>
         </section>
         <section className="desk-panel">
@@ -451,7 +451,8 @@ export default function Toolkit() {
       </main>}
 
       {view === "characters" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("characters.kicker")}</p><h1>{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
+        {/* With a sheet open the character's name is the visible heading; keep the page title for screen readers only. */}
+        <div className={`section-title page-title${selectedCharacterId ? " sr-only" : ""}`}><div><p className="eyebrow">{t("characters.kicker")}</p><h1 id="characters-title">{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
         <CharacterBuilder locale={locale} characters={ownCharacters} allCharacters={characters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter}
           selectedId={selectedCharacterId} onSelect={(id) => router.push(id ? `/characters/${encodeURIComponent(id)}` : viewPaths.characters)} />
         <p className="local-data-note">{t("characters.localData")}</p>
@@ -462,7 +463,7 @@ export default function Toolkit() {
       </main>}
 
       {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: creatures.length })}</button></div>
+        <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: ownCreatures.length })}</button></div>
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
         <BestiaryBrowser locale={locale} homebrew={{ me, campaigns, onAddCreature: (creature) => { void saveCreature(creature); } }} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
         {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}

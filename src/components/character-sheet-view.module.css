@@ -18,6 +18,7 @@
 .vital small { font-size: var(--text-xs); color: var(--muted); }
 .abilities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .ability { display: grid; justify-items: center; padding: 10px 6px; border: 1px solid var(--line); background: var(--paper); }
+.ability abbr { text-decoration: none; }
 .ability span { font: 600 var(--text-xs) var(--font-label); letter-spacing: .06em; color: var(--muted); }
 .ability b { font: 700 24px var(--font-display); color: var(--ink); }
 .ability small { font: 600 14px var(--font-body); color: var(--crimson); }

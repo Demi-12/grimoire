@@ -331,7 +331,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
             {(["srd", "both", "custom"] as const).map((item) => (
               <button type="button" key={item} aria-pressed={source === item} className={`difficulty-option ${source === item ? "selected" : ""}`} onClick={() => setSource(item)}>
                 <b>{translate(locale, `encounter.monsters.source.${item}`)}</b>
-                <small>{item === "custom" ? translate(locale, "encounter.monsters.customCount", { count: creatures.length }) : srd ? translate(locale, "encounter.monsters.srdCount", { count: srd.monsters.length, edition: "Open5e" }) : translate(locale, "encounter.monsters.api")}</small>
+                <small>{item === "custom" ? translate(locale, creatures.every((creature) => creature.source === "Ejemplo editable") ? "encounter.monsters.sampleCount" : "encounter.monsters.customCount", { count: creatures.length }) : srd ? translate(locale, "encounter.monsters.srdCount", { count: srd.monsters.length, edition: "Open5e" }) : translate(locale, "encounter.monsters.api")}</small>
               </button>
             ))}
           </div>
