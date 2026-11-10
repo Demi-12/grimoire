@@ -65,15 +65,29 @@ function toView(user: AppUser, campaignId: string, context: MapContext, row: { s
   };
 }
 
-/** The campaign's map as this member may see it. Every member of the campaign can open it. */
+/**
+ * The campaign's map as this member may see it. Every member of the campaign can open it.
+ * One round trip: every open live stream of the campaign runs this after each change.
+ */
 export async function readBattleMap(user: AppUser, campaignId: string, audience: MapAudience = "auto"): Promise<MapResult<BattleMapView>> {
-  const context = await readContext(pool, user, campaignId);
-  if (!context) return { ok: false, error: "not-found" };
-  const result = await pool.query<{ state: unknown; version: number; updatedAt: Date }>(
-    'SELECT "state", "version", "updatedAt" FROM "battle_map" WHERE "campaignId" = $1',
-    [campaignId],
+  const result = await pool.query<{
+    name: string; ownerId: string; myRole: CampaignRole | null; heroes: MapHero[];
+    state: unknown; version: number | null; updatedAt: Date | null;
+  }>(
+    `SELECT k."name", k."ownerId", m."role" AS "myRole", b."state", b."version", b."updatedAt",
+            COALESCE((SELECT json_agg(json_build_object('id', c."id", 'name', c."name", 'ownerId', c."ownerId") ORDER BY c."createdAt", c."id")
+                        FROM "character" c WHERE c."campaignId" = k."id"), '[]'::json) AS "heroes"
+       FROM "campaign" k
+       LEFT JOIN "campaign_member" m ON m."campaignId" = k."id" AND m."userId" = $2
+       LEFT JOIN "battle_map" b ON b."campaignId" = k."id"
+      WHERE k."id" = $1`,
+    [campaignId, user.id],
   );
-  return { ok: true, value: toView(user, campaignId, context, result.rows[0], audience) };
+  const row = result.rows[0];
+  if (!row || (row.ownerId !== user.id && row.myRole === null)) return { ok: false, error: "not-found" };
+  const context: MapContext = { campaignName: row.name, isDm: canManageCampaign(user, row), heroes: row.heroes };
+  const saved = row.version === null || row.updatedAt === null ? undefined : { state: row.state, version: row.version, updatedAt: row.updatedAt };
+  return { ok: true, value: toView(user, campaignId, context, saved, audience) };
 }
 
 const newTokenId = () => randomBytes(9).toString("base64url");
