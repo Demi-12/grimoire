@@ -74,7 +74,9 @@ export default function CharacterSheetView({ character, campaignName, locale, on
           <div className={styles.abilities}>{abilities.map(({ key }) => {
             const score = sheet?.scores[key] ?? character.scores[key];
             const modifier = abilityModifier(score);
-            return <div className={styles.ability} key={key}><span>{t(`ability.${key}`)}</span><b>{score}</b><small>{signed(modifier)}</small></div>;
+            const name = t(`ability.${key}`);
+            // Full names ("Constitución") overflow the narrow cells, so show the three-letter short form.
+            return <div className={styles.ability} key={key}><span><abbr title={name} aria-hidden="true">{name.slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</abbr><span className="sr-only">{name}</span></span><b>{score}</b><small>{signed(modifier)}</small></div>;
           })}</div>
         </section>
 
@@ -106,7 +108,7 @@ export default function CharacterSheetView({ character, campaignName, locale, on
         <section className={styles.panel} aria-labelledby="sheet-combat">
           <h3 id="sheet-combat">{t("character.combatTitle")}</h3>
           {sheet ? <div className={styles.vitals}>
-            <div className={styles.vital}><span>{t("character.armorClass")}</span><b>{sheet.armorClass}</b>{sheet.armorNote && <small>{sheet.armorNote}</small>}</div>
+            <div className={styles.vital}><span>{t("character.armorClass")}</span><b>{sheet.armorClass}</b>{sheet.armorSource && <small>{say(sheet.armorSource, locale)}</small>}</div>
             <div className={styles.vital}><span>{t("character.hitPoints")}</span><b>{sheet.hitPoints}</b><small>{sheet.hitDice}</small></div>
             <div className={styles.vital}><span>{t("character.initiative")}</span><b>{signed(sheet.initiative)}</b></div>
             <div className={styles.vital}><span>{t("character.speed")}</span><b>{sheet.speed}</b></div>

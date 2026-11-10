@@ -38,7 +38,7 @@ const copy = {
   en: {
     kicker: "Character creation, 2024 rules", create: "Forge a new adventurer", edit: "Revise your adventurer",
     steps: ["Class", "Background", "Species", "Abilities", "Proficiencies", "Equipment", "Details", "Summary"],
-    back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator", quickCreate: "Quick sheet",
+    back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator", quickCreate: "Character on one page",
     stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
     classIntro: "Your class is the heart of your adventurer: it sets your Hit Points, proficiencies and core features.",
     level: "Starting level", hitDie: "Hit Die", primary: "Primary ability", saves: "Saving throws", armor: "Armor training",
@@ -81,7 +81,7 @@ const copy = {
   es: {
     kicker: "Creación de personaje, reglas 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
     steps: ["Clase", "Trasfondo", "Especie", "Características", "Competencias", "Equipo", "Detalles", "Resumen"],
-    back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador", quickCreate: "Edición rápida",
+    back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador", quickCreate: "Personaje en una página",
     stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
     classIntro: "La clase es el corazón de tu aventurero: define sus puntos de golpe, competencias y rasgos principales.",
     level: "Nivel inicial", hitDie: "Dado de golpe", primary: "Característica principal", saves: "Tiradas de salvación", armor: "Entrenamiento con armaduras",

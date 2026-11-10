@@ -218,6 +218,8 @@ export interface DerivedSheet {
   hitDice: string;
   armorClass: number;
   armorNote: string;
+  /** Where the armor class comes from (armor worn or an unarmored formula), in both languages. */
+  armorSource?: Text;
   initiative: number;
   speed: number;
   darkvision?: number;
@@ -256,11 +258,13 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
   const equipment = cls.equipment.find((option) => option.id === build.classEquipment) ?? cls.equipment[0];
   let armorClass = 10 + mod("dex");
   let armorNote = "";
+  let armorSource: Text | undefined;
   if (equipment.armor) {
     const armor = armorTable[equipment.armor];
     const dex = armor.dexCap === null ? mod("dex") : Math.min(mod("dex"), armor.dexCap);
     armorClass = armor.base + dex;
     armorNote = armor.name.en;
+    armorSource = armor.name;
   } else {
     // Unarmored Defense, Draconic Resilience, Natural Armor…: the best formula wins.
     for (const { source, effect } of granted) {
@@ -268,7 +272,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
       if (effect.kind === "unarmoredDefense") value = 10 + mod("dex") + effect.add.reduce((sum, key) => sum + mod(key), 0);
       else if (effect.kind === "naturalArmor") value = effect.base + (effect.addDex ? mod("dex") : 0);
       else continue;
-      if (value > armorClass) { armorClass = value; armorNote = source.en; }
+      if (value > armorClass) { armorClass = value; armorNote = source.en; armorSource = source; }
     }
   }
   if (equipment.shield) armorClass += 2;
@@ -298,6 +302,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     hitDice: `${safeLevel}d${cls.hitDie}`,
     armorClass,
     armorNote,
+    armorSource,
     initiative: mod("dex") + effectsOf(effects, "initiativeBonus").length * pb,
     speed: (lineage?.speed ?? sp.speed) + effectsOf(effects, "speedBonus").reduce((sum, effect) => sum + effect.amount, 0),
     darkvision: lineage?.darkvision ?? sp.darkvision,
