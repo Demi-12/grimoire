@@ -54,8 +54,10 @@ export interface CharacterBuild {
   abilityMethod: AbilityMethod;
   /** Scores before background increases. */
   baseScores: AbilityScores;
-  /** Results of 4d6-drop-lowest rolls, kept so the assignment can be changed. */
+  /** Results of 4d6-drop-lowest rolls, kept so the assignment can be changed. Rolled once per character: never replaced. */
   rolledPool?: number[];
+  /** The four dice behind each rolled score, in the same order as rolledPool. */
+  rolledDice?: number[][];
   bonusMode: BonusMode;
   /** plus2plus1: [ability +2, ability +1]; plus1x3: the background's three abilities. */
   bonusAbilities: AbilityKey[];
@@ -76,9 +78,20 @@ export interface CharacterBuild {
 
 export const emptyScores: AbilityScores = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
 
+/** Four d6, highest first; the score is the sum of the first three. */
+export function roll4d6(random: () => number = Math.random): { dice: number[]; total: number } {
+  const dice = Array.from({ length: 4 }, () => 1 + Math.floor(random() * 6)).sort((a, b) => b - a);
+  return { dice, total: dice[0] + dice[1] + dice[2] };
+}
+
 export function roll4d6DropLowest(random: () => number = Math.random): number {
-  const dice = Array.from({ length: 4 }, () => 1 + Math.floor(random() * 6)).sort((a, b) => a - b);
-  return dice[1] + dice[2] + dice[3];
+  return roll4d6(random).total;
+}
+
+/** The six rolls of the "Roll 4d6" method, in the order they were rolled. */
+export function rollAbilityPool(random: () => number = Math.random): { pool: number[]; dice: number[][] } {
+  const rolls = Array.from({ length: 6 }, () => roll4d6(random));
+  return { pool: rolls.map((roll) => roll.total), dice: rolls.map((roll) => roll.dice) };
 }
 
 export function pointBuySpent(scores: AbilityScores): number {
@@ -314,6 +327,16 @@ export function attackList(build: CharacterBuild, sheet: DerivedSheet): SheetAtt
   });
 }
 
+/**
+ * Whether the Human's Versatile feat repeats the background's Origin feat. Only Magic Initiate may be taken twice here, with
+ * another spell list: other feats aren't repeatable (Alert would double its Initiative bonus) and the sheet tracks one Skilled pick.
+ */
+export function duplicatesBackgroundFeat(build: Pick<CharacterBuild, "backgroundId" | "speciesFeat" | "magicInitiateList">, feat = build.speciesFeat): boolean {
+  const background = findBackground(build.backgroundId);
+  if (!feat || feat !== background?.feat) return false;
+  return feat !== "magicInitiate" || (build.magicInitiateList ?? "wizard") === background.featList;
+}
+
 /** Problems that block finishing each step; an empty list means the step is complete. */
 export function stepIssues(build: CharacterBuild, step: number): string[] {
   const issues: string[] = [];
@@ -321,12 +344,29 @@ export function stepIssues(build: CharacterBuild, step: number): string[] {
   const sp = findSpecies(build.speciesId);
   if (step === 2 && sp?.lineages?.length && !sp.lineages.some((item) => item.id === build.lineageId)) issues.push("lineage");
   if (step === 2 && sp?.skillChoice && build.speciesSkills.length !== sp.skillChoice.count) issues.push("speciesSkills");
+  const bg = findBackground(build.backgroundId);
   if (step === 2 && sp?.originFeat && !build.speciesFeat) issues.push("speciesFeat");
-  if (step === 3 && !validBaseScores(build)) issues.push("scores");
+  if (step === 2 && sp?.originFeat && build.speciesFeat && duplicatesBackgroundFeat(build)) issues.push("duplicateFeat");
+  if (step === 3 && build.abilityMethod === "rolled" && !build.rolledPool?.length) issues.push("roll");
+  else if (step === 3 && !validBaseScores(build)) issues.push("scores");
   if (step === 3 && !validBonuses(build)) issues.push("bonuses");
-  if (step === 4 && cls && build.classSkills.length !== cls.skillCount) issues.push("classSkills");
-  if (step === 4 && characterFeats(build).includes("skilled") && build.featSkills.length !== 3) issues.push("featSkills");
-  if (step === 4 && cls?.expertiseAtLevel1 && build.expertise.length !== cls.expertiseAtLevel1) issues.push("expertise");
+  if (step === 4 && cls) {
+    // Skills already granted by the background or species can't be chosen again; the player picks another one instead.
+    const earlier = new Set<SkillKey>([...(bg?.skills ?? []), ...build.speciesSkills]);
+    const options = new Set<SkillKey>(cls.skillOptions.length ? cls.skillOptions : (Object.keys(skills) as SkillKey[]));
+    const classSkills = new Set(build.classSkills);
+    if (classSkills.size !== cls.skillCount || build.classSkills.length !== cls.skillCount
+      || build.classSkills.some((skill) => earlier.has(skill) || !options.has(skill))) issues.push("classSkills");
+    if (characterFeats(build).includes("skilled")) {
+      const taken = new Set<SkillKey>([...earlier, ...build.classSkills]);
+      if (new Set(build.featSkills).size !== 3 || build.featSkills.length !== 3 || build.featSkills.some((skill) => taken.has(skill))) issues.push("featSkills");
+    }
+    if (cls.expertiseAtLevel1) {
+      const proficient = new Set(proficientSkills(build, 1));
+      if (new Set(build.expertise).size !== cls.expertiseAtLevel1 || build.expertise.length !== cls.expertiseAtLevel1
+        || build.expertise.some((skill) => !proficient.has(skill))) issues.push("expertise");
+    }
+  }
   if (step === 6 && build.languages.length !== 2) issues.push("languages");
   return issues;
 }
