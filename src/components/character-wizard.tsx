@@ -5,16 +5,17 @@ import { abilities, abilityModifier, type AbilityKey, type AbilityScores } from 
 import { translate, type Locale } from "@/lib/i18n";
 import {
   alignments, backgrounds, classes, findBackground, findClass, findSpecies, magicInitiateLists, originFeats,
-  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, STANDARD_ARRAY, standardLanguages,
+  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, speciesSources, STANDARD_ARRAY, standardLanguages,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
 } from "@/lib/dnd2024";
 import {
-  backgroundBonuses, characterFeats, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues,
+  backgroundBonuses, characterFeats, deriveSheet, duplicatesBackgroundFeat, finalScores, pointBuySpent, rollAbilityPool, speciesSkillsOf, stepIssues,
   validBaseScores, type AbilityMethod, type CharacterBuild,
 } from "@/lib/character-sheet";
 import { featInfo } from "@/lib/levelup-data";
 import { chosenSubclassId, subclassLabel, unlockedFeatures } from "@/lib/levelup";
 import { findSubclass, subclassesFor } from "@/lib/subclasses";
+import type { BackgroundData, ClassData } from "@/lib/dnd2024";
 import styles from "./character-wizard.module.css";
 
 export interface WizardResult {
@@ -47,12 +48,18 @@ const copy = {
     backgroundIntro: "Your background tells where you came from. In the 2024 rules it grants the ability score increases, an Origin feat, two skills and a tool.",
     abilitiesLabel: "Ability increases", feat: "Origin feat", skills: "Skill proficiencies", tool: "Tool proficiency",
     speciesIntro: "Your species grants traits such as size, speed and senses. It no longer changes your ability scores.",
-    size: "Size", speed: "Speed", darkvision: "Darkvision", traits: "Traits", ft: "ft.",
+    size: "Size", speed: "Speed", darkvision: "Darkvision", traits: "Traits", ft: "ft.", source: "Source", creatureType: "Creature type", speciesSkills: "Skills",
     chooseSkill: (n: number) => n === 1 ? "Choose 1 skill" : `Choose ${n} skills`, chooseFeat: "Versatile: choose an Origin feat",
     spellList: "Spell list", abilitiesIntro: "Generate your six scores, then apply your background's increases (maximum 20).",
     methods: { standard: "Standard array", pointBuy: "Point buy", rolled: "Roll 4d6" } as Record<AbilityMethod, string>,
     methodHelp: { standard: "Assign 15, 14, 13, 12, 10 and 8.", pointBuy: `Spend up to ${POINT_BUY_BUDGET} points; scores from 8 to 15.`, rolled: "Roll 4d6 six times, dropping the lowest die each time." } as Record<AbilityMethod, string>,
-    suggest: "Suggest for my class", roll: "Roll the dice", reroll: "Roll again", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} points`,
+    suggest: "Suggest for my class", roll: "Roll the dice", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} points`,
+    rollOnce: "You roll once per character: the results can't be rolled again, only assigned.",
+    rollLocked: "These rolls are final. Assign them to the abilities you prefer.",
+    rollDetail: (dice: number[]) => `Dice ${dice.slice(0, 3).join(", ")} (dropped ${dice[3]})`,
+    rolledLabel: (index: number) => `Roll ${index + 1}`,
+    lower: (ability: string) => `Lower ${ability}`, raise: (ability: string) => `Raise ${ability}`,
+    classChangeWarning: "Changing class discards the choices saved at each level-up.",
     bonusMode: "Background increase", plus2plus1: "+2 and +1", plus1x3: "+1 to all three", plusTwo: "+2 to", plusOne: "+1 to",
     base: "Base", bonus: "Bonus", final: "Final", mod: "Mod",
     profIntro: "Pick the skills your class trains. Skills you already have from your background or species are marked.",
@@ -65,7 +72,8 @@ const copy = {
     ac: "Armor Class", hp: "Hit Points", initiative: "Initiative", proficiency: "Proficiency", passive: "Passive Perception", spellDc: "Spell save DC", spellAtk: "Spell attack",
     issues: {
       lineage: "Choose a lineage or ancestry.", speciesSkills: "Choose the species skill.", speciesFeat: "Choose the Origin feat.",
-      scores: "Assign valid scores for the chosen method.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
+      scores: "Assign valid scores for the chosen method.", roll: "Roll the dice to get your scores.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
+      duplicateFeat: "Your background already grants that feat: choose another one (Magic Initiate only with another spell list).",
       featSkills: "Choose 3 skills for Skilled.", expertise: "Choose your Expertise skills.", languages: "Choose two languages.", name: "Give your character a name.",
     } as Record<string, string>,
     srd: "Rules data from the 2024 Player's Handbook and the System Reference Document 5.2 (CC-BY-4.0).",
@@ -83,12 +91,18 @@ const copy = {
     backgroundIntro: "El trasfondo cuenta de dónde vienes. En las reglas de 2024 otorga los aumentos de característica, una dote de origen, dos habilidades y una herramienta.",
     abilitiesLabel: "Aumentos de característica", feat: "Dote de origen", skills: "Competencias en habilidades", tool: "Competencia con herramienta",
     speciesIntro: "La especie otorga rasgos como tamaño, velocidad y sentidos. Ya no modifica tus características.",
-    size: "Tamaño", speed: "Velocidad", darkvision: "Visión en la oscuridad", traits: "Rasgos", ft: "pies",
+    size: "Tamaño", speed: "Velocidad", darkvision: "Visión en la oscuridad", traits: "Rasgos", ft: "pies", source: "Fuente", creatureType: "Tipo de criatura", speciesSkills: "Habilidades",
     chooseSkill: (n: number) => n === 1 ? "Elige 1 habilidad" : `Elige ${n} habilidades`, chooseFeat: "Versátil: elige una dote de origen",
     spellList: "Lista de conjuros", abilitiesIntro: "Genera tus seis puntuaciones y aplica los aumentos del trasfondo (máximo 20).",
     methods: { standard: "Matriz estándar", pointBuy: "Compra por puntos", rolled: "Tirar 4d6" } as Record<AbilityMethod, string>,
     methodHelp: { standard: "Asigna 15, 14, 13, 12, 10 y 8.", pointBuy: `Gasta hasta ${POINT_BUY_BUDGET} puntos; puntuaciones de 8 a 15.`, rolled: "Tira 4d6 seis veces y descarta el dado más bajo cada vez." } as Record<AbilityMethod, string>,
-    suggest: "Sugerir para mi clase", roll: "Tirar los dados", reroll: "Volver a tirar", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} puntos`,
+    suggest: "Sugerir para mi clase", roll: "Tirar los dados", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} puntos`,
+    rollOnce: "Se tira una sola vez por personaje: los resultados no se pueden repetir, solo repartir.",
+    rollLocked: "Estas tiradas son definitivas. Repártelas entre las características que prefieras.",
+    rollDetail: (dice: number[]) => `Dados ${dice.slice(0, 3).join(", ")} (descartado ${dice[3]})`,
+    rolledLabel: (index: number) => `Tirada ${index + 1}`,
+    lower: (ability: string) => `Bajar ${ability}`, raise: (ability: string) => `Subir ${ability}`,
+    classChangeWarning: "Cambiar de clase descarta las elecciones guardadas en cada subida de nivel.",
     bonusMode: "Aumento del trasfondo", plus2plus1: "+2 y +1", plus1x3: "+1 a las tres", plusTwo: "+2 a", plusOne: "+1 a",
     base: "Base", bonus: "Bono", final: "Final", mod: "Mod",
     profIntro: "Elige las habilidades que entrena tu clase. Las que ya tienes por trasfondo o especie aparecen marcadas.",
@@ -101,7 +115,8 @@ const copy = {
     ac: "Clase de armadura", hp: "Puntos de golpe", initiative: "Iniciativa", proficiency: "Competencia", passive: "Percepción pasiva", spellDc: "CD de conjuros", spellAtk: "Ataque de conjuro",
     issues: {
       lineage: "Elige un linaje o ascendencia.", speciesSkills: "Elige la habilidad de la especie.", speciesFeat: "Elige la dote de origen.",
-      scores: "Asigna puntuaciones válidas para el método elegido.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
+      scores: "Asigna puntuaciones válidas para el método elegido.", roll: "Tira los dados para obtener tus puntuaciones.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
+      duplicateFeat: "Tu trasfondo ya otorga esa dote: elige otra (Iniciado en la magia solo con otra lista de conjuros).",
       featSkills: "Elige 3 habilidades para Habilidoso.", expertise: "Elige tus habilidades de Pericia.", languages: "Elige dos idiomas.", name: "Ponle nombre a tu personaje.",
     } as Record<string, string>,
     srd: "Datos de reglas del Manual del Jugador 2024 y del System Reference Document 5.2 (CC-BY-4.0).",
@@ -117,6 +132,39 @@ function suggestedAssignment(values: readonly number[], classId: ClassId): Abili
   for (const key of ["con", "dex", "wis", "str", "int", "cha"] as AbilityKey[]) if (!order.includes(key)) order.push(key);
   const sorted = [...values].sort((a, b) => b - a);
   return Object.fromEntries(order.map((key, index) => [key, sorted[index]])) as AbilityScores;
+}
+
+/** +2/+1 from the background, favouring the class's primary abilities. */
+function defaultBonusAbilities(background: BackgroundData, cls: ClassData | undefined): AbilityKey[] {
+  const preferred = background.abilities.filter((key) => cls?.primary.includes(key));
+  const ordered = [...preferred, ...background.abilities.filter((key) => !preferred.includes(key))];
+  return [ordered[0], ordered[1]];
+}
+
+/**
+ * A roll made in the creator but not saved yet. Kept in the browser so closing the creator, cancelling or reloading the page
+ * brings back the same dice instead of a fresh roll; it is cleared once a character keeps it.
+ */
+const PENDING_ROLL_ITEM = "grimoire.pendingRoll.v1";
+type PendingRoll = { pool: number[]; dice: number[][] };
+
+function readPendingRoll(): PendingRoll | undefined {
+  try {
+    const raw = typeof window === "undefined" ? null : window.localStorage.getItem(PENDING_ROLL_ITEM);
+    const value = raw ? JSON.parse(raw) as PendingRoll : undefined;
+    const die = (n: unknown) => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 6;
+    if (value && Array.isArray(value.pool) && Array.isArray(value.dice) && value.pool.length === 6 && value.dice.length === 6
+      && value.dice.every((dice, index) => Array.isArray(dice) && dice.length === 4 && dice.every(die)
+        && dice[0] + dice[1] + dice[2] === value.pool[index])) return value;
+  } catch { /* storage blocked or corrupt: no pending roll */ }
+  return undefined;
+}
+
+function writePendingRoll(roll: PendingRoll | null) {
+  try {
+    if (roll) window.localStorage.setItem(PENDING_ROLL_ITEM, JSON.stringify(roll));
+    else window.localStorage.removeItem(PENDING_ROLL_ITEM);
+  } catch { /* storage blocked: the roll still lives in the build until the creator closes */ }
 }
 
 export function newBuild(): CharacterBuild {
@@ -150,7 +198,13 @@ function SkillPicker({ options, chosen, limit, locked, onChange, locale, lockedL
 export default function CharacterWizard({ locale, initial, quick = false, onSave, onCancel }: Props) {
   const c = copy[locale];
   const [step, setStep] = useState(0);
-  const [build, setBuild] = useState<CharacterBuild>(initial?.build ?? newBuild());
+  // A build that has never rolled picks up a roll left pending in this browser, so the dice can't be re-rolled by reopening the creator.
+  const [build, setBuild] = useState<CharacterBuild>(() => {
+    const start = initial?.build ?? newBuild();
+    if (start.rolledPool?.length) return start;
+    const pending = readPendingRoll();
+    return pending ? { ...start, rolledPool: pending.pool, rolledDice: pending.dice } : start;
+  });
   const [name, setName] = useState(initial?.name ?? "");
   const [level, setLevel] = useState(initial?.level ?? 1);
   const [notes, setNotes] = useState(initial?.notes ?? "");
@@ -162,7 +216,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const sheet = useMemo(() => deriveSheet(build, level), [build, level]);
   const feats = characterFeats(build);
   const bgSkills = new Set<SkillKey>(bg.skills);
-  const beforeClass = new Set<SkillKey>([...bg.skills, ...build.speciesSkills]);
+  const fixedSpeciesSkills = sp.skills ?? [];
+  const beforeClass = new Set<SkillKey>([...bg.skills, ...speciesSkillsOf(build)]);
   const show = (target: number) => quick || step === target;
   const issues = quick
     ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...(name.trim() ? [] : ["name"])])]
@@ -174,20 +229,34 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const last = c.steps.length - 1;
 
   function chooseClass(classId: ClassId) {
-    update({ classId, classSkills: [], expertise: [], classEquipment: "A", useSubclass: true, subclassId: undefined, customSubclass: undefined,
+    if (classId === build.classId) return;
+    // Level-up choices (Fighting Styles, Expertise, feats…) belong to the old class.
+    update({ classId, classSkills: [], expertise: [], classEquipment: "A", useSubclass: true, subclassId: undefined, customSubclass: undefined, levelUps: undefined,
       ...(build.abilityMethod === "standard" ? { baseScores: suggestedAssignment(STANDARD_ARRAY, classId) } : {}) });
   }
+  /** Skill picks that a new background or species already grants are dropped, so the player chooses others. */
+  function pruneSkills(granted: SkillKey[], patch: Partial<CharacterBuild>): Partial<CharacterBuild> {
+    const classSkills = build.classSkills.filter((skill) => !granted.includes(skill));
+    const featSkills = build.featSkills.filter((skill) => !granted.includes(skill) && !classSkills.includes(skill));
+    return { classSkills, featSkills, ...patch };
+  }
   function chooseBackground(backgroundId: BackgroundId) {
+    if (backgroundId === build.backgroundId) return;
     const next = findBackground(backgroundId)!;
-    const preferred = next.abilities.filter((key) => cls.primary.includes(key));
-    const rest = next.abilities.filter((key) => !preferred.includes(key));
-    const ordered = [...preferred, ...rest];
-    update({ backgroundId, bonusAbilities: build.bonusMode === "plus2plus1" ? [ordered[0], ordered[1]] : [...next.abilities], backgroundEquipment: "A",
-      classSkills: build.classSkills.filter((skill) => !next.skills.includes(skill)),
-      speciesSkills: build.speciesSkills.filter((skill) => !next.skills.includes(skill)) });
+    const patch = pruneSkills(next.skills, {
+      backgroundId, bonusAbilities: build.bonusMode === "plus2plus1" ? defaultBonusAbilities(next, cls) : [...next.abilities], backgroundEquipment: "A",
+      speciesSkills: build.speciesSkills.filter((skill) => !next.skills.includes(skill)),
+    });
+    const proficient = new Set([...next.skills, ...fixedSpeciesSkills, ...(patch.speciesSkills ?? []), ...(patch.classSkills ?? []), ...(patch.featSkills ?? [])]);
+    update({ ...patch, expertise: build.expertise.filter((skill) => proficient.has(skill)) });
   }
   function chooseSpecies(speciesId: SpeciesId) {
-    update({ speciesId, lineageId: undefined, speciesSkills: [], speciesFeat: undefined });
+    if (speciesId === build.speciesId) return;
+    // Skills the new species grants outright replace the same class or Skilled picks.
+    const granted = findSpecies(speciesId)?.skills ?? [];
+    const patch = pruneSkills(granted, { speciesId, lineageId: undefined, speciesSkills: [], speciesFeat: undefined });
+    const proficient = new Set([...bg.skills, ...granted, ...(patch.classSkills ?? []), ...(bg.feat === "skilled" ? patch.featSkills ?? [] : [])]);
+    update({ ...patch, expertise: build.expertise.filter((skill) => proficient.has(skill)) });
   }
   /** Swap-based assignment keeps a fixed pool of values (standard array or rolls). */
   function assign(key: AbilityKey, value: number) {
@@ -196,13 +265,17 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     update({ baseScores: { ...build.baseScores, [key]: value, ...(other ? { [other]: current } : {}) } });
   }
   function setMethod(method: AbilityMethod) {
+    if (method === build.abilityMethod) return;
     if (method === "standard") update({ abilityMethod: method, baseScores: suggestedAssignment(STANDARD_ARRAY, build.classId) });
     else if (method === "pointBuy") update({ abilityMethod: method, baseScores: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 } });
-    else rollScores();
+    // Coming back to rolling reuses the dice already rolled for this character; a new roll only happens with the button.
+    else update({ abilityMethod: method, ...(build.rolledPool?.length === 6 ? { baseScores: suggestedAssignment(build.rolledPool, build.classId) } : {}) });
   }
   function rollScores() {
-    const pool = Array.from({ length: 6 }, () => roll4d6DropLowest());
-    update({ abilityMethod: "rolled", rolledPool: pool, baseScores: suggestedAssignment(pool, build.classId) });
+    if (build.rolledPool?.length) return; // One roll per character.
+    const { pool, dice } = rollAbilityPool();
+    writePendingRoll({ pool, dice });
+    update({ abilityMethod: "rolled", rolledPool: pool, rolledDice: dice, baseScores: suggestedAssignment(pool, build.classId) });
   }
   function go(target: number) {
     if (target === 4) {
@@ -216,14 +289,20 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === 6 && !name.trim()));
     if (incomplete >= 0) { setStep(incomplete); return; }
     // Level-ups above the chosen level no longer apply.
-    onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...build, levelUps: build.levelUps?.filter((entry) => entry.level <= level) } });
+    // A pending roll used by this character now belongs to it, and the next character rolls fresh. One it didn't use stays pending.
+    const pending = readPendingRoll();
+    const usesPending = !!pending && pending.pool.join() === build.rolledPool?.join();
+    if (usesPending && build.abilityMethod === "rolled") writePendingRoll(null);
+    const kept = usesPending && build.abilityMethod !== "rolled" ? { ...build, rolledPool: undefined, rolledDice: undefined } : build;
+    onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...kept, levelUps: build.levelUps?.filter((entry) => entry.level <= level) } });
   }
 
   const pool = build.abilityMethod === "standard" ? [...STANDARD_ARRAY] : build.rolledPool ?? [];
+  const awaitingRoll = build.abilityMethod === "rolled" && pool.length !== 6;
   const bonuses = backgroundBonuses(build);
   const scores = finalScores(build);
   const classOptions = cls.skillOptions.length ? cls.skillOptions : skillKeys;
-  const proficientForExpertise = [...new Set([...bg.skills, ...build.speciesSkills, ...build.classSkills, ...(feats.includes("skilled") ? build.featSkills : [])])];
+  const proficientForExpertise = [...new Set([...bg.skills, ...speciesSkillsOf(build), ...build.classSkills, ...(feats.includes("skilled") ? build.featSkills : [])])];
 
   return <section className={styles.wizard} aria-labelledby="wizard-title">
     <header className={styles.head}>
@@ -245,6 +324,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         {quick ? selectFor(classes, build.classId, chooseClass) : <div className={styles.cardGrid}>{classes.map((item) => <Choice key={item.id} selected={item.id === build.classId} onClick={() => chooseClass(item.id)}>
           <strong>{say(item.name, locale)}</strong><small>d{item.hitDie} · {item.primary.map((key) => translate(locale, `ability.${key}`)).join(" / ")}</small><em>{say(item.summary, locale)}</em>
         </Choice>)}</div>}
+        {!!initial?.build.levelUps?.length && <p className={styles.note}>{c.classChangeWarning}</p>}
         <div className={styles.detail}>
           <h3>{say(cls.name, locale)}</h3>
           <dl className={styles.facts}>
@@ -294,15 +374,18 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         {heading(2)}
         <p className={styles.intro}>{c.speciesIntro}</p>
         {quick ? selectFor(species, build.speciesId, chooseSpecies) : <div className={styles.cardGrid}>{species.map((item) => <Choice key={item.id} selected={item.id === build.speciesId} onClick={() => chooseSpecies(item.id)}>
-          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait.name, locale)).join(" · ")}</em>
+          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait.name, locale)).join(" · ")}</em><small>{say(speciesSources[item.source], locale)}</small>
         </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(sp.name, locale)}</h3>
           <dl className={styles.facts}>
+            <div><dt>{c.source}</dt><dd>{say(speciesSources[sp.source], locale)}</dd></div>
+            {sp.creatureType && <div><dt>{c.creatureType}</dt><dd>{say(sp.creatureType, locale)}</dd></div>}
             <div><dt>{c.size}</dt><dd>{say(sp.size, locale)}</dd></div>
             <div><dt>{c.speed}</dt><dd>{sp.speed} {c.ft}</dd></div>
             {sp.darkvision && <div><dt>{c.darkvision}</dt><dd>{sp.darkvision} {c.ft}</dd></div>}
             <div><dt>{c.traits}</dt><dd>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}</dd></div>
+            {fixedSpeciesSkills.length > 0 && <div><dt>{c.speciesSkills}</dt><dd>{fixedSpeciesSkills.map((skill) => translate(locale, `skill.${skill}`)).join(", ")}</dd></div>}
           </dl>
           {sp.lineages && <fieldset className={styles.group}><legend>{say(sp.lineageLabel, locale)}</legend><div className={styles.pills}>
             {sp.lineages.map((lineage) => <Choice key={lineage.id} selected={lineage.id === build.lineageId} onClick={() => update({ lineageId: lineage.id })}>
@@ -311,10 +394,12 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           </div></fieldset>}
           {sp.skillChoice && <fieldset className={styles.group}><legend>{c.chooseSkill(sp.skillChoice.count)}</legend>
             <SkillPicker locale={locale} lockedLabel={c.already} options={sp.skillChoice.options.length ? sp.skillChoice.options : skillKeys} chosen={build.speciesSkills}
-              limit={sp.skillChoice.count} locked={bgSkills} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
+              limit={sp.skillChoice.count} locked={new Set([...bgSkills, ...fixedSpeciesSkills])} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
           </fieldset>}
           {sp.originFeat && <fieldset className={styles.group}><legend>{c.chooseFeat}</legend><div className={styles.pills}>
-            {(Object.keys(originFeats) as FeatId[]).map((feat) => <Choice key={feat} selected={build.speciesFeat === feat} onClick={() => update({ speciesFeat: feat, featSkills: [] })}>
+            {(Object.keys(originFeats) as FeatId[]).map((feat) => <Choice key={feat} selected={build.speciesFeat === feat}
+              disabled={feat !== "magicInitiate" && duplicatesBackgroundFeat(build, feat)} title={feat !== "magicInitiate" && duplicatesBackgroundFeat(build, feat) ? c.issues.duplicateFeat : undefined}
+              onClick={() => update({ speciesFeat: feat, featSkills: bg.feat === "skilled" ? build.featSkills : [] })}>
               <strong>{say(originFeats[feat].name, locale)}</strong><small>{say(originFeats[feat].summary, locale)}</small>
             </Choice>)}
           </div>
@@ -332,33 +417,36 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           <Choice key={method} selected={build.abilityMethod === method} onClick={() => setMethod(method)}><strong>{c.methods[method]}</strong><small>{c.methodHelp[method]}</small></Choice>)}</div>
         <div className={styles.toolbar}>
           {build.abilityMethod !== "pointBuy" && pool.length === 6 && <button type="button" className={styles.link} onClick={() => update({ baseScores: suggestedAssignment(pool, build.classId) })}>✧ {c.suggest}</button>}
-          {build.abilityMethod === "rolled" && <button type="button" className={styles.link} onClick={rollScores}>⚄︎ {c.reroll}</button>}
-          {build.abilityMethod === "rolled" && pool.length === 6 && <span className={styles.pool}>{pool.join(" · ")}</span>}
+          {awaitingRoll && <button type="button" className="button button-primary" onClick={rollScores}>⚄︎ {c.roll}</button>}
+          {build.abilityMethod === "rolled" && pool.length === 6 && <ol className={styles.rolls} aria-label={c.methods.rolled}>{pool.map((value, index) =>
+            <li key={index} title={build.rolledDice?.[index] ? c.rollDetail(build.rolledDice[index]) : undefined}
+              aria-label={`${c.rolledLabel(index)}: ${value}${build.rolledDice?.[index] ? `. ${c.rollDetail(build.rolledDice[index])}` : ""}`}>{value}</li>)}</ol>}
           {build.abilityMethod === "pointBuy" && <span className={`${styles.pool} ${pointBuySpent(build.baseScores) > POINT_BUY_BUDGET ? styles.bad : ""}`}>{c.points(pointBuySpent(build.baseScores))}</span>}
         </div>
+        {build.abilityMethod === "rolled" && <p className={styles.note}>{awaitingRoll ? c.rollOnce : c.rollLocked}</p>}
         <div className={styles.abilityTable}>
           <div className={styles.abilityHead}><span /><span>{c.base}</span><span>{c.bonus}</span><span>{c.final}</span><span>{c.mod}</span></div>
           {abilities.map(({ key }) => <div className={styles.abilityRow} key={key}>
             <b>{translate(locale, `ability.${key}`)}{cls.primary.includes(key) && <i title={c.primary}> ★︎</i>}</b>
             <span>{build.abilityMethod === "pointBuy"
               ? <span className={styles.stepper}>
-                <button type="button" onClick={() => update({ baseScores: { ...build.baseScores, [key]: build.baseScores[key] - 1 } })} disabled={build.baseScores[key] <= 8} aria-label="−">−</button>
+                <button type="button" onClick={() => update({ baseScores: { ...build.baseScores, [key]: build.baseScores[key] - 1 } })} disabled={build.baseScores[key] <= 8} aria-label={c.lower(translate(locale, `ability.${key}`))}>−</button>
                 <output>{build.baseScores[key]}</output>
                 <button type="button" onClick={() => update({ baseScores: { ...build.baseScores, [key]: build.baseScores[key] + 1 } })}
-                  disabled={build.baseScores[key] >= 15 || pointBuySpent({ ...build.baseScores, [key]: build.baseScores[key] + 1 }) > POINT_BUY_BUDGET} aria-label="+">+</button>
+                  disabled={build.baseScores[key] >= 15 || pointBuySpent({ ...build.baseScores, [key]: build.baseScores[key] + 1 }) > POINT_BUY_BUDGET} aria-label={c.raise(translate(locale, `ability.${key}`))}>+</button>
                 <small>{pointBuyCost[build.baseScores[key]]}</small>
               </span>
-              : <select value={build.baseScores[key]} onChange={(event) => assign(key, Number(event.target.value))} aria-label={translate(locale, `ability.${key}`)}>
+              : awaitingRoll ? <span aria-hidden="true">—</span> : <select value={build.baseScores[key]} onChange={(event) => assign(key, Number(event.target.value))} aria-label={translate(locale, `ability.${key}`)}>
                 {[...new Set(pool)].sort((a, b) => b - a).map((value) => <option key={value} value={value}>{value}</option>)}
               </select>}</span>
             <span className={styles.bonusCell}>{bonuses[key] ? `+${bonuses[key]}` : "—"}</span>
-            <strong>{scores[key]}</strong>
-            <span className={styles.mod}>{signed(abilityModifier(scores[key]))}</span>
+            <strong>{awaitingRoll ? "—" : scores[key]}</strong>
+            <span className={styles.mod}>{awaitingRoll ? "—" : signed(abilityModifier(scores[key]))}</span>
           </div>)}
         </div>
         <fieldset className={styles.group}><legend>{c.bonusMode} · {say(bg.name, locale)}</legend>
           <div className={styles.inline}>
-            <label className={styles.check}><input type="radio" name="bonus-mode" checked={build.bonusMode === "plus2plus1"} onChange={() => update({ bonusMode: "plus2plus1", bonusAbilities: [bg.abilities[0], bg.abilities[1]] })} />{c.plus2plus1}</label>
+            <label className={styles.check}><input type="radio" name="bonus-mode" checked={build.bonusMode === "plus2plus1"} onChange={() => update({ bonusMode: "plus2plus1", bonusAbilities: defaultBonusAbilities(bg, cls) })} />{c.plus2plus1}</label>
             <label className={styles.check}><input type="radio" name="bonus-mode" checked={build.bonusMode === "plus1x3"} onChange={() => update({ bonusMode: "plus1x3", bonusAbilities: [...bg.abilities] })} />{c.plus1x3}</label>
           </div>
           {build.bonusMode === "plus2plus1" && <div className={styles.inline}>
@@ -372,7 +460,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
             </label>)}
           </div>}
         </fieldset>
-        {!validBaseScores(build) && <p className={styles.warning} role="alert">{c.issues.scores}</p>}
+        {!awaitingRoll && !validBaseScores(build) && <p className={styles.warning} role="alert">{c.issues.scores}</p>}
       </>}
 
       {show(4) && <>

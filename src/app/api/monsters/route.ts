@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
-import { fetchMonsterCatalog, upstreamErrorResponse } from "@/lib/monster-upstream";
+import { fetchMonsterCatalog, upstreamErrorResponse, type CompactMonster } from "@/lib/monster-upstream";
 
 const CHALLENGE_RATINGS = new Set([
   "0", "0.125", "0.25", "0.5", ...Array.from({ length: 30 }, (_, index) => String(index + 1)),
 ]);
+
+/** Lower-cased names, worked out once per catalog build instead of on every search request. */
+const searchNames = new WeakMap<CompactMonster[], string[]>();
+function namesFor(monsters: CompactMonster[]): string[] {
+  let names = searchNames.get(monsters);
+  if (!names) searchNames.set(monsters, names = monsters.map((monster) => monster.name.toLocaleLowerCase("en-US")));
+  return names;
+}
 
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -24,9 +32,10 @@ export async function GET(request: Request) {
   try {
     const { monsters, sources } = await fetchMonsterCatalog();
     const rating = requestedRating ? Number(requestedRating) : undefined;
-    const matches = monsters.filter((monster) => (rating === undefined || monster.cr === rating)
+    const names = namesFor(monsters);
+    const matches = monsters.filter((monster, index) => (rating === undefined || monster.cr === rating)
       && (!source || monster.sourceKey === source)
-      && (!search || monster.name.toLocaleLowerCase("en-US").includes(search)));
+      && (!search || names[index].includes(search)));
     const results = matches.slice((page - 1) * limit, page * limit)
       .map(({ index, name, cr, type, source: book }) => ({ index, name, cr, type, source: book }));
     return NextResponse.json({ count: matches.length, sources, results }, {

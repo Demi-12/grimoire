@@ -18,6 +18,8 @@ type BrowserCopy = {
   ratingLabel: (rating: string) => string;
 };
 const PAGE_SIZE = 12;
+/** Wait this long after the last keystroke before asking the server, so typing "owlbear" is one request, not seven. */
+const SEARCH_DEBOUNCE_MS = 250;
 const ratings = ["0", "0.125", "0.25", "0.5", ...Array.from({ length: 30 }, (_, index) => String(index + 1))];
 
 const copy = {
@@ -45,6 +47,7 @@ function SrdBestiary({ locale = "en", onAddCreature }: Props) {
   const [book, setBook] = useState("");
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [catalog, setCatalog] = useState<MonsterListEntry[]>([]);
   const [catalogCount, setCatalogCount] = useState(0);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -56,10 +59,15 @@ function SrdBestiary({ locale = "en", onAddCreature }: Props) {
   const [addedSlug, setAddedSlug] = useState("");
 
   useEffect(() => {
+    const timer = setTimeout(() => setSearch(query), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    fetchMonsterCatalog({ challengeRating: rating, source: book, search: query, page, limit: PAGE_SIZE }, controller.signal).then((result) => {
+    fetchMonsterCatalog({ challengeRating: rating, source: book, search, page, limit: PAGE_SIZE }, controller.signal).then((result) => {
       setCatalog(result.results);
       setCatalogCount(result.count);
       setSources(result.sources);
@@ -67,7 +75,7 @@ function SrdBestiary({ locale = "en", onAddCreature }: Props) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Request failed");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [rating, book, query, page, retryCount]);
+  }, [rating, book, search, page, retryCount]);
   const pageCount = Math.max(1, Math.ceil(catalogCount / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const countText = t.count as (count: number) => string;
