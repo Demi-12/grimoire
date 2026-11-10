@@ -100,6 +100,41 @@ describe.skipIf(!url)("battle maps on PostgreSQL", () => {
     expect(after.ok && after.value.state.tokens.find((token) => token.id === lia.id)).toMatchObject({ x: 1, y: 1 });
   });
 
+  it("stores a background picture apart from the state and lets only DMs change it", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    expect(await mapData.setBattleMapBackground(player, campaignId, { bytes: png, mimeType: "image/png" })).toEqual({ ok: false, error: "forbidden" });
+    const set = await mapData.setBattleMapBackground(dm, campaignId, { bytes: png, mimeType: "image/png" });
+    const key = set.ok ? set.value.state.background?.key : undefined;
+    expect(key).toMatch(/^[A-Za-z0-9_-]+$/);
+    const read = await mapData.readBattleMapBackground(player, campaignId);
+    expect(read.ok && read.value).toMatchObject({ mimeType: "image/png", key });
+    expect(read.ok && read.value && Buffer.compare(read.value.image, png)).toBe(0);
+    expect(await mapData.readBattleMapBackground(stranger, campaignId)).toEqual({ ok: false, error: "not-found" });
+    const cleared = await mapData.setBattleMapBackground(dm, campaignId, null);
+    expect(cleared.ok && cleared.value.state.background).toBeUndefined();
+    expect(await mapData.readBattleMapBackground(player, campaignId)).toEqual({ ok: true, value: null });
+  });
+
+  it("with fog of war, players only receive the monsters their heroes can see", async () => {
+    const map = await mapData.readBattleMap(dm, campaignId);
+    if (!map.ok) throw new Error("read failed");
+    const lia = map.value.state.tokens.find((token) => token.kind === "hero")!;
+    const [first, second] = map.value.state.tokens.filter((token) => token.label.startsWith("Goblin"));
+    const done = await mapData.changeBattleMap(dm, campaignId, [
+      { type: "settings", fog: true },
+      { type: "move", tokenId: lia.id, x: 5, y: 8 },
+      { type: "update", tokenId: lia.id, vision: { range: 4, angle: 90 } },
+      { type: "move", tokenId: first.id, x: 5, y: 5 },
+      { type: "move", tokenId: second.id, x: 5, y: 9 },
+    ]);
+    expect(done.ok && done.value.state.tokens.filter((token) => token.kind === "monster")).toHaveLength(3);
+    const seen = await mapData.readBattleMap(player, campaignId);
+    expect(seen.ok && seen.value.state.tokens.filter((token) => token.kind === "monster").map((token) => token.id)).toEqual([first.id]);
+    const turned = await mapData.changeBattleMap(player, campaignId, [{ type: "face", tokenId: lia.id, facing: 4 }]);
+    expect(turned.ok && turned.value.state.tokens.filter((token) => token.kind === "monster").map((token) => token.id)).toEqual([second.id]);
+    await mapData.changeBattleMap(dm, campaignId, [{ type: "settings", fog: false }]);
+  });
+
   it("drops a hero's token when the character leaves the campaign", async () => {
     await pool.query('UPDATE "character" SET "campaignId" = NULL WHERE "id" = $1', [heroId]);
     const map = await mapData.readBattleMap(dm, campaignId);

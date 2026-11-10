@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import Link from "next/link";
 import { api, ApiError, type SavedEncounter } from "@/lib/api-client";
 import {
-  applyMapOps, canControlToken, columnName, squareName, MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX,
-  type MapHero, type MapOp, type MapState, type MapToken, type TokenSize,
+  applyMapOps, canControlToken, columnName, facingScreenAngle, partySight, rowsForImage, squareName, tokenInSight, tokenVision,
+  DEFAULT_HERO_VISION, MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX, VISION_ANGLES,
+  type Facing, type MapHero, type MapOp, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@/lib/battle-map";
 import { Spinner } from "./skeleton";
 import styles from "./battle-map.module.css";
@@ -37,11 +38,23 @@ const text = {
     fromJournal: "From the encounter journal", pickEncounter: "Choose a saved encounter", addEncounter: "Add its monsters",
     noEncounters: "No saved encounters in this campaign.",
     onBoard: "On the map", hide: "Hide", reveal: "Reveal", defeat: "Defeated", revive: "Back up", remove: "Remove",
-    hiddenTag: "hidden", defeatedTag: "defeated", noMonsters: "No monsters on the map.",
+    hiddenTag: "hidden", defeatedTag: "defeated", unseenTag: "out of sight", noMonsters: "No monsters on the map.",
     grid: "Grid", columns: "Columns", rows: "Rows", resize: "Resize", clearMonsters: "Remove all monsters",
     clearConfirm: "Remove every monster from the map?",
     share: "Each player opens this same page on their phone to move their hero:", copy: "Copy link", copied: "Copied",
     legend: "On the table",
+    turnLeft: "Turn left", turnRight: "Turn right", facing: "Facing",
+    directions: ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"],
+    vision: "Vision", visionNone: "None", visionRange: (squares: number) => `${squares * 5} ft`, visionAngle: "Cone",
+    angles: { 60: "60°", 90: "90°", 120: "120°", 180: "180°", 360: "All around" } as Record<VisionAngle, string>,
+    showCones: "Vision cones",
+    keysHint: "Q and E turn the selected token.",
+    fog: "Fog of war", fogHint: "Players only see what the heroes' vision cones cover, and monsters standing there.",
+    gridLines: "Show grid lines",
+    background: "Background", uploadBackground: "Upload picture", replaceBackground: "Replace picture", removeBackground: "Remove picture",
+    backgroundHint: "PNG, JPEG, WebP or GIF up to 5 MB. It is stretched over the whole grid.",
+    fitRows: (rows: number) => `Match the picture: ${rows} rows`, uploading: "Uploading…",
+    uploadError: "The picture couldn't be uploaded. Use a PNG, JPEG, WebP or GIF of 5 MB or less.",
   },
   es: {
     back: "Campañas", kicker: "MAPA DE BATALLA", live: "En directo", connecting: "Conectando…", offline: "Reconectando…",
@@ -61,11 +74,23 @@ const text = {
     fromJournal: "Desde el diario de encuentros", pickEncounter: "Elige un encuentro guardado", addEncounter: "Añadir sus monstruos",
     noEncounters: "No hay encuentros guardados en esta campaña.",
     onBoard: "En el mapa", hide: "Ocultar", reveal: "Revelar", defeat: "Derrotado", revive: "Recuperar", remove: "Quitar",
-    hiddenTag: "oculto", defeatedTag: "derrotado", noMonsters: "No hay monstruos en el mapa.",
+    hiddenTag: "oculto", defeatedTag: "derrotado", unseenTag: "fuera de la vista", noMonsters: "No hay monstruos en el mapa.",
     grid: "Cuadrícula", columns: "Columnas", rows: "Filas", resize: "Cambiar tamaño", clearMonsters: "Quitar todos los monstruos",
     clearConfirm: "¿Quitar todos los monstruos del mapa?",
     share: "Cada jugador abre esta misma página en su móvil para mover a su héroe:", copy: "Copiar enlace", copied: "Copiado",
     legend: "En la mesa",
+    turnLeft: "Girar a la izquierda", turnRight: "Girar a la derecha", facing: "Mira al",
+    directions: ["norte", "noreste", "este", "sureste", "sur", "suroeste", "oeste", "noroeste"],
+    vision: "Visión", visionNone: "Ninguna", visionRange: (squares: number) => `${squares * 1.5} m`, visionAngle: "Cono",
+    angles: { 60: "60°", 90: "90°", 120: "120°", 180: "180°", 360: "Alrededor" } as Record<VisionAngle, string>,
+    showCones: "Conos de visión",
+    keysHint: "Q y E giran la ficha seleccionada.",
+    fog: "Niebla de guerra", fogHint: "Los jugadores solo ven lo que cubren los conos de visión de los héroes y los monstruos que haya ahí.",
+    gridLines: "Mostrar las líneas de la cuadrícula",
+    background: "Fondo", uploadBackground: "Subir imagen", replaceBackground: "Cambiar imagen", removeBackground: "Quitar imagen",
+    backgroundHint: "PNG, JPEG, WebP o GIF de hasta 5 MB. Se estira sobre toda la cuadrícula.",
+    fitRows: (rows: number) => `Ajustar a la imagen: ${rows} filas`, uploading: "Subiendo…",
+    uploadError: "No se pudo subir la imagen. Usa un PNG, JPEG, WebP o GIF de 5 MB como mucho.",
   },
 };
 
@@ -75,6 +100,22 @@ const GUTTER = 26;
 const heroColors = ["#2f6690", "#2e7d4f", "#7b4fa8", "#a8620f", "#16777a", "#a83f6f", "#4a5fc1", "#69741f"];
 const monsterColor = "#922610";
 const defeatedColor = "#6b6158";
+const visionRanges = [0, 2, 4, 6, 8, 12, 18, 24];
+
+/** URL of the map's background picture; the key makes every upload a new URL. */
+const backgroundUrl = (campaignId: string, key: string) => `/api/campaigns/${encodeURIComponent(campaignId)}/map/background?k=${encodeURIComponent(key)}`;
+
+/** SVG path of a token's vision cone (a wedge, or a circle when it sees all around), in board units. */
+function conePath(token: MapToken, range: number, angle: VisionAngle): string {
+  const cx = GUTTER + (token.x + token.size / 2) * CELL;
+  const cy = GUTTER + (token.y + token.size / 2) * CELL;
+  const r = (range + token.size / 2) * CELL;
+  if (angle >= 360) return `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+  const mid = facingScreenAngle(token.facing) * Math.PI / 180;
+  const half = angle / 2 * Math.PI / 180;
+  const point = (a: number) => `${(cx + r * Math.cos(a)).toFixed(1)} ${(cy + r * Math.sin(a)).toFixed(1)}`;
+  return `M${cx} ${cy}L${point(mid - half)}A${r} ${r} 0 ${angle > 180 ? 1 : 0} 1 ${point(mid + half)}Z`;
+}
 
 function initials(token: MapToken): string {
   const number = /(\d+)$/.exec(token.label)?.[1];
@@ -99,6 +140,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [showCones, setShowCones] = useState(true);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tableRef = useRef<HTMLDivElement | null>(null);
   /** While our own changes are in flight, ignore server states that predate them (no snapping back). */
@@ -264,10 +306,13 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
     const offset = Math.floor((selected.size - 1) / 2);
     moveTo(selected, Math.floor((point.x - GUTTER) / CELL) - offset, Math.floor((point.y - GUTTER) / CELL) - offset);
   }
+  const turn = (token: MapToken, by: 1 | -1) => void send([{ type: "face", tokenId: token.id, facing: (((token.facing ?? 0) + by + 8) % 8) as Facing }]);
   function onTokenKey(event: KeyboardEvent<SVGGElement>, token: MapToken) {
     const steps: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(token.id); return; }
     if (event.key === "Escape") { setSelectedId(null); return; }
+    const key = event.key.toLowerCase();
+    if ((key === "q" || key === "e") && canMove(token)) { event.preventDefault(); setSelectedId(token.id); turn(token, key === "q" ? -1 : 1); return; }
     const step = steps[event.key];
     if (!step || !canMove(token)) return;
     event.preventDefault();
@@ -280,14 +325,29 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   // Big tokens first so small ones standing next to them stay clickable; the dragged one on top.
   const ordered = [...state.tokens].sort((a, b) => b.size - a.size || (a.id === drag?.id ? 1 : b.id === drag?.id ? -1 : 0));
 
+  // Fog of war: what the party sees, computed the same way the server filters monsters for players.
+  const sight = state.fog ? partySight(state) : null;
+  const fogPath = sight ? Array.from({ length: state.cols * state.rows }, (_, i) => [i % state.cols, Math.floor(i / state.cols)] as const)
+    .filter(([x, y]) => !sight.has(`${x},${y}`)).map(([x, y]) => `M${GUTTER + x * CELL} ${GUTTER + y * CELL}h${CELL}v${CELL}h${-CELL}Z`).join("") : "";
+  const cones = showCones ? state.tokens.flatMap((token) => {
+    const vision = tokenVision(token);
+    if (!vision || token.defeated || (drag?.id === token.id && drag.moved)) return [];
+    const color = token.kind === "hero" ? heroColor.get(token.characterId ?? "") ?? heroColors[0] : monsterColor;
+    return [<path key={token.id} className={styles.cone} d={conePath(token, vision.range, vision.angle)} fill={color} stroke={color} />];
+  }) : [];
+
   const boardStyle = { "--ratio": width / height, "--min-width": `${state.cols * 30 + 20}px` } as CSSProperties;
   const board = <svg ref={svgRef} className={styles.board} style={boardStyle} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={t.boardLabel(map.campaignName)}
     onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setDrag(null)}>
+    <defs><clipPath id={`grid-${map.campaignId}`}><rect x={GUTTER} y={GUTTER} width={state.cols * CELL} height={state.rows * CELL} /></clipPath></defs>
     <rect className={styles.floor} x={GUTTER} y={GUTTER} width={state.cols * CELL} height={state.rows * CELL} onClick={onFloorClick} />
-    <path className={styles.gridLines} d={[
+    {state.background && <image className={styles.backdrop} href={backgroundUrl(map.campaignId, state.background.key)} x={GUTTER} y={GUTTER}
+      width={state.cols * CELL} height={state.rows * CELL} preserveAspectRatio="none" aria-hidden="true" />}
+    {!state.gridHidden && <path className={styles.gridLines} d={[
       ...Array.from({ length: state.cols + 1 }, (_, i) => `M${GUTTER + i * CELL} ${GUTTER}V${height}`),
       ...Array.from({ length: state.rows + 1 }, (_, i) => `M${GUTTER} ${GUTTER + i * CELL}H${width}`),
-    ].join("")} />
+    ].join("")} />}
+    {cones.length > 0 && <g clipPath={`url(#grid-${map.campaignId})`} aria-hidden="true">{cones}</g>}
     <g className={styles.coords} aria-hidden="true">
       {Array.from({ length: state.cols }, (_, i) => <text key={`c${i}`} x={GUTTER + i * CELL + CELL / 2} y={GUTTER / 2 + 1}>{columnName(i)}</text>)}
       {Array.from({ length: state.rows }, (_, i) => <text key={`r${i}`} x={GUTTER / 2} y={GUTTER + i * CELL + CELL / 2 + 1}>{i + 1}</text>)}
@@ -309,8 +369,13 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
         <circle cx={span / 2} cy={span / 2} r={radius} fill={fill} className={mine ? styles.mineDisc : styles.disc} />
         <text className={styles.tokenText} x={span / 2} y={span / 2 + 1} style={{ fontSize: Math.max(15, Math.min(30, radius * 0.75)) }}>{initials(token)}</text>
         {token.defeated && <path className={styles.cross} d={`M${span * 0.28} ${span * 0.28}L${span * 0.72} ${span * 0.72}M${span * 0.72} ${span * 0.28}L${span * 0.28} ${span * 0.72}`} />}
+        {tokenVision(token) && !token.defeated && <path className={styles.facing}
+          transform={`rotate(${(token.facing ?? 0) * 45} ${span / 2} ${span / 2})`}
+          d={`M${span / 2 - 7} ${span / 2 - radius + 4}L${span / 2} ${span / 2 - radius - 7}L${span / 2 + 7} ${span / 2 - radius + 4}Z`} />}
       </g>;
     })}
+    {/* Above the tokens: players never get monsters out there, and the DM sees which ones are unseen. */}
+    {fogPath && <path className={map.showsHidden ? styles.fogDm : styles.fog} d={fogPath} aria-hidden="true" />}
   </svg>;
 
   const legend = <ul className={styles.legend} aria-label={t.legend}>
@@ -363,9 +428,18 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
             <button type="button" aria-label={t.moveDown} onClick={() => moveTo(selected, selected.x, selected.y + 1)}>↓</button>
             <button type="button" aria-label={t.moveRight} onClick={() => moveTo(selected, selected.x + 1, selected.y)}>→</button>
           </span> : <small>{t.cannotMove}</small>}
+          {canMove(selected) && tokenVision(selected) && <span className={styles.nudge}>
+            <button type="button" aria-label={t.turnLeft} title={t.turnLeft} onClick={() => turn(selected, -1)}>⟲</button>
+            <button type="button" aria-label={t.turnRight} title={t.turnRight} onClick={() => turn(selected, 1)}>⟳</button>
+          </span>}
+          {tokenVision(selected) && <small className={styles.facingLabel}>{t.facing} {t.directions[selected.facing ?? 0]}</small>}
+          {map.isDm && <VisionPicker token={selected} locale={locale} send={send} />}
           <button type="button" className={styles.smallButton} onClick={() => setSelectedId(null)}>{t.deselect}</button>
         </div>}
-        <p className={styles.hint}>{t.howTo}</p>
+        <div className={styles.boardOptions}>
+          <label className={styles.check}><input type="checkbox" checked={showCones} onChange={(event) => setShowCones(event.target.checked)} />{t.showCones}</label>
+        </div>
+        <p className={styles.hint}>{t.howTo} {t.keysHint}</p>
       </div>
 
       <aside className={styles.panel} aria-label={map.isDm ? t.heroes : t.yourHeroes}>
@@ -388,7 +462,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
             onClick={() => void send(map.heroes.filter((hero) => !heroToken(hero.id)).map((hero) => ({ type: "place-hero" as const, characterId: hero.id })))}>{t.placeAll}</button>}
         </section>
 
-        {map.isDm && <DmTools map={map} locale={locale} send={send} onSelect={setSelectedId} />}
+        {map.isDm && <DmTools map={map} locale={locale} send={send} onSelect={setSelectedId} onSaved={(saved) => receive(saved, true)} playersAudience={audience === "players"} />}
 
         <section>
           <p className={styles.share}>{t.share}</p>
@@ -410,7 +484,24 @@ function CopyLink({ url, locale }: { url: string; locale: Locale }) {
   </div>;
 }
 
-function DmTools({ map, locale, send, onSelect }: { map: BattleMapView; locale: Locale; send: (ops: MapOp[]) => Promise<void>; onSelect: (id: string) => void }) {
+function VisionPicker({ token, locale, send }: { token: MapToken; locale: Locale; send: (ops: MapOp[]) => Promise<void> }) {
+  const t = text[locale];
+  const current = token.vision ?? (token.kind === "hero" ? DEFAULT_HERO_VISION : { range: 0, angle: 90 as VisionAngle });
+  const set = (range: number, angle: VisionAngle) => void send([{ type: "update", tokenId: token.id, vision: { range, angle } }]);
+  return <span className={styles.vision}>
+    <label>{t.vision}<select className={styles.sizeSelect} value={current.range} onChange={(event) => set(Number(event.target.value), current.angle)}>
+      {visionRanges.map((range) => <option key={range} value={range}>{range ? t.visionRange(range) : t.visionNone}</option>)}
+    </select></label>
+    <label>{t.visionAngle}<select className={styles.sizeSelect} value={current.angle} disabled={!current.range} onChange={(event) => set(current.range, Number(event.target.value) as VisionAngle)}>
+      {VISION_ANGLES.map((angle) => <option key={angle} value={angle}>{t.angles[angle]}</option>)}
+    </select></label>
+  </span>;
+}
+
+function DmTools({ map, locale, send, onSelect, onSaved, playersAudience }: {
+  map: BattleMapView; locale: Locale; send: (ops: MapOp[]) => Promise<void>; onSelect: (id: string) => void;
+  onSaved: (map: BattleMapView) => void; playersAudience: boolean;
+}) {
   const t = text[locale];
   const [name, setName] = useState("");
   const [count, setCount] = useState(1);
@@ -420,7 +511,42 @@ function DmTools({ map, locale, send, onSelect }: { map: BattleMapView; locale: 
   const [rows, setRows] = useState(map.state.rows);
   const [encounters, setEncounters] = useState<SavedEncounter[] | null>(null);
   const [encounterId, setEncounterId] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(false);
+  const [imageSize, setImageSize] = useState<{ key: string; width: number; height: number } | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const monsters = map.state.tokens.filter((token) => token.kind === "monster");
+  const backgroundKey = map.state.background?.key;
+  const sight = map.state.fog ? partySight(map.state) : null;
+
+  // The picture's proportions, to offer a number of rows that keeps its squares square.
+  useEffect(() => {
+    if (!backgroundKey) return;
+    const image = new Image();
+    image.onload = () => setImageSize({ key: backgroundKey, width: image.naturalWidth, height: image.naturalHeight });
+    image.src = backgroundUrl(map.campaignId, backgroundKey);
+    return () => { image.onload = null; };
+  }, [map.campaignId, backgroundKey]);
+  const fittedRows = imageSize && imageSize.key === backgroundKey ? rowsForImage(map.state.cols, imageSize.width, imageSize.height) : null;
+
+  async function changeBackground(file: File | null) {
+    setUploadError(false);
+    setUploading(true);
+    try {
+      const query = playersAudience ? "?audience=players" : "";
+      const response = await fetch(`/api/campaigns/${encodeURIComponent(map.campaignId)}/map/background${query}`, {
+        method: file ? "PUT" : "DELETE", credentials: "same-origin", cache: "no-store",
+        ...(file ? { body: file, headers: { "Content-Type": file.type || "application/octet-stream" } } : {}),
+      });
+      if (!response.ok) throw new ApiError(response.status, response.statusText);
+      onSaved(((await response.json()) as { map: BattleMapView }).map);
+    } catch {
+      setUploadError(true);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   useEffect(() => { setCols(map.state.cols); setRows(map.state.rows); }, [map.state.cols, map.state.rows]);
   useEffect(() => {
@@ -473,7 +599,7 @@ function DmTools({ map, locale, send, onSelect }: { map: BattleMapView; locale: 
       {monsters.length ? <ul className={styles.list}>{monsters.map((token) => <li key={token.id} className={token.hidden ? styles.itemHidden : ""}>
         <span className={styles.legendDot} style={{ background: token.defeated ? defeatedColor : monsterColor }} aria-hidden="true" />
         <button type="button" className={styles.itemName} onClick={() => onSelect(token.id)}>{token.label}
-          <small>{squareName(token.x, token.y)}{token.hidden ? ` · ${t.hiddenTag}` : ""}{token.defeated ? ` · ${t.defeatedTag}` : ""}</small></button>
+          <small>{squareName(token.x, token.y)}{token.hidden ? ` · ${t.hiddenTag}` : ""}{token.defeated ? ` · ${t.defeatedTag}` : ""}{sight && !token.hidden && !tokenInSight(token, sight) ? ` · ${t.unseenTag}` : ""}</small></button>
         <button type="button" className={styles.smallButton} onClick={() => void send([{ type: "update", tokenId: token.id, hidden: !token.hidden }])}>{token.hidden ? t.reveal : t.hide}</button>
         <button type="button" className={styles.smallButton} onClick={() => void send([{ type: "update", tokenId: token.id, defeated: !token.defeated }])}>{token.defeated ? t.revive : t.defeat}</button>
         <select className={styles.sizeSelect} aria-label={`${t.size}: ${token.label}`} value={token.size} onChange={(event) => void send([{ type: "update", tokenId: token.id, size: Number(event.target.value) as TokenSize }])}>
@@ -491,6 +617,24 @@ function DmTools({ map, locale, send, onSelect }: { map: BattleMapView; locale: 
         <label>{t.rows}<input type="number" min={MAP_MIN_SIZE} max={MAP_MAX_SIZE} value={rows} onChange={(event) => setRows(Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Number(event.target.value) || MAP_MIN_SIZE)))} /></label>
         <button type="submit" className="button button-quiet" disabled={cols === map.state.cols && rows === map.state.rows}>{t.resize}</button>
       </form>
+      <label className={styles.check}><input type="checkbox" checked={!map.state.gridHidden} onChange={(event) => void send([{ type: "settings", gridHidden: !event.target.checked }])} />{t.gridLines}</label>
+      <label className={styles.check}><input type="checkbox" checked={map.state.fog === true} onChange={(event) => void send([{ type: "settings", fog: event.target.checked }])} />{t.fog}</label>
+      <p className={styles.empty}>{t.fogHint}</p>
+    </section>
+
+    <section>
+      <h2>{t.background}</h2>
+      {backgroundKey && <img className={styles.backgroundPreview} src={backgroundUrl(map.campaignId, backgroundKey)} alt="" />}
+      <input ref={fileRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" tabIndex={-1} aria-hidden="true"
+        onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeBackground(file); }} />
+      <div className={styles.form}>
+        <button type="button" className="button button-quiet" disabled={uploading} onClick={() => fileRef.current?.click()}>
+          {uploading ? t.uploading : backgroundKey ? t.replaceBackground : t.uploadBackground}</button>
+        {backgroundKey && <button type="button" className="button button-quiet" disabled={uploading} onClick={() => void changeBackground(null)}>{t.removeBackground}</button>}
+      </div>
+      {fittedRows !== null && fittedRows !== map.state.rows && <button type="button" className="button button-quiet" onClick={() => void send([{ type: "resize", cols: map.state.cols, rows: fittedRows }])}>{t.fitRows(fittedRows)}</button>}
+      {uploadError && <p className={styles.error} role="alert">{t.uploadError}</p>}
+      <p className={styles.empty}>{t.backgroundHint}</p>
     </section>
   </>;
 }

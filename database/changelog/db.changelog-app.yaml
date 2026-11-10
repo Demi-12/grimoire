@@ -280,3 +280,25 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP TABLE IF EXISTS "battle_map";
+
+  - changeSet:
+      id: data-007-battle-map-backgrounds
+      author: grimoire
+      comment: >-
+        Background picture of a campaign's battle map, uploaded by a DM (PNG, JPEG, WebP or GIF, up to 5 MB).
+        Kept apart from battle_map so the state sent on every change stays small; battle_map.state only
+        carries the picture's key, which changes on every upload.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "battle_map_background" (
+                "campaignId" UUID PRIMARY KEY REFERENCES "campaign" ("id") ON DELETE CASCADE,
+                "image" BYTEA NOT NULL CHECK (octet_length("image") BETWEEN 1 AND 5000000),
+                "mimeType" TEXT NOT NULL CHECK ("mimeType" IN ('image/png', 'image/jpeg', 'image/webp', 'image/gif')),
+                "key" TEXT NOT NULL,
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+              );
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS "battle_map_background";

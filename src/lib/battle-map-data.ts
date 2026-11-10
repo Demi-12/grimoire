@@ -5,7 +5,7 @@ import { pool, transaction } from "@/lib/db";
 import { canManageCampaign, type AppUser, type CampaignRole } from "@/lib/permissions";
 import {
   applyMapOps, emptyMapState, normalizeMapState, syncHeroes, visibleMapState,
-  type MapHero, type MapOp, type MapOpError, type MapState,
+  type MapHero, type MapImageType, type MapOp, type MapOpError, type MapState,
 } from "@/lib/battle-map";
 
 type Queryable = { query<R extends QueryResultRow>(text: string, values?: unknown[]): Promise<QueryResult<R>> };
@@ -98,6 +98,54 @@ export async function changeBattleMap(user: AppUser, campaignId: string, ops: Ma
       `UPDATE "battle_map" SET "state" = $2, "version" = "version" + 1, "updatedAt" = now()
         WHERE "campaignId" = $1 RETURNING "state", "version", "updatedAt"`,
       [campaignId, JSON.stringify(applied.state)],
+    );
+    await client.query("SELECT pg_notify($1, $2)", [BATTLE_MAP_CHANNEL, campaignId]);
+    return { ok: true as const, value: toView(user, campaignId, context, saved.rows[0], audience) };
+  });
+}
+
+/** The campaign's background picture, for any member; null when there is none. */
+export async function readBattleMapBackground(user: AppUser, campaignId: string): Promise<MapResult<{ image: Buffer; mimeType: MapImageType; key: string } | null>> {
+  const context = await readContext(pool, user, campaignId);
+  if (!context) return { ok: false, error: "not-found" };
+  const result = await pool.query<{ image: Buffer; mimeType: MapImageType; key: string }>(
+    'SELECT "image", "mimeType", "key" FROM "battle_map_background" WHERE "campaignId" = $1',
+    [campaignId],
+  );
+  return { ok: true, value: result.rows[0] ?? null };
+}
+
+/**
+ * Replace (or with null, remove) the background picture. DMs only. The picture lives in its own table so the
+ * map state that travels on every change stays small; the state only carries its key, which changes each time.
+ */
+export async function setBattleMapBackground(user: AppUser, campaignId: string, image: { bytes: Buffer; mimeType: MapImageType } | null, audience: MapAudience = "auto"): Promise<MapResult<BattleMapView>> {
+  return transaction(async (client) => {
+    const context = await readContext(client, user, campaignId);
+    if (!context) return { ok: false as const, error: "not-found" as const };
+    if (!context.isDm) return { ok: false as const, error: "forbidden" as const };
+    await client.query(
+      'INSERT INTO "battle_map" ("campaignId", "state") VALUES ($1, $2) ON CONFLICT ("campaignId") DO NOTHING',
+      [campaignId, JSON.stringify(emptyMapState())],
+    );
+    const current = await client.query<{ state: unknown }>('SELECT "state" FROM "battle_map" WHERE "campaignId" = $1 FOR UPDATE', [campaignId]);
+    const state: MapState = { ...normalizeMapState(current.rows[0]?.state) };
+    if (image) {
+      const key = randomBytes(9).toString("base64url");
+      await client.query(
+        `INSERT INTO "battle_map_background" ("campaignId", "image", "mimeType", "key") VALUES ($1, $2, $3, $4)
+         ON CONFLICT ("campaignId") DO UPDATE SET "image" = EXCLUDED."image", "mimeType" = EXCLUDED."mimeType", "key" = EXCLUDED."key", "updatedAt" = now()`,
+        [campaignId, image.bytes, image.mimeType, key],
+      );
+      state.background = { key };
+    } else {
+      await client.query('DELETE FROM "battle_map_background" WHERE "campaignId" = $1', [campaignId]);
+      delete state.background;
+    }
+    const saved = await client.query<{ state: unknown; version: number; updatedAt: Date }>(
+      `UPDATE "battle_map" SET "state" = $2, "version" = "version" + 1, "updatedAt" = now()
+        WHERE "campaignId" = $1 RETURNING "state", "version", "updatedAt"`,
+      [campaignId, JSON.stringify(state)],
     );
     await client.query("SELECT pg_notify($1, $2)", [BATTLE_MAP_CHANNEL, campaignId]);
     return { ok: true as const, value: toView(user, campaignId, context, saved.rows[0], audience) };

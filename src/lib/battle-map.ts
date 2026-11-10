@@ -12,10 +12,21 @@ export const MAP_MAX_TOKENS = 120;
 export const MAP_MAX_OPS = 40;
 export const MAP_MAX_MONSTERS_PER_ADD = 20;
 export const TOKEN_LABEL_MAX = 40;
+/** Longest vision cone, in squares (120 ft). */
+export const VISION_MAX_RANGE = 24;
+/** Cone widths the DM can pick; 360 is all-round sight. */
+export const VISION_ANGLES = [60, 90, 120, 180, 360] as const;
+export type VisionAngle = (typeof VISION_ANGLES)[number];
+/** Heroes see 60 ft in a 90° cone unless the DM says otherwise. */
+export const DEFAULT_HERO_VISION: TokenVision = { range: 12, angle: 90 };
 
 /** Creature size in grid squares per side: Medium/Small/Tiny 1, Large 2, Huge 3, Gargantuan 4. */
 export type TokenSize = 1 | 2 | 3 | 4;
 export type TokenKind = "hero" | "monster";
+/** Where a token looks, in eighths of a turn clockwise from the top of the map: 0 north, 2 east, 4 south, 6 west. */
+export type Facing = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** Vision cone: how far (squares, 0 = none) and how wide (degrees). */
+export interface TokenVision { range: number; angle: VisionAngle }
 
 export interface MapToken {
   id: string;
@@ -32,19 +43,33 @@ export interface MapToken {
   /** Monsters the DM placed but players can't see yet. */
   hidden?: boolean;
   defeated?: boolean;
+  /** Defaults to north. */
+  facing?: Facing;
+  /** Explicit cone; heroes fall back to DEFAULT_HERO_VISION and monsters to none (see tokenVision). */
+  vision?: TokenVision;
 }
+
+/** Background picture stretched over the grid; `key` changes on every upload, so its URL does too. */
+export interface MapBackground { key: string }
 
 export interface MapState {
   cols: number;
   rows: number;
   tokens: MapToken[];
+  background?: MapBackground;
+  /** Fog of war: players only see the squares inside the heroes' vision cones (and monsters standing there). */
+  fog?: boolean;
+  /** Grid lines switched off (the background picture usually brings its own). */
+  gridHidden?: boolean;
 }
 
 export type MapOp =
   | { type: "move"; tokenId: string; x: number; y: number }
   | { type: "place-hero"; characterId: string; x?: number; y?: number }
   | { type: "add-monster"; label: string; count: number; size: TokenSize; hidden: boolean; monsterSlug?: string }
-  | { type: "update"; tokenId: string; label?: string; hidden?: boolean; defeated?: boolean; size?: TokenSize }
+  | { type: "update"; tokenId: string; label?: string; hidden?: boolean; defeated?: boolean; size?: TokenSize; vision?: TokenVision }
+  | { type: "face"; tokenId: string; facing: Facing }
+  | { type: "settings"; fog?: boolean; gridHidden?: boolean }
   | { type: "remove"; tokenId: string }
   | { type: "clear-monsters" }
   | { type: "resize"; cols: number; rows: number };
@@ -64,7 +89,15 @@ const isInt = (value: unknown, min: number, max: number): value is number => Num
 const isSize = (value: unknown): value is TokenSize => isInt(value, 1, 4);
 const tokenIdPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const isTokenId = (value: unknown): value is string => typeof value === "string" && tokenIdPattern.test(value);
+const isFacing = (value: unknown): value is Facing => isInt(value, 0, 7);
+const backgroundKeyPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseVision(value: unknown): TokenVision | null {
+  if (!value || typeof value !== "object") return null;
+  const { range, angle } = value as Record<string, unknown>;
+  return isInt(range, 0, VISION_MAX_RANGE) && VISION_ANGLES.includes(angle as VisionAngle) ? { range, angle: angle as VisionAngle } : null;
+}
 
 function label(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -101,7 +134,16 @@ export function parseMapOp(raw: unknown): MapOp | null {
       if (op.hidden !== undefined) { if (typeof op.hidden !== "boolean") return null; result.hidden = op.hidden; }
       if (op.defeated !== undefined) { if (typeof op.defeated !== "boolean") return null; result.defeated = op.defeated; }
       if (op.size !== undefined) { if (!isSize(op.size)) return null; result.size = op.size; }
+      if (op.vision !== undefined) { const vision = parseVision(op.vision); if (!vision) return null; result.vision = vision; }
       return Object.keys(result).length > 2 ? result : null;
+    }
+    case "face":
+      return isTokenId(op.tokenId) && isFacing(op.facing) ? { type: "face", tokenId: op.tokenId, facing: op.facing } : null;
+    case "settings": {
+      const result: Extract<MapOp, { type: "settings" }> = { type: "settings" };
+      if (op.fog !== undefined) { if (typeof op.fog !== "boolean") return null; result.fog = op.fog; }
+      if (op.gridHidden !== undefined) { if (typeof op.gridHidden !== "boolean") return null; result.gridHidden = op.gridHidden; }
+      return Object.keys(result).length > 1 ? result : null;
     }
     case "remove":
       return isTokenId(op.tokenId) ? { type: "remove", tokenId: op.tokenId } : null;
@@ -138,15 +180,24 @@ export function normalizeMapState(raw: unknown): MapState {
     if (!isTokenId(token.id) || (token.kind !== "hero" && token.kind !== "monster") || !name || !isSize(token.size)) continue;
     if (!isInt(token.x, 0, MAP_MAX_SIZE - 1) || !isInt(token.y, 0, MAP_MAX_SIZE - 1)) continue;
     if (token.kind === "hero" && (typeof token.characterId !== "string" || !uuidPattern.test(token.characterId))) continue;
+    const vision = parseVision(token.vision);
     tokens.push(clampToken({
       id: token.id, kind: token.kind, label: name, x: token.x, y: token.y, size: token.size,
       ...(token.kind === "hero" ? { characterId: token.characterId as string } : {}),
       ...(typeof token.monsterSlug === "string" ? { monsterSlug: token.monsterSlug } : {}),
       ...(token.hidden === true ? { hidden: true } : {}),
       ...(token.defeated === true ? { defeated: true } : {}),
+      ...(isFacing(token.facing) && token.facing !== 0 ? { facing: token.facing } : {}),
+      ...(vision ? { vision } : {}),
     }, cols, rows));
   }
-  return { cols, rows, tokens: tokens.slice(0, MAP_MAX_TOKENS) };
+  const background = value.background && typeof value.background === "object" ? (value.background as Record<string, unknown>).key : undefined;
+  return {
+    cols, rows, tokens: tokens.slice(0, MAP_MAX_TOKENS),
+    ...(typeof background === "string" && backgroundKeyPattern.test(background) ? { background: { key: background } } : {}),
+    ...(value.fog === true ? { fog: true } : {}),
+    ...(value.gridHidden === true ? { gridHidden: true } : {}),
+  };
 }
 
 function clampToken(token: MapToken, cols: number, rows: number): MapToken {
@@ -170,9 +221,67 @@ export function syncHeroes(state: MapState, heroes: MapHero[]): MapState {
   };
 }
 
-/** What a viewer may see: players (and the table display) never receive hidden monsters. */
+/** The cone a token sees with, or null when it has none. */
+export function tokenVision(token: MapToken): TokenVision | null {
+  const vision = token.vision ?? (token.kind === "hero" ? DEFAULT_HERO_VISION : null);
+  return vision && vision.range > 0 ? vision : null;
+}
+
+/** Facing as an angle on screen in degrees (0 = right/east, 90 = down/south), the way SVG and atan2 measure it. */
+export const facingScreenAngle = (facing: Facing | undefined) => (facing ?? 0) * 45 - 90;
+
+/** Smallest difference between two angles in degrees (0…180). */
+function angleGap(a: number, b: number): number {
+  const gap = Math.abs(((a - b) % 360 + 360) % 360);
+  return gap > 180 ? 360 - gap : gap;
+}
+
+/**
+ * Squares ("x,y") a token sees: its own squares plus every square whose centre falls inside its cone.
+ * Range is counted from the token's edge (a Medium hero with 12 squares sees 60 ft around it). No walls.
+ */
+export function tokenSight(token: MapToken, cols: number, rows: number): Set<string> {
+  const cells = new Set<string>();
+  for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.add(`${token.x + dx},${token.y + dy}`);
+  const vision = tokenVision(token);
+  if (!vision) return cells;
+  const cx = token.x + token.size / 2;
+  const cy = token.y + token.size / 2;
+  const reach = vision.range + token.size / 2;
+  const facing = facingScreenAngle(token.facing);
+  const eps = 1e-9;
+  for (let x = Math.max(0, Math.floor(cx - reach)); x <= Math.min(cols - 1, Math.ceil(cx + reach)); x++) {
+    for (let y = Math.max(0, Math.floor(cy - reach)); y <= Math.min(rows - 1, Math.ceil(cy + reach)); y++) {
+      const px = x + 0.5 - cx;
+      const py = y + 0.5 - cy;
+      if (Math.hypot(px, py) > reach + eps) continue;
+      if (vision.angle < 360 && angleGap(Math.atan2(py, px) * 180 / Math.PI, facing) > vision.angle / 2 + eps) continue;
+      cells.add(`${x},${y}`);
+    }
+  }
+  return cells;
+}
+
+/** Squares the party sees together: the union of every hero's sight. */
+export function partySight(state: MapState): Set<string> {
+  const cells = new Set<string>();
+  for (const token of state.tokens) if (token.kind === "hero") for (const cell of tokenSight(token, state.cols, state.rows)) cells.add(cell);
+  return cells;
+}
+
+const tokenCells = (token: MapToken) => Array.from({ length: token.size * token.size }, (_, i) => `${token.x + (i % token.size)},${token.y + Math.floor(i / token.size)}`);
+
+/** Is any square of this token in sight? */
+export const tokenInSight = (token: MapToken, sight: Set<string>) => tokenCells(token).some((cell) => sight.has(cell));
+
+/**
+ * What a viewer may see: players (and the table display) never receive hidden monsters, and with fog of war
+ * they don't receive monsters outside every hero's vision either.
+ */
 export function visibleMapState(state: MapState, showHidden: boolean): MapState {
-  return showHidden ? state : { ...state, tokens: state.tokens.filter((token) => !token.hidden) };
+  if (showHidden) return state;
+  const sight = state.fog ? partySight(state) : null;
+  return { ...state, tokens: state.tokens.filter((token) => !token.hidden && (!sight || token.kind !== "monster" || tokenInSight(token, sight))) };
 }
 
 /** Squares covered by tokens, to place new ones without stacking them. */
@@ -272,11 +381,33 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         if (!token) return fail("invalid");
         if (token.kind === "hero" && (op.label !== undefined || op.hidden !== undefined)) return fail("invalid");
         replace(token.id, (item) => {
-          const next: MapToken = { ...item, ...(op.label !== undefined ? { label: op.label } : {}), ...(op.size !== undefined ? { size: op.size } : {}) };
+          const next: MapToken = {
+            ...item, ...(op.label !== undefined ? { label: op.label } : {}), ...(op.size !== undefined ? { size: op.size } : {}),
+            ...(op.vision !== undefined ? { vision: op.vision } : {}),
+          };
           if (op.hidden !== undefined) { if (op.hidden) next.hidden = true; else delete next.hidden; }
           if (op.defeated !== undefined) { if (op.defeated) next.defeated = true; else delete next.defeated; }
           return clampToken(next, state.cols, state.rows);
         });
+        break;
+      }
+      case "face": {
+        const token = state.tokens.find((item) => item.id === op.tokenId);
+        if (!token) return fail("invalid");
+        if (!canControlToken(actor, token, heroes)) return fail("forbidden");
+        replace(token.id, (item) => {
+          const next: MapToken = { ...item, facing: op.facing };
+          if (op.facing === 0) delete next.facing;
+          return next;
+        });
+        break;
+      }
+      case "settings": {
+        if (!actor.isDm) return fail("forbidden");
+        const next: MapState = { ...state };
+        if (op.fog !== undefined) { if (op.fog) next.fog = true; else delete next.fog; }
+        if (op.gridHidden !== undefined) { if (op.gridHidden) next.gridHidden = true; else delete next.gridHidden; }
+        state = next;
         break;
       }
       case "remove": {
@@ -292,7 +423,7 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         break;
       case "resize":
         if (!actor.isDm) return fail("forbidden");
-        state = { cols: op.cols, rows: op.rows, tokens: state.tokens.map((token) => clampToken(token, op.cols, op.rows)) };
+        state = { ...state, cols: op.cols, rows: op.rows, tokens: state.tokens.map((token) => clampToken(token, op.cols, op.rows)) };
         break;
     }
   }
@@ -313,3 +444,22 @@ export function columnName(index: number): string {
 
 /** Square reference players say out loud at the table, e.g. "C4". */
 export const squareName = (x: number, y: number) => `${columnName(x)}${y + 1}`;
+
+/** Picture formats accepted as a map background (no SVG: it can carry scripts). */
+export type MapImageType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+
+/** Recognise an uploaded picture by its first bytes, not by what the browser claims it is. */
+export function sniffImageType(bytes: Uint8Array): MapImageType | null {
+  const starts = (...signature: number[]) => signature.every((byte, index) => bytes[index] === byte);
+  if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (starts(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (starts(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  return null;
+}
+
+/** Rows that keep a picture's proportions with the given number of columns (square squares), within the map limits. */
+export function rowsForImage(cols: number, width: number, height: number): number {
+  if (!(width > 0 && height > 0)) return MAP_DEFAULT_ROWS;
+  return Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Math.round(cols * height / width)));
+}

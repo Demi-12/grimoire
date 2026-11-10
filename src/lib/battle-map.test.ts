@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyMapOps, columnName, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, squareName, syncHeroes, visibleMapState,
-  type MapHero, type MapState,
+  applyMapOps, columnName, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState,
+  type MapHero, type MapState, type MapToken,
 } from "./battle-map";
 
 const aliceHero = "11111111-1111-4111-8111-111111111111";
@@ -175,5 +176,109 @@ describe("grid helpers", () => {
   it("finds a free spot from either side", () => {
     expect(findFreeSpot(emptyMapState(), 1, "left")).toEqual({ x: 0, y: 0 });
     expect(findFreeSpot(emptyMapState(), 2, "right")).toEqual({ x: 18, y: 0 });
+  });
+});
+
+describe("vision cones and fog of war", () => {
+  const hero = (over: Partial<MapToken> = {}): MapToken => ({ id: "h", kind: "hero", label: "Lia", characterId: aliceHero, x: 5, y: 5, size: 1, ...over });
+
+  it("validates turning, vision and map settings", () => {
+    expect(parseMapOp({ type: "face", tokenId: "abc", facing: 3 })).toEqual({ type: "face", tokenId: "abc", facing: 3 });
+    expect(parseMapOp({ type: "face", tokenId: "abc", facing: 8 })).toBeNull();
+    expect(parseMapOp({ type: "update", tokenId: "abc", vision: { range: 12, angle: 120 } })).toEqual({ type: "update", tokenId: "abc", vision: { range: 12, angle: 120 } });
+    expect(parseMapOp({ type: "update", tokenId: "abc", vision: { range: 12, angle: 45 } })).toBeNull();
+    expect(parseMapOp({ type: "update", tokenId: "abc", vision: { range: 99, angle: 90 } })).toBeNull();
+    expect(parseMapOp({ type: "settings", fog: true })).toEqual({ type: "settings", fog: true });
+    expect(parseMapOp({ type: "settings" })).toBeNull();
+    expect(parseMapOp({ type: "settings", gridHidden: "yes" })).toBeNull();
+  });
+
+  it("lets players turn their own hero and only the DM change vision or settings", () => {
+    const state = withParty();
+    const lia = state.tokens.find((token) => token.characterId === aliceHero)!;
+    const brom = state.tokens.find((token) => token.characterId === bobHero)!;
+    const turned = applyMapOps(state, [{ type: "face", tokenId: lia.id, facing: 2 }], alice, heroes, ids());
+    expect(turned.ok && turned.state.tokens.find((token) => token.id === lia.id)?.facing).toBe(2);
+    expect(applyMapOps(state, [{ type: "face", tokenId: brom.id, facing: 2 }], alice, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
+    expect(applyMapOps(state, [{ type: "update", tokenId: lia.id, vision: { range: 24, angle: 360 } }], alice, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
+    expect(applyMapOps(state, [{ type: "settings", fog: true }], alice, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
+    const set = applyMapOps(state, [{ type: "update", tokenId: lia.id, vision: { range: 24, angle: 360 } }, { type: "settings", fog: true, gridHidden: true }], dm, heroes, ids());
+    expect(set.ok && set.state.fog).toBe(true);
+    expect(set.ok && set.state.gridHidden).toBe(true);
+    expect(set.ok && set.state.tokens.find((token) => token.id === lia.id)?.vision).toEqual({ range: 24, angle: 360 });
+    const back = set.ok ? applyMapOps(set.state, [{ type: "settings", fog: false }, { type: "resize", cols: 10, rows: 10 }], dm, heroes, ids()) : null;
+    expect(back?.ok && back.state.fog).toBeUndefined();
+    expect(back?.ok && back.state.gridHidden).toBe(true);
+  });
+
+  it("gives heroes a default cone and monsters none", () => {
+    expect(tokenVision(hero())).toEqual({ range: 12, angle: 90 });
+    expect(tokenVision(hero({ vision: { range: 0, angle: 90 } }))).toBeNull();
+    expect(tokenVision({ id: "m", kind: "monster", label: "Rat", x: 0, y: 0, size: 1 })).toBeNull();
+  });
+
+  it("sees squares inside the cone in the direction the token faces", () => {
+    const north = tokenSight(hero({ vision: { range: 3, angle: 90 } }), 20, 20);
+    expect(north.has("5,5")).toBe(true); // its own square
+    expect(north.has("5,2")).toBe(true); // three squares straight ahead
+    expect(north.has("5,1")).toBe(false); // out of range
+    expect(north.has("5,6")).toBe(false); // behind
+    expect(north.has("8,5")).toBe(false); // to the side
+    const east = tokenSight(hero({ facing: 2, vision: { range: 3, angle: 90 } }), 20, 20);
+    expect(east.has("8,5")).toBe(true);
+    expect(east.has("5,2")).toBe(false);
+    const around = tokenSight(hero({ vision: { range: 2, angle: 360 } }), 20, 20);
+    expect(around.has("5,7") && around.has("3,5") && around.has("7,5")).toBe(true);
+    // Never outside the grid.
+    expect([...tokenSight(hero({ x: 0, y: 0, vision: { range: 5, angle: 360 } }), 4, 4)].every((cell) => cell.split(",").every((n) => Number(n) >= 0 && Number(n) < 4))).toBe(true);
+  });
+
+  it("keeps monsters out of the heroes' sight away from players when the fog is on", () => {
+    const state: MapState = {
+      cols: 20, rows: 20, fog: true,
+      tokens: [
+        hero({ vision: { range: 4, angle: 90 } }),
+        { id: "seen", kind: "monster", label: "Goblin", x: 5, y: 2, size: 1 },
+        { id: "behind", kind: "monster", label: "Goblin", x: 5, y: 9, size: 1 },
+        { id: "big", kind: "monster", label: "Ogre", x: 6, y: 0, size: 2 }, // only its lower-left square is in sight
+      ],
+    };
+    expect(partySight(state).has("6,1")).toBe(true);
+    expect(visibleMapState(state, false).tokens.map((token) => token.id)).toEqual(["h", "seen", "big"]);
+    expect(visibleMapState(state, true).tokens).toHaveLength(4);
+    expect(visibleMapState({ ...state, fog: false }, false).tokens).toHaveLength(4);
+  });
+
+  it("stores facing, vision, fog and background, dropping malformed values", () => {
+    const state = normalizeMapState({
+      cols: 10, rows: 10, fog: true, gridHidden: true, background: { key: "abc_123" },
+      tokens: [
+        { id: "a", kind: "monster", label: "Rat", x: 0, y: 0, size: 1, facing: 3, vision: { range: 6, angle: 180 } },
+        { id: "b", kind: "monster", label: "Rat", x: 1, y: 0, size: 1, facing: 9, vision: { range: 6, angle: 33 } },
+      ],
+    });
+    expect(state).toMatchObject({ fog: true, gridHidden: true, background: { key: "abc_123" } });
+    expect(state.tokens[0]).toMatchObject({ facing: 3, vision: { range: 6, angle: 180 } });
+    expect(state.tokens[1].facing).toBeUndefined();
+    expect(state.tokens[1].vision).toBeUndefined();
+    expect(normalizeMapState({ background: { key: "../etc" } }).background).toBeUndefined();
+  });
+});
+
+describe("background pictures", () => {
+  it("recognises pictures by their bytes", () => {
+    expect(sniffImageType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBe("image/png");
+    expect(sniffImageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe("image/jpeg");
+    expect(sniffImageType(new TextEncoder().encode("GIF89a"))).toBe("image/gif");
+    expect(sniffImageType(new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 "))).toBe("image/webp");
+    expect(sniffImageType(new TextEncoder().encode("<svg onload=alert(1)>"))).toBeNull();
+    expect(sniffImageType(new Uint8Array())).toBeNull();
+  });
+
+  it("suggests rows that keep the picture's proportions", () => {
+    expect(rowsForImage(20, 2000, 1400)).toBe(14);
+    expect(rowsForImage(20, 100, 1000)).toBe(40);
+    expect(rowsForImage(20, 1000, 10)).toBe(4);
+    expect(rowsForImage(20, 0, 0)).toBe(14);
   });
 });
