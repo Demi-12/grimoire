@@ -20,6 +20,8 @@ export type Effect =
   | { kind: "speedBonus"; amount: number }
   /** Without armor, AC = 10 + Dexterity + these modifiers; the best formula the character has is used. */
   | { kind: "unarmoredDefense"; add: AbilityKey[] }
+  /** Without armor, AC = base (+ Dexterity if addDex): Lizardfolk 13 + Dex, Tortle 17. Competes with Unarmored Defense; the best wins. */
+  | { kind: "naturalArmor"; base: number; addDex: boolean }
   | { kind: "acBonus"; amount: number; whileArmored?: boolean }
   | { kind: "initiativeBonus"; add: "proficiency" }
   | { kind: "saveProficiency"; abilities: AbilityKey[] };

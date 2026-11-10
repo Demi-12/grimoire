@@ -5,11 +5,11 @@ import { abilities, abilityModifier, type AbilityKey, type AbilityScores } from 
 import { translate, type Locale } from "@/lib/i18n";
 import {
   alignments, backgrounds, classes, findBackground, findClass, findSpecies, magicInitiateLists, originFeats,
-  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, STANDARD_ARRAY, standardLanguages,
+  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, speciesSources, STANDARD_ARRAY, standardLanguages,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
 } from "@/lib/dnd2024";
 import {
-  backgroundBonuses, characterFeats, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, stepIssues,
+  backgroundBonuses, characterFeats, deriveSheet, finalScores, pointBuySpent, roll4d6DropLowest, speciesSkillsOf, stepIssues,
   validBaseScores, type AbilityMethod, type CharacterBuild,
 } from "@/lib/character-sheet";
 import { featInfo } from "@/lib/levelup-data";
@@ -47,7 +47,7 @@ const copy = {
     backgroundIntro: "Your background tells where you came from. In the 2024 rules it grants the ability score increases, an Origin feat, two skills and a tool.",
     abilitiesLabel: "Ability increases", feat: "Origin feat", skills: "Skill proficiencies", tool: "Tool proficiency",
     speciesIntro: "Your species grants traits such as size, speed and senses. It no longer changes your ability scores.",
-    size: "Size", speed: "Speed", darkvision: "Darkvision", traits: "Traits", ft: "ft.",
+    size: "Size", speed: "Speed", darkvision: "Darkvision", traits: "Traits", ft: "ft.", source: "Source", creatureType: "Creature type", speciesSkills: "Skills",
     chooseSkill: (n: number) => n === 1 ? "Choose 1 skill" : `Choose ${n} skills`, chooseFeat: "Versatile: choose an Origin feat",
     spellList: "Spell list", abilitiesIntro: "Generate your six scores, then apply your background's increases (maximum 20).",
     methods: { standard: "Standard array", pointBuy: "Point buy", rolled: "Roll 4d6" } as Record<AbilityMethod, string>,
@@ -83,7 +83,7 @@ const copy = {
     backgroundIntro: "El trasfondo cuenta de dónde vienes. En las reglas de 2024 otorga los aumentos de característica, una dote de origen, dos habilidades y una herramienta.",
     abilitiesLabel: "Aumentos de característica", feat: "Dote de origen", skills: "Competencias en habilidades", tool: "Competencia con herramienta",
     speciesIntro: "La especie otorga rasgos como tamaño, velocidad y sentidos. Ya no modifica tus características.",
-    size: "Tamaño", speed: "Velocidad", darkvision: "Visión en la oscuridad", traits: "Rasgos", ft: "pies",
+    size: "Tamaño", speed: "Velocidad", darkvision: "Visión en la oscuridad", traits: "Rasgos", ft: "pies", source: "Fuente", creatureType: "Tipo de criatura", speciesSkills: "Habilidades",
     chooseSkill: (n: number) => n === 1 ? "Elige 1 habilidad" : `Elige ${n} habilidades`, chooseFeat: "Versátil: elige una dote de origen",
     spellList: "Lista de conjuros", abilitiesIntro: "Genera tus seis puntuaciones y aplica los aumentos del trasfondo (máximo 20).",
     methods: { standard: "Matriz estándar", pointBuy: "Compra por puntos", rolled: "Tirar 4d6" } as Record<AbilityMethod, string>,
@@ -162,7 +162,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const sheet = useMemo(() => deriveSheet(build, level), [build, level]);
   const feats = characterFeats(build);
   const bgSkills = new Set<SkillKey>(bg.skills);
-  const beforeClass = new Set<SkillKey>([...bg.skills, ...build.speciesSkills]);
+  const fixedSpeciesSkills = sp.skills ?? [];
+  const beforeClass = new Set<SkillKey>([...bg.skills, ...speciesSkillsOf(build)]);
   const show = (target: number) => quick || step === target;
   const issues = quick
     ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...(name.trim() ? [] : ["name"])])]
@@ -223,7 +224,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const bonuses = backgroundBonuses(build);
   const scores = finalScores(build);
   const classOptions = cls.skillOptions.length ? cls.skillOptions : skillKeys;
-  const proficientForExpertise = [...new Set([...bg.skills, ...build.speciesSkills, ...build.classSkills, ...(feats.includes("skilled") ? build.featSkills : [])])];
+  const proficientForExpertise = [...new Set([...bg.skills, ...speciesSkillsOf(build), ...build.classSkills, ...(feats.includes("skilled") ? build.featSkills : [])])];
 
   return <section className={styles.wizard} aria-labelledby="wizard-title">
     <header className={styles.head}>
@@ -294,15 +295,18 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         {heading(2)}
         <p className={styles.intro}>{c.speciesIntro}</p>
         {quick ? selectFor(species, build.speciesId, chooseSpecies) : <div className={styles.cardGrid}>{species.map((item) => <Choice key={item.id} selected={item.id === build.speciesId} onClick={() => chooseSpecies(item.id)}>
-          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait.name, locale)).join(" · ")}</em>
+          <strong>{say(item.name, locale)}</strong><small>{say(item.size, locale)} · {item.speed} {c.ft}{item.darkvision ? ` · ◐ ${item.darkvision}` : ""}</small><em>{item.traits.map((trait) => say(trait.name, locale)).join(" · ")}</em><small>{say(speciesSources[item.source], locale)}</small>
         </Choice>)}</div>}
         <div className={styles.detail}>
           <h3>{say(sp.name, locale)}</h3>
           <dl className={styles.facts}>
+            <div><dt>{c.source}</dt><dd>{say(speciesSources[sp.source], locale)}</dd></div>
+            {sp.creatureType && <div><dt>{c.creatureType}</dt><dd>{say(sp.creatureType, locale)}</dd></div>}
             <div><dt>{c.size}</dt><dd>{say(sp.size, locale)}</dd></div>
             <div><dt>{c.speed}</dt><dd>{sp.speed} {c.ft}</dd></div>
             {sp.darkvision && <div><dt>{c.darkvision}</dt><dd>{sp.darkvision} {c.ft}</dd></div>}
             <div><dt>{c.traits}</dt><dd>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}</dd></div>
+            {fixedSpeciesSkills.length > 0 && <div><dt>{c.speciesSkills}</dt><dd>{fixedSpeciesSkills.map((skill) => translate(locale, `skill.${skill}`)).join(", ")}</dd></div>}
           </dl>
           {sp.lineages && <fieldset className={styles.group}><legend>{say(sp.lineageLabel, locale)}</legend><div className={styles.pills}>
             {sp.lineages.map((lineage) => <Choice key={lineage.id} selected={lineage.id === build.lineageId} onClick={() => update({ lineageId: lineage.id })}>
@@ -311,7 +315,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           </div></fieldset>}
           {sp.skillChoice && <fieldset className={styles.group}><legend>{c.chooseSkill(sp.skillChoice.count)}</legend>
             <SkillPicker locale={locale} lockedLabel={c.already} options={sp.skillChoice.options.length ? sp.skillChoice.options : skillKeys} chosen={build.speciesSkills}
-              limit={sp.skillChoice.count} locked={bgSkills} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
+              limit={sp.skillChoice.count} locked={new Set([...bgSkills, ...fixedSpeciesSkills])} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
           </fieldset>}
           {sp.originFeat && <fieldset className={styles.group}><legend>{c.chooseFeat}</legend><div className={styles.pills}>
             {(Object.keys(originFeats) as FeatId[]).map((feat) => <Choice key={feat} selected={build.speciesFeat === feat} onClick={() => update({ speciesFeat: feat, featSkills: [] })}>
