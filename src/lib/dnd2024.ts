@@ -1,7 +1,9 @@
 /**
  * Character creation data for the 2024 rules: the 12 classes with their SRD subclass,
- * the 10 Player's Handbook species, the 16 Player's Handbook backgrounds and the origin
- * feats they grant (the System Reference Document 5.2, CC-BY-4.0, only covers part of it).
+ * the 10 Player's Handbook species plus the species of Eberron: Forge of the Artificer (2025) and
+ * Mordenkainen Presents: Monsters of the Multiverse (2022, playable with the 2024 rules), the 16 Player's
+ * Handbook backgrounds and the origin feats they grant (the System Reference Document 5.2, CC-BY-4.0,
+ * only covers part of it).
  * Names are given in English and Spanish; rules text is summarized, not reproduced.
  */
 import type { AbilityKey } from "./rules";
@@ -502,11 +504,26 @@ export const backgrounds: BackgroundData[] = [
   },
 ];
 
-export type SpeciesId = "aasimar" | "dragonborn" | "dwarf" | "elf" | "gnome" | "goliath" | "halfling" | "human" | "orc" | "tiefling";
+export type SpeciesId =
+  | "aasimar" | "dragonborn" | "dwarf" | "elf" | "gnome" | "goliath" | "halfling" | "human" | "orc" | "tiefling"
+  | "changeling" | "kalashtar" | "khoravar" | "shifter" | "warforged"
+  | "aarakocra" | "bugbear" | "centaur" | "deepGnome" | "duergar" | "eladrin" | "fairy" | "firbolg" | "genasi"
+  | "githyanki" | "githzerai" | "goblin" | "harengon" | "hobgoblin" | "kenku" | "kobold" | "lizardfolk" | "minotaur"
+  | "satyr" | "seaElf" | "shadarKai" | "tabaxi" | "tortle" | "triton" | "yuanTi";
+/** Book a species comes from. Monsters of the Multiverse species work with the 2024 rules: ability increases come from the background. */
+export type SpeciesSource = "phb2024" | "eberron2025" | "motm2022";
+export const speciesSources: Record<SpeciesSource, Text> = {
+  phb2024: { en: "Player's Handbook (2024)", es: "Manual del Jugador (2024)" },
+  eberron2025: { en: "Eberron: Forge of the Artificer (2025)", es: "Eberron: Forge of the Artificer (2025)" },
+  motm2022: { en: "Monsters of the Multiverse (2022)", es: "Monstruos del Multiverso (2022)" },
+};
 export interface Lineage { id: string; name: Text; detail?: Text; speed?: number; darkvision?: number }
 export interface SpeciesData {
   id: SpeciesId;
   name: Text;
+  source: SpeciesSource;
+  /** Only when it isn't Humanoid (it matters for spells such as Hold Person). */
+  creatureType?: Text;
   size: Text;
   speed: number;
   darkvision?: number;
@@ -515,13 +532,15 @@ export interface SpeciesData {
   lineages?: Lineage[];
   /** Number of extra skills chosen from the given list (empty = any). */
   skillChoice?: { count: number; options: SkillKey[] };
+  /** Skills the species always grants. */
+  skills?: SkillKey[];
   /** Human Versatile: choose an origin feat. */
   originFeat?: boolean;
 }
 
 export const species: SpeciesData[] = [
   {
-    id: "aasimar", name: t("Aasimar", "Aasimar"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    id: "aasimar", name: t("Aasimar", "Aasimar"), source: "phb2024", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
     traits: [
       f("Celestial Resistance", "Resistencia celestial", "Resistance to necrotic and radiant damage.", "Resistencia al daño necrótico y radiante."),
       f("Healing Hands", "Manos curativas", "Magic action: touch a creature to heal it a number of d4 equal to your proficiency bonus. Once per Long Rest.", "Acción mágica: tocas a una criatura y la curas tantos d4 como tu bonificador por competencia. Una vez por descanso largo."),
@@ -530,7 +549,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "dragonborn", name: t("Dragonborn", "Dracónido"), size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    id: "dragonborn", name: t("Dragonborn", "Dracónido"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
     traits: [
       f("Breath Weapon", "Arma de aliento", "Replace one attack with a 15-foot cone or 30-foot line of your ancestry's damage (1d10, Dexterity save halves it). Uses equal to your proficiency bonus per Long Rest.", "Sustituyes un ataque por un cono de 15 pies o una línea de 30 pies del daño de tu ascendencia (1d10, salvación de Destreza para la mitad). Tantos usos como tu bonificador por competencia por descanso largo."),
       f("Damage Resistance", "Resistencia al daño", "Resistance to the damage type of your draconic ancestry.", "Resistencia al tipo de daño de tu ascendencia dracónica."),
@@ -544,7 +563,7 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
   },
   {
-    id: "dwarf", name: t("Dwarf", "Enano"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
+    id: "dwarf", name: t("Dwarf", "Enano"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
     traits: [
       f("Dwarven Resilience", "Resistencia enana", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
       f("Dwarven Toughness", "Dureza enana", "+1 hit point maximum per level (already counted on this sheet).", "+1 punto de golpe máximo por nivel (ya incluido en esta ficha).", [{ kind: "hpPerLevel", amount: 1 }]),
@@ -552,7 +571,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "elf", name: t("Elf", "Elfo"), size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    id: "elf", name: t("Elf", "Elfo"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
     traits: [
       f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
       f("Keen Senses", "Sentidos agudos", "Proficiency in Insight, Perception or Survival.", "Competencia en Perspicacia, Percepción o Supervivencia."),
@@ -567,7 +586,7 @@ export const species: SpeciesData[] = [
     skillChoice: { count: 1, options: ["insight", "perception", "survival"] },
   },
   {
-    id: "gnome", name: t("Gnome", "Gnomo"), size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
+    id: "gnome", name: t("Gnome", "Gnomo"), source: "phb2024", size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
     traits: [
       f("Gnomish Cunning", "Astucia gnoma", "Advantage on Intelligence, Wisdom and Charisma saving throws.", "Ventaja en las salvaciones de Inteligencia, Sabiduría y Carisma."),
     ],
@@ -578,7 +597,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "goliath", name: t("Goliath", "Goliat"), size: t("Medium", "Mediano"), speed: 35,
+    id: "goliath", name: t("Goliath", "Goliat"), source: "phb2024", size: t("Medium", "Mediano"), speed: 35,
     traits: [
       f("Large Form (level 5)", "Forma grande (nivel 5)", "Bonus action: become Large for 10 minutes, with advantage on Strength checks and +10 feet of speed. Once per Long Rest.", "Acción adicional: pasas a tamaño grande durante 10 minutos, con ventaja en pruebas de Fuerza y +10 pies de velocidad. Una vez por descanso largo."),
       f("Powerful Build", "Complexión poderosa", "Advantage on checks to end the Grappled condition, and you count as one size larger for carrying capacity.", "Ventaja en pruebas para terminar el estado agarrado, y cuentas como un tamaño mayor para la capacidad de carga."),
@@ -594,7 +613,7 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(`${den} (proficiency bonus uses per Long Rest)`, `${des} (tantos usos como tu bonificador por competencia por descanso largo)`) })),
   },
   {
-    id: "halfling", name: t("Halfling", "Mediano"), size: t("Small", "Pequeño"), speed: 30,
+    id: "halfling", name: t("Halfling", "Mediano"), source: "phb2024", size: t("Small", "Pequeño"), speed: 30,
     traits: [
       f("Brave", "Valiente", "Advantage on saves to avoid or end the Frightened condition.", "Ventaja en salvaciones para evitar o terminar el estado asustado."),
       f("Halfling Nimbleness", "Agilidad mediana", "You can move through the space of any creature larger than you.", "Puedes atravesar el espacio de cualquier criatura más grande que tú."),
@@ -603,7 +622,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "human", name: t("Human", "Humano"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    id: "human", name: t("Human", "Humano"), source: "phb2024", size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
     traits: [
       f("Resourceful", "Ingenioso", "You gain Heroic Inspiration whenever you finish a Long Rest.", "Ganas Inspiración heroica cada vez que terminas un descanso largo."),
       f("Skillful", "Hábil", "Proficiency in one extra skill of your choice.", "Competencia en una habilidad adicional a tu elección."),
@@ -612,14 +631,14 @@ export const species: SpeciesData[] = [
     skillChoice: { count: 1, options: [] }, originFeat: true,
   },
   {
-    id: "orc", name: t("Orc", "Orco"), size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
+    id: "orc", name: t("Orc", "Orco"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
     traits: [
       f("Adrenaline Rush", "Subidón de adrenalina", "Dash as a bonus action and gain temporary hit points equal to your proficiency bonus. Uses equal to your proficiency bonus per Short or Long Rest.", "Corres como acción adicional y ganas puntos de golpe temporales iguales a tu bonificador por competencia. Tantos usos como ese bonificador por descanso corto o largo."),
       f("Relentless Endurance", "Aguante incansable", "When you drop to 0 hit points without being killed outright, you drop to 1 instead. Once per Long Rest.", "Cuando caes a 0 puntos de golpe sin morir en el acto, te quedas a 1. Una vez por descanso largo."),
     ],
   },
   {
-    id: "tiefling", name: t("Tiefling", "Tiflin"), size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    id: "tiefling", name: t("Tiefling", "Tiflin"), source: "phb2024", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
     traits: [
       f("Otherworldly Presence", "Presencia de otro mundo", "You know the Thaumaturgy cantrip, cast with the same ability as your Fiendish Legacy spells.", "Conoces el truco Taumaturgia, que lanzas con la misma característica que los conjuros de tu legado infernal."),
     ],
@@ -628,6 +647,308 @@ export const species: SpeciesData[] = [
       { id: "abyssal", name: t("Abyssal", "Abisal"), detail: t("Poison resistance", "Resistencia al veneno") },
       { id: "chthonic", name: t("Chthonic", "Ctónico"), detail: t("Necrotic resistance", "Resistencia al daño necrótico") },
       { id: "infernal", name: t("Infernal", "Infernal"), detail: t("Fire resistance", "Resistencia al fuego") },
+    ],
+  },
+
+  // --- Eberron: Forge of the Artificer (2025), already written for the 2024 rules ---
+  {
+    id: "changeling", name: t("Changeling", "Cambiante"), source: "eberron2025", creatureType: t("Fey", "Feérico"),
+    size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    traits: [
+      f("Changeling Instincts", "Instintos de cambiante", "Proficiency in two of Deception, Insight, Intimidation, Performance and Persuasion.", "Competencia en dos de Engaño, Perspicacia, Intimidación, Interpretación y Persuasión."),
+      f("Shape-Shifter", "Cambiaformas", "Action: change your appearance and voice (height, build, features, apparent age), keeping your size and game statistics; the disguise also helps your Charisma checks.", "Acción: cambias tu aspecto y tu voz (altura, complexión, rasgos, edad aparente) sin cambiar tu tamaño ni tus estadísticas; el disfraz también te ayuda en las pruebas de Carisma."),
+    ],
+    skillChoice: { count: 2, options: ["deception", "insight", "intimidation", "performance", "persuasion"] },
+  },
+  {
+    id: "kalashtar", name: t("Kalashtar", "Kalashtar"), source: "eberron2025", creatureType: t("Aberration", "Aberración"),
+    size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Dual Mind", "Mente dual", "Advantage on Wisdom and Charisma saving throws.", "Ventaja en las salvaciones de Sabiduría y Carisma."),
+      f("Mental Discipline", "Disciplina mental", "Resistance to psychic damage.", "Resistencia al daño psíquico."),
+      f("Mind Link", "Vínculo mental", "Telepathy with a creature you can see within 10 feet × your level; it can answer you while the link lasts.", "Telepatía con una criatura que veas a 10 pies × tu nivel; puede responderte mientras dure el vínculo."),
+      f("Severed from Dreams", "Separado de los sueños", "Your sleep doesn't touch the plane of dreams: magic that works through dreams can't reach you.", "Tu sueño no toca el plano de los sueños: la magia que actúa a través de ellos no te alcanza."),
+    ],
+  },
+  {
+    id: "khoravar", name: t("Khoravar", "Khoravar"), source: "eberron2025", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Fey Gift", "Don feérico", "You know the Friends cantrip; after a Long Rest you can swap it for a Cleric, Druid or Wizard cantrip.", "Conoces el truco Amistad; tras un descanso largo puedes cambiarlo por un truco de clérigo, druida o mago."),
+      f("Lethargy Resilience", "Resistencia al letargo", "When you fail a save against the Unconscious condition, you can succeed instead. Usable again after 1d4 Long Rests.", "Cuando fallas una salvación contra el estado inconsciente, puedes superarla. Vuelves a poder usarlo tras 1d4 descansos largos."),
+      f("Skill Versatility", "Versatilidad", "Proficiency in one skill or tool of your choice; you can change it after a Long Rest.", "Competencia en una habilidad o herramienta a tu elección; puedes cambiarla tras un descanso largo."),
+    ],
+    skillChoice: { count: 1, options: [] },
+  },
+  {
+    id: "shifter", name: t("Shifter", "Cambiaformas"), source: "eberron2025", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Bestial Instincts", "Instintos bestiales", "Proficiency in Acrobatics, Athletics, Intimidation or Survival.", "Competencia en Acrobacias, Atletismo, Intimidación o Supervivencia."),
+      f("Shifting", "Transformación", "Bonus action: take on a bestial look for 1 minute and gain temporary hit points equal to twice your proficiency bonus, plus your shift's benefit. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: adoptas un aspecto bestial durante 1 minuto y ganas puntos de golpe temporales iguales al doble de tu bonificador por competencia, más el beneficio de tu transformación. Tantos usos como ese bonificador por descanso largo."),
+    ],
+    skillChoice: { count: 1, options: ["acrobatics", "athletics", "intimidation", "survival"] },
+    lineageLabel: t("Shift", "Transformación"),
+    lineages: [
+      ["beasthide", "Beasthide", "Piel de bestia", "+1d6 temporary hit points and +1 AC while shifted", "+1d6 puntos de golpe temporales y +1 a la CA mientras dura"],
+      ["longtooth", "Longtooth", "Colmillo largo", "Bonus action fang strike (1d6 + Strength piercing) while shifted", "Mordisco como acción adicional (1d6 + Fuerza perforante) mientras dura"],
+      ["swiftstride", "Swiftstride", "Paso veloz", "+10 feet of speed while shifted", "+10 pies de velocidad mientras dura"],
+      ["wildhunt", "Wildhunt", "Cacería salvaje", "Advantage on Wisdom checks; nearby creatures can't gain advantage to hit you", "Ventaja en pruebas de Sabiduría; las criaturas cercanas no tienen ventaja al atacarte"],
+    ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
+  },
+  {
+    id: "warforged", name: t("Warforged", "Forjado"), source: "eberron2025", creatureType: t("Construct", "Constructo"),
+    size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Constructed Resilience", "Resistencia de constructo", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
+      f("Integrated Protection", "Protección integrada", "+1 to Armor Class (already counted on this sheet); armor you wear can't be removed against your will.", "+1 a la Clase de Armadura (ya incluido en esta ficha); nadie puede quitarte la armadura contra tu voluntad.", [{ kind: "acBonus", amount: 1 }]),
+      f("Sentry's Rest", "Descanso del centinela", "You don't need to sleep and magic can't put you to sleep; a Long Rest is 6 hours of inactive but conscious rest.", "No necesitas dormir y la magia no puede dormirte; un descanso largo son 6 horas de reposo inactivo pero consciente."),
+      f("Tireless", "Incansable", "You don't gain Exhaustion from lack of food, water or air.", "No sufres cansancio por falta de comida, agua o aire."),
+    ],
+  },
+
+  // --- Mordenkainen Presents: Monsters of the Multiverse (2022) ---
+  {
+    id: "aarakocra", name: t("Aarakocra", "Aarakocra"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Flight", "Vuelo", "Fly speed equal to your walking speed, as long as you aren't wearing Medium or Heavy armor.", "Velocidad de vuelo igual a tu velocidad caminando, si no llevas armadura media ni pesada."),
+      f("Talons", "Garras", "Your unarmed strikes can deal 1d6 + Strength slashing damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño cortante."),
+      f("Wind Caller (level 3)", "Llamada del viento (nivel 3)", "Cast Gust of Wind once per Long Rest without a slot (or with your slots), using Intelligence, Wisdom or Charisma.", "Lanzas Ráfaga de viento una vez por descanso largo sin espacio (o con tus espacios), con Inteligencia, Sabiduría o Carisma."),
+    ],
+  },
+  {
+    id: "bugbear", name: t("Bugbear", "Osgo"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Long-Limbed", "Extremidades largas", "Your melee attacks on your turn have 5 more feet of reach.", "Tus ataques cuerpo a cuerpo en tu turno tienen 5 pies más de alcance."),
+      f("Powerful Build", "Complexión poderosa", "Advantage on checks to end the Grappled condition, and you count as one size larger for carrying capacity.", "Ventaja en pruebas para terminar el estado agarrado, y cuentas como un tamaño mayor para la capacidad de carga."),
+      f("Sneaky", "Sigiloso", "Proficiency in Stealth, and you can squeeze through spaces made for Small creatures.", "Competencia en Sigilo, y puedes colarte por espacios pensados para criaturas pequeñas."),
+      f("Surprise Attack", "Ataque sorpresa", "Deal an extra 2d6 damage once per combat when you hit a creature that hasn't taken a turn yet.", "Haces 2d6 de daño extra una vez por combate al impactar a una criatura que aún no ha tenido turno."),
+    ],
+    skills: ["stealth"],
+  },
+  {
+    id: "centaur", name: t("Centaur", "Centauro"), source: "motm2022", creatureType: t("Fey", "Feérico"), size: t("Medium", "Mediano"), speed: 40,
+    traits: [
+      f("Charge", "Carga", "After moving 30 feet straight toward a target and hitting it with a melee attack, make a hooves attack as a bonus action.", "Si te mueves 30 pies en línea recta hacia un objetivo y lo impactas cuerpo a cuerpo, puedes atacar con los cascos como acción adicional."),
+      f("Equine Build", "Constitución equina", "You count as one size larger for carrying capacity; climbing costs you 4 extra feet per foot.", "Cuentas como un tamaño mayor para la capacidad de carga; trepar te cuesta 4 pies extra por cada pie."),
+      f("Hooves", "Cascos", "Your unarmed strikes can deal 1d6 + Strength bludgeoning damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño contundente."),
+      f("Natural Affinity", "Afinidad natural", "Proficiency in Animal Handling, Medicine, Nature or Survival.", "Competencia en Trato con animales, Medicina, Naturaleza o Supervivencia."),
+    ],
+    skillChoice: { count: 1, options: ["animalHandling", "medicine", "nature", "survival"] },
+  },
+  {
+    id: "deepGnome", name: t("Deep Gnome", "Gnomo de las profundidades"), source: "motm2022", size: t("Small", "Pequeño"), speed: 30, darkvision: 120,
+    traits: [
+      f("Gift of the Svirfneblin (level 3)", "Don de los svirfneblin (nivel 3)", "Cast Disguise Self (level 3) and Nondetection (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Disfrazarse (nivel 3) e Indetectable (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Gnomish Magic Resistance", "Resistencia mágica gnoma", "Advantage on Intelligence, Wisdom and Charisma saves against spells.", "Ventaja en salvaciones de Inteligencia, Sabiduría y Carisma contra conjuros."),
+      f("Svirfneblin Camouflage", "Camuflaje svirfneblin", "Give yourself advantage on a Stealth check. Uses equal to your proficiency bonus per Long Rest.", "Te das ventaja en una prueba de Sigilo. Tantos usos como tu bonificador por competencia por descanso largo."),
+    ],
+  },
+  {
+    id: "duergar", name: t("Duergar", "Duergar"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
+    traits: [
+      f("Duergar Magic (level 3)", "Magia duergar (nivel 3)", "Cast Enlarge/Reduce (level 3) and Invisibility (level 5) on yourself once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Agrandar/reducir (nivel 3) e Invisibilidad (nivel 5) sobre ti una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Dwarven Resilience", "Resistencia enana", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
+      f("Psionic Fortitude", "Fortaleza psiónica", "Advantage on saves to avoid or end the Charmed or Stunned condition.", "Ventaja en salvaciones para evitar o terminar los estados hechizado o aturdido."),
+    ],
+  },
+  {
+    id: "eladrin", name: t("Eladrin", "Eladrin"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Fey Step", "Paso feérico", "Bonus action: teleport up to 30 feet; from level 3 your season adds an effect. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: te teletransportas hasta 30 pies; desde el nivel 3 tu estación añade un efecto. Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Keen Senses", "Sentidos agudos", "Proficiency in Perception.", "Competencia en Percepción."),
+      f("Trance", "Trance", "You don't need to sleep; 4 hours of trance give you a Long Rest and a temporary weapon or tool proficiency.", "No necesitas dormir; 4 horas de trance te dan un descanso largo y una competencia temporal con un arma o herramienta."),
+    ],
+    skills: ["perception"],
+    lineageLabel: t("Season", "Estación"),
+    lineages: [
+      ["autumn", "Autumn", "Otoño", "Charm up to two creatures within 10 feet for 1 minute", "Hechizas hasta a dos criaturas a 10 pies durante 1 minuto"],
+      ["winter", "Winter", "Invierno", "Frighten a creature within 5 feet before you teleport", "Asustas a una criatura a 5 pies antes de teletransportarte"],
+      ["spring", "Spring", "Primavera", "Teleport a willing creature within 5 feet instead of yourself", "Teletransportas a una criatura voluntaria a 5 pies en tu lugar"],
+      ["summer", "Summer", "Verano", "Fire damage equal to your proficiency bonus to creatures within 5 feet of where you arrive", "Daño de fuego igual a tu bonificador por competencia a las criaturas a 5 pies de donde apareces"],
+    ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
+  },
+  {
+    id: "fairy", name: t("Fairy", "Hada"), source: "motm2022", creatureType: t("Fey", "Feérico"), size: t("Small", "Pequeño"), speed: 30,
+    traits: [
+      f("Fairy Magic", "Magia feérica", "You know Druidcraft; cast Faerie Fire (level 3) and Enlarge/Reduce (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces Saber druídico; lanzas Fuego feérico (nivel 3) y Agrandar/reducir (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Flight", "Vuelo", "Fly speed equal to your walking speed, as long as you aren't wearing Medium or Heavy armor.", "Velocidad de vuelo igual a tu velocidad caminando, si no llevas armadura media ni pesada."),
+    ],
+  },
+  {
+    id: "firbolg", name: t("Firbolg", "Firbolg"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Firbolg Magic", "Magia firbolg", "Cast Detect Magic and Disguise Self once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Detectar magia y Disfrazarse una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Hidden Step", "Paso oculto", "Bonus action: turn invisible until the start of your next turn or until you attack, deal damage or force a save. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: te vuelves invisible hasta el inicio de tu siguiente turno o hasta que ataques, hagas daño u obligues a una salvación. Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Powerful Build", "Complexión poderosa", "Advantage on checks to end the Grappled condition, and you count as one size larger for carrying capacity.", "Ventaja en pruebas para terminar el estado agarrado, y cuentas como un tamaño mayor para la capacidad de carga."),
+      f("Speech of Beast and Leaf", "Habla de bestias y hojas", "Beasts and plants understand the meaning of your words; you have advantage on Charisma checks to influence them.", "Las bestias y las plantas entienden el sentido de tus palabras; tienes ventaja en pruebas de Carisma para influir en ellas."),
+    ],
+  },
+  {
+    id: "genasi", name: t("Genasi", "Genasi"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Elemental Magic", "Magia elemental", "Your element grants a cantrip, a level 1 spell at level 3 and a level 2 spell at level 5 (once per Long Rest each without a slot), using Intelligence, Wisdom or Charisma.", "Tu elemento te da un truco, un conjuro de nivel 1 al nivel 3 y uno de nivel 2 al nivel 5 (una vez por descanso largo cada uno sin espacio), con Inteligencia, Sabiduría o Carisma."),
+    ],
+    lineageLabel: t("Element", "Elemento"),
+    lineages: [
+      { id: "air", name: t("Air Genasi", "Genasi de aire"), detail: t("Speed 35 ft., lightning resistance, hold breath indefinitely; Shocking Grasp, Feather Fall, Levitate", "Velocidad 35 pies, resistencia al relámpago, aguantas la respiración indefinidamente; Agarre electrizante, Caída de pluma, Levitar"), speed: 35 },
+      { id: "earth", name: t("Earth Genasi", "Genasi de tierra"), detail: t("Ignore difficult terrain of earth or stone; Blade Ward as a bonus action, Pass without Trace", "Ignoras el terreno difícil de tierra o piedra; Custodia contra armas como acción adicional, Pasar sin rastro"), },
+      { id: "fire", name: t("Fire Genasi", "Genasi de fuego"), detail: t("Fire resistance; Produce Flame, Burning Hands, Flame Blade", "Resistencia al fuego; Crear llama, Manos ardientes, Hoja de fuego") },
+      { id: "water", name: t("Water Genasi", "Genasi de agua"), detail: t("Acid resistance, breathe underwater, swim speed; Acid Splash, Create or Destroy Water, Water Walk", "Resistencia al ácido, respiras bajo el agua, velocidad nadando; Salpicadura ácida, Crear o destruir agua, Caminar sobre el agua") },
+    ],
+  },
+  {
+    id: "githyanki", name: t("Githyanki", "Githyanki"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Astral Knowledge", "Conocimiento astral", "After each Long Rest, gain proficiency in one skill and one weapon or tool of your choice until the next one.", "Tras cada descanso largo, ganas competencia en una habilidad y en un arma o herramienta a tu elección hasta el siguiente."),
+      f("Githyanki Psionics", "Psiónica githyanki", "You know an invisible Mage Hand; cast Jump (level 3) and Misty Step (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces una Mano de mago invisible; lanzas Salto (nivel 3) y Paso brumoso (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Psychic Resilience", "Resiliencia psíquica", "Resistance to psychic damage.", "Resistencia al daño psíquico."),
+    ],
+    skillChoice: { count: 1, options: [] },
+  },
+  {
+    id: "githzerai", name: t("Githzerai", "Githzerai"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Githzerai Psionics", "Psiónica githzerai", "You know an invisible Mage Hand; cast Shield (level 3) and Detect Thoughts (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces una Mano de mago invisible; lanzas Escudo (nivel 3) y Detectar pensamientos (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Mental Discipline", "Disciplina mental", "Advantage on saves to avoid or end the Charmed and Frightened conditions.", "Ventaja en salvaciones para evitar o terminar los estados hechizado y asustado."),
+      f("Psychic Resilience", "Resiliencia psíquica", "Resistance to psychic damage.", "Resistencia al daño psíquico."),
+    ],
+  },
+  {
+    id: "goblin", name: t("Goblin", "Goblin"), source: "motm2022", size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Fury of the Small", "Furia de los pequeños", "Once per turn, deal extra damage equal to your proficiency bonus to a creature larger than you. Uses equal to your proficiency bonus per Long Rest.", "Una vez por turno, haces daño extra igual a tu bonificador por competencia a una criatura más grande que tú. Tantos usos como ese bonificador por descanso largo."),
+      f("Nimble Escape", "Huida ágil", "Disengage or Hide as a bonus action.", "Retirarte o Esconderte como acción adicional."),
+    ],
+  },
+  {
+    id: "harengon", name: t("Harengon", "Harengon"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    traits: [
+      f("Hare-Trigger", "Gatillo de liebre", "Add your proficiency bonus to Initiative (already counted on this sheet).", "Sumas tu bonificador por competencia a la iniciativa (ya incluido en esta ficha).", [{ kind: "initiativeBonus", add: "proficiency" }]),
+      f("Leporine Senses", "Sentidos de liebre", "Proficiency in Perception.", "Competencia en Percepción."),
+      f("Lucky Footwork", "Pies afortunados", "Reaction: add 1d4 to a failed Dexterity save, possibly turning it into a success.", "Reacción: sumas 1d4 a una salvación de Destreza fallada, que puede pasar a ser un éxito."),
+      f("Rabbit Hop", "Salto de conejo", "Bonus action: jump 5 × your proficiency bonus feet without provoking Opportunity Attacks. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: saltas 5 × tu bonificador por competencia pies sin provocar ataques de oportunidad. Tantos usos como ese bonificador por descanso largo."),
+    ],
+    skills: ["perception"],
+  },
+  {
+    id: "hobgoblin", name: t("Hobgoblin", "Hobgoblin"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Fey Gift", "Don feérico", "Help as a bonus action; from level 3 it also heals, speeds up or hinders. Uses equal to your proficiency bonus per Long Rest.", "Ayudar como acción adicional; desde el nivel 3 además cura, acelera o entorpece. Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Fortune from the Many", "Fortuna de los muchos", "When you miss or fail a check or save, add +1 for each ally you can see within 30 feet (up to +3). Uses equal to your proficiency bonus per Long Rest.", "Si fallas un ataque, prueba o salvación, sumas +1 por cada aliado que veas a 30 pies (hasta +3). Tantos usos como tu bonificador por competencia por descanso largo."),
+    ],
+  },
+  {
+    id: "kenku", name: t("Kenku", "Kenku"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    traits: [
+      f("Expert Duplication", "Copia experta", "Advantage on checks to forge writing or copy craftwork.", "Ventaja en pruebas para falsificar escritos o copiar obras."),
+      f("Kenku Recall", "Memoria kenku", "Proficiency in two skills of your choice; give yourself advantage on a check with a proficient skill. Uses equal to your proficiency bonus per Long Rest.", "Competencia en dos habilidades a tu elección; te das ventaja en una prueba de una habilidad que domines. Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Mimicry", "Mimetismo", "You can imitate sounds and voices you have heard; telling them apart takes an Insight check.", "Imitas sonidos y voces que hayas oído; distinguirlos exige una prueba de Perspicacia."),
+    ],
+    skillChoice: { count: 2, options: [] },
+  },
+  {
+    id: "kobold", name: t("Kobold", "Kobold"), source: "motm2022", size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Draconic Cry", "Grito dracónico", "Bonus action: until your next turn, you and your allies have advantage on attacks against enemies within 10 feet of you that can hear you. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: hasta tu siguiente turno, tú y tus aliados tenéis ventaja al atacar a enemigos a 10 pies de ti que te oigan. Tantos usos como tu bonificador por competencia por descanso largo."),
+    ],
+    lineageLabel: t("Kobold Legacy", "Legado kobold"),
+    lineages: [
+      { id: "craftiness", name: t("Craftiness", "Astucia"), detail: t("Proficiency in Arcana, Investigation, Medicine, Sleight of Hand or Survival", "Competencia en Arcanos, Investigación, Medicina, Juego de manos o Supervivencia") },
+      { id: "defiance", name: t("Defiance", "Desafío"), detail: t("Advantage on saves to avoid or end the Frightened condition", "Ventaja en salvaciones para evitar o terminar el estado asustado") },
+      { id: "sorcery", name: t("Draconic Sorcery", "Hechicería dracónica"), detail: t("A Sorcerer cantrip, cast with Intelligence, Wisdom or Charisma", "Un truco de hechicero, lanzado con Inteligencia, Sabiduría o Carisma") },
+    ],
+  },
+  {
+    id: "lizardfolk", name: t("Lizardfolk", "Hombre lagarto"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    traits: [
+      f("Bite", "Mordisco", "Your unarmed strikes can deal 1d6 + Strength slashing damage. You also have a swim speed equal to your walking speed.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño cortante. Además, tienes velocidad nadando igual a tu velocidad caminando."),
+      f("Hold Breath", "Aguantar la respiración", "You can hold your breath for up to 15 minutes.", "Puedes aguantar la respiración hasta 15 minutos."),
+      f("Hunter's Lore", "Saber del cazador", "Proficiency in two of Animal Handling, Medicine, Nature, Perception, Stealth and Survival.", "Competencia en dos de Trato con animales, Medicina, Naturaleza, Percepción, Sigilo y Supervivencia."),
+      f("Hungry Jaws", "Fauces hambrientas", "Bonus action: a bite attack that gives you temporary hit points equal to your proficiency bonus if it hits. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: un mordisco que, si impacta, te da puntos de golpe temporales iguales a tu bonificador por competencia. Tantos usos como ese bonificador por descanso largo."),
+      f("Natural Armor", "Armadura natural", "Without armor, your AC is 13 + Dexterity modifier; a shield still adds its bonus.", "Sin armadura, tu CA es 13 + modificador de Destreza; el escudo sigue sumando.", [{ kind: "naturalArmor", base: 13, addDex: true }]),
+    ],
+    skillChoice: { count: 2, options: ["animalHandling", "medicine", "nature", "perception", "stealth", "survival"] },
+  },
+  {
+    id: "minotaur", name: t("Minotaur", "Minotauro"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    traits: [
+      f("Horns", "Cuernos", "Your unarmed strikes can deal 1d6 + Strength piercing damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño perforante."),
+      f("Goring Rush", "Embestida", "When you Dash and move at least 20 feet, make a horns attack as a bonus action.", "Cuando corres y te mueves al menos 20 pies, atacas con los cuernos como acción adicional."),
+      f("Hammering Horns", "Cornada", "After hitting with a melee attack, try to shove the target 10 feet away as a bonus action.", "Tras impactar cuerpo a cuerpo, intentas empujar al objetivo 10 pies como acción adicional."),
+      f("Labyrinthine Recall", "Memoria laberíntica", "You always know which way is north and have advantage on Survival checks to navigate or track.", "Siempre sabes dónde está el norte y tienes ventaja en pruebas de Supervivencia para orientarte o rastrear."),
+    ],
+  },
+  {
+    id: "satyr", name: t("Satyr", "Sátiro"), source: "motm2022", creatureType: t("Fey", "Feérico"), size: t("Medium", "Mediano"), speed: 35,
+    traits: [
+      f("Ram", "Testarazo", "Your unarmed strikes can deal 1d6 + Strength bludgeoning damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño contundente."),
+      f("Magic Resistance", "Resistencia mágica", "Advantage on saving throws against spells.", "Ventaja en las salvaciones contra conjuros."),
+      f("Mirthful Leaps", "Saltos alegres", "Add 1d8 feet to your long or high jumps.", "Sumas 1d8 pies a tus saltos de longitud o altura."),
+      f("Reveler", "Juerguista", "Proficiency in Performance and Persuasion and with one musical instrument.", "Competencia en Interpretación, Persuasión y un instrumento musical."),
+    ],
+    skills: ["performance", "persuasion"],
+  },
+  {
+    id: "seaElf", name: t("Sea Elf", "Elfo marino"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Child of the Sea", "Hijo del mar", "Swim speed equal to your walking speed, you can breathe air and water, and you have resistance to cold damage.", "Velocidad nadando igual a tu velocidad caminando, respiras aire y agua y tienes resistencia al frío."),
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Friend of the Sea", "Amigo del mar", "You can communicate simple ideas to Beasts, Elementals and Monstrosities that have a swim speed.", "Comunicas ideas sencillas a bestias, elementales y monstruosidades con velocidad nadando."),
+      f("Keen Senses", "Sentidos agudos", "Proficiency in Perception.", "Competencia en Percepción."),
+      f("Trance", "Trance", "You don't need to sleep; 4 hours of trance give you a Long Rest and a temporary weapon or tool proficiency.", "No necesitas dormir; 4 horas de trance te dan un descanso largo y una competencia temporal con un arma o herramienta."),
+    ],
+    skills: ["perception"],
+  },
+  {
+    id: "shadarKai", name: t("Shadar-kai", "Shadar-kai"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Blessing of the Raven Queen", "Bendición de la Reina Cuervo", "Bonus action: teleport up to 30 feet; from level 3 you also resist all damage until your next turn. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: te teletransportas hasta 30 pies; desde el nivel 3 además resistes todo el daño hasta tu siguiente turno. Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
+      f("Keen Senses", "Sentidos agudos", "Proficiency in Perception.", "Competencia en Percepción."),
+      f("Necrotic Resistance", "Resistencia necrótica", "Resistance to necrotic damage.", "Resistencia al daño necrótico."),
+      f("Trance", "Trance", "You don't need to sleep; 4 hours of trance give you a Long Rest and a temporary weapon or tool proficiency.", "No necesitas dormir; 4 horas de trance te dan un descanso largo y una competencia temporal con un arma o herramienta."),
+    ],
+    skills: ["perception"],
+  },
+  {
+    id: "tabaxi", name: t("Tabaxi", "Tabaxi"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Cat's Claws", "Garras felinas", "Climb speed equal to your walking speed; your unarmed strikes can deal 1d6 + Strength slashing damage.", "Velocidad trepando igual a tu velocidad caminando; tus ataques sin armas pueden hacer 1d6 + Fuerza de daño cortante."),
+      f("Cat's Talent", "Talento felino", "Proficiency in Perception and Stealth.", "Competencia en Percepción y Sigilo."),
+      f("Feline Agility", "Agilidad felina", "Double your speed until the end of the turn; you can do it again after a turn in which you don't move.", "Duplicas tu velocidad hasta el final del turno; puedes repetirlo tras un turno en el que no te muevas."),
+    ],
+    skills: ["perception", "stealth"],
+  },
+  {
+    id: "tortle", name: t("Tortle", "Tortle"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30,
+    traits: [
+      f("Claws", "Garras", "Your unarmed strikes can deal 1d6 + Strength slashing damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño cortante."),
+      f("Hold Breath", "Aguantar la respiración", "You can hold your breath for up to 1 hour.", "Puedes aguantar la respiración hasta 1 hora."),
+      f("Natural Armor", "Armadura natural", "Your shell gives you AC 17 (Dexterity doesn't apply); you can't wear armor, but a shield still adds its bonus.", "Tu caparazón te da CA 17 (sin sumar Destreza); no puedes llevar armadura, pero el escudo sigue sumando.", [{ kind: "naturalArmor", base: 17, addDex: false }]),
+      f("Nature's Intuition", "Intuición natural", "Proficiency in Animal Handling, Medicine, Nature, Perception, Stealth or Survival.", "Competencia en Trato con animales, Medicina, Naturaleza, Percepción, Sigilo o Supervivencia."),
+      f("Shell Defense", "Defensa del caparazón", "Action: withdraw into your shell for +4 AC and advantage on Strength and Constitution saves, but you are Prone and can't move or react. Bonus action to come out.", "Acción: te metes en el caparazón y ganas +4 a la CA y ventaja en salvaciones de Fuerza y Constitución, pero quedas derribado y no puedes moverte ni reaccionar. Sales con una acción adicional."),
+    ],
+    skillChoice: { count: 1, options: ["animalHandling", "medicine", "nature", "perception", "stealth", "survival"] },
+  },
+  {
+    id: "triton", name: t("Triton", "Tritón"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    traits: [
+      f("Amphibious", "Anfibio", "You can breathe air and water, and you have a swim speed equal to your walking speed.", "Respiras aire y agua, y tienes velocidad nadando igual a tu velocidad caminando."),
+      f("Control Air and Water", "Controlar aire y agua", "Cast Fog Cloud, Gust of Wind (level 3) and Water Walk (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Nube de niebla, Ráfaga de viento (nivel 3) y Caminar sobre el agua (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
+      f("Emissary of the Sea", "Emisario del mar", "You can communicate simple ideas to Beasts, Elementals and Monstrosities that have a swim speed.", "Comunicas ideas sencillas a bestias, elementales y monstruosidades con velocidad nadando."),
+      f("Guardian of the Depths", "Guardián de las profundidades", "Resistance to cold damage.", "Resistencia al daño de frío."),
+    ],
+  },
+  {
+    id: "yuanTi", name: t("Yuan-ti", "Yuan-ti"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    traits: [
+      f("Magic Resistance", "Resistencia mágica", "Advantage on saving throws against spells.", "Ventaja en las salvaciones contra conjuros."),
+      f("Poison Resilience", "Resistencia al veneno", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
+      f("Serpentine Spellcasting", "Conjuros serpentinos", "You know Poison Spray and can cast Animal Friendship on snakes at will; Suggestion once per Long Rest from level 3. Intelligence, Wisdom or Charisma.", "Conoces Rociada venenosa y lanzas Amistad con los animales sobre serpientes a voluntad; Sugestión una vez por descanso largo desde el nivel 3. Con Inteligencia, Sabiduría o Carisma."),
     ],
   },
 ];
