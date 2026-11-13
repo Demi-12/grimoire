@@ -14,9 +14,11 @@ import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { Spinner } from "./skeleton";
 import { LoadingShell } from "./loading-shell";
 import { Icon } from "./icons";
+import { BrandMark, GateBackdrop } from "./brand";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
 
@@ -241,15 +243,14 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
-  useEffect(() => {
-    // Next re-applies the static metadata title whenever a navigation settles, so keep ours in place.
-    const wanted = `${translate(locale, `nav.${view}`)} | Grimoire`;
-    const apply = () => { if (document.title !== wanted) document.title = wanted; };
-    apply();
-    const observer = new MutationObserver(apply);
-    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
-    return () => observer.disconnect();
-  }, [locale, view]);
+  const selectedCharacterName = selectedCharacterId ? characters.find((item) => item.id === selectedCharacterId)?.name : undefined;
+  useDocumentTitle(
+    !sessionChecked ? translate(locale, sessionHint ? `title.${view}` : "title.gate")
+    : !accountId || (meLoadedFor === accountId && !me) ? translate(locale, "title.gate")
+    : me && me.status !== "approved" ? translate(locale, me.status === "blocked" ? "title.blocked" : "title.pending")
+    : selectedCharacterName ? translate(locale, "title.character", { name: selectedCharacterName })
+    : translate(locale, `title.${view}`),
+  );
   useEffect(() => {
     if (view === "admin" && me && me.role !== "admin") router.replace("/");
   }, [view, me, router]);
@@ -284,7 +285,8 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   if (!accountId || !me || me.status !== "approved") {
     const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
     return <div className="gate-shell text-ink">
-      <header className="gate-header"><span className="gate-brand"><span aria-hidden="true">✳︎</span>GRIMOIRE</span>{controls}</header>
+      <GateBackdrop />
+      <header className="gate-header"><span className="gate-brand"><BrandMark size={26} />GRIMOIRE</span>{controls}</header>
       <main className="gate-main" id="main">
       {loadError ? <section className="gate-card" role="alert"><h1>{t("gate.errorTitle")}</h1><p>{t("gate.errorDescription")}</p>
         <button className="button button-primary" onClick={() => window.location.reload()}>{t("gate.retry")}</button></section>
@@ -411,7 +413,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   return <div className="app-shell min-h-screen bg-paper text-ink">
     <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">
-      <button className="brand" onClick={() => setView("home")}><span>✳︎</span><b>GRIMOIRE</b></button>
+      <button className="brand" onClick={() => setView("home")}><BrandMark size={26} /><b>GRIMOIRE</b></button>
       <div className="sidebar-caption">{t("nav.workspace")}</div>
       <nav className="side-nav" aria-label={t("nav.aria")}>
         <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><span aria-hidden="true"><Icon name="home" /></span>{t("nav.home")}</button>
@@ -425,7 +427,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     </aside>
 
     <div className="workspace">
-      <header className="workspace-header"><div className="mobile-brand">✳︎ <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+      <header className="workspace-header"><div className="mobile-brand"><BrandMark size={20} /> <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
         {controls}
         {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
         <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>

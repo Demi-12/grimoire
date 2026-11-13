@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import BattleMap from "@/components/battle-map";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Battle map | Grimoire" };
+export const metadata: Metadata = { title: "Battle map · Grimoire" };
 
 /**
  * A campaign's live battle map. It has its own page (outside the toolkit shell) so it can fill the screen
