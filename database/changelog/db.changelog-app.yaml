@@ -329,3 +329,47 @@ databaseChangeLog:
       rollback:
         - sql:
             sql: DROP TABLE IF EXISTS "battle_map_save";
+
+  - changeSet:
+      id: data-009-usage-analytics
+      author: grimoire
+      comment: >-
+        Usage analytics and error log for the admin dashboard, kept in this database (nothing leaves the server).
+        usage_event: one row per tracked action (character created, encounter generated, page view, ...), with a
+        small JSON of non-personal details. app_error: server and browser errors, grouped by fingerprint.
+        Rows older than 90 days are deleted by the app. Deleting an account keeps its rows but drops the link.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              CREATE TABLE "usage_event" (
+                "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                "occurredAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "userId" TEXT REFERENCES "user" ("id") ON DELETE SET NULL,
+                "name" TEXT NOT NULL CHECK (char_length("name") BETWEEN 1 AND 64),
+                "props" JSONB NOT NULL DEFAULT '{}' CHECK (octet_length("props"::text) <= 2000)
+              );
+              CREATE INDEX "usage_event_time_idx" ON "usage_event" ("occurredAt");
+              CREATE INDEX "usage_event_name_time_idx" ON "usage_event" ("name", "occurredAt");
+              CREATE TABLE "app_error" (
+                "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                "occurredAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+                "userId" TEXT REFERENCES "user" ("id") ON DELETE SET NULL,
+                "source" TEXT NOT NULL CHECK ("source" IN ('server', 'client')),
+                "fingerprint" TEXT NOT NULL CHECK (char_length("fingerprint") <= 64),
+                "name" TEXT NOT NULL CHECK (char_length("name") <= 100),
+                "message" TEXT NOT NULL CHECK (char_length("message") <= 500),
+                "stack" TEXT CHECK (char_length("stack") <= 4000),
+                "route" TEXT CHECK (char_length("route") <= 200),
+                "method" TEXT CHECK (char_length("method") <= 10),
+                "digest" TEXT CHECK (char_length("digest") <= 100),
+                "userAgent" TEXT CHECK (char_length("userAgent") <= 100)
+              );
+              CREATE INDEX "app_error_time_idx" ON "app_error" ("occurredAt");
+              CREATE INDEX "app_error_fingerprint_idx" ON "app_error" ("fingerprint", "occurredAt");
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              DROP TABLE IF EXISTS "app_error";
+              DROP TABLE IF EXISTS "usage_event";

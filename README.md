@@ -118,7 +118,25 @@ El token del túnel es un secreto: guárdalo como GitHub Secret o en el `.env` d
 - **Resto de cabeceras** (`next.config.ts`): `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y `X-Frame-Options` (más `frame-ancestors 'none'` en la CSP).
 - **HSTS**: solo se envía si `BETTER_AUTH_URL` empieza por `https://`, y se lee al arrancar el servidor (la imagen se construye sin `.env`). Sin `includeSubDomains` ni `preload`.
 - **Rate limiting**: better-auth ya limita inicio de sesión, registro y restablecimiento (`auth.ts`). Las rutas de datos tienen un limitador propio en memoria (`src/lib/rate-limit.ts`), por usuario: 60 escrituras/min, 300 cambios del mapa de batalla/min, 30 conexiones al mapa en directo/min, 10 invitaciones/min, 20 altas de miembros/min y 5 importaciones cada 10 min. Los contadores viven en el proceso: con varias réplicas el límite efectivo se multiplica y un reinicio los pone a cero. Hoy `compose.yaml` ejecuta una sola instancia `app`.
-- **Tamaño de cuerpo**: las rutas JSON rechazan cuerpos de más de 64 KB (4 MB en `/api/import`).
+- **Tamaño de cuerpo**: las rutas JSON rechazan cuerpos de más de 64 KB (4 MB en `/api/import`, 16 KB en `/api/telemetry`).
+- **Telemetría** (`/api/telemetry`): 120 eventos/min por cuenta y 20 informes de error/min por cuenta (o por IP antes de iniciar sesión). Solo acepta `Content-Type: application/json`, así que un envío desde otro sitio necesita un *preflight* CORS que la app nunca concede.
+
+## Analíticas de uso y errores
+
+Los admins tienen en **Usuarios → Analíticas** (`/admin/analytics`) un panel con los últimos 7, 30 o 90 días, comparados con el periodo anterior:
+
+- **Indicadores:** cuentas activas (hoy, nuevas y aprobadas), personajes creados (con el creador o en edición rápida), encuentros generados (y guardados en un diario), campañas creadas (y jugadores que se unieron) y errores (cuentas afectadas, de servidor y de navegador), cada uno con su tendencia diaria.
+- **Gráficas:** cuentas activas por día, porcentaje del creador de personajes que termina en un personaje guardado, secciones más visitadas y errores por día. Todas se leen con el teclado (flechas, Inicio y Fin) y las cifras diarias se pueden ver como tabla.
+- **Registro de errores:** agrupados por tipo (misma clase, mensaje sin números y ruta), con número de veces, cuentas afectadas, última y primera vez, dispositivo, *digest* y traza.
+
+Cómo se recoge (todo queda en el PostgreSQL de la app; no hay servicios de terceros ni scripts externos, así que la CSP no cambia):
+
+- **Eventos de servidor:** las rutas de la API registran `character.created`, `character.deleted`, `campaign.created`, `campaign.joined`, `encounter.saved` y `homebrew.created` al terminar bien. El navegador no puede enviar estos nombres.
+- **Eventos del navegador** (`src/lib/telemetry-client.ts` → `/api/telemetry`): `page.view` (sección visitada), `character.wizard_started`, `character.level_up` y `encounter.generated`. Solo cuentan para cuentas aprobadas y solo con los nombres y propiedades permitidos en `src/lib/analytics.ts`.
+- **Errores de servidor:** `src/instrumentation.ts` (`onRequestError` de Next) guarda toda excepción no capturada en rutas de la API, renderizado y *proxy*.
+- **Errores del navegador:** `error` y `unhandledrejection` de `window`, más las pantallas de error de React (`src/app/error.tsx` y `src/app/global-error.tsx`). Como mucho 10 por carga de página, sin repetir el mismo mensaje.
+
+Privacidad: los eventos no llevan nombres, notas ni texto libre; las rutas se guardan como patrón (`/characters/:id`, sin parámetros, así que tampoco tokens de invitación); los mensajes y trazas ocultan correos, UUID y tokens largos, y del navegador solo se guarda «Navegador versión · Sistema». Las filas se borran a los 90 días (la app lo hace sola, como mucho una vez por hora). Al eliminar una cuenta, sus filas se quedan pero pierden el vínculo con ella. Las tablas son `usage_event` y `app_error` (migración `data-009-usage-analytics`) y no entran en la copia de seguridad.
 
 ## Deploy con runner self-hosted
 

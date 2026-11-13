@@ -1,8 +1,8 @@
 /**
  * Fixed-window request limiter kept in this process's memory, no dependencies.
  *
- * Scope: only the data API routes (/api/characters, /api/campaigns (and their battle maps), /api/creatures, /api/homebrew, /api/import), keyed by
- * signed-in user. Sign-in, sign-up and password reset are already limited by better-auth (see `rateLimit`
+ * Scope: only the data API routes (/api/characters, /api/campaigns (and their battle maps), /api/creatures, /api/homebrew, /api/import)
+ * and /api/telemetry, keyed by signed-in user (or, for error reports sent before signing in, by client IP). Sign-in, sign-up and password reset are already limited by better-auth (see `rateLimit`
  * in auth.ts), so they are not repeated here.
  *
  * Multiple instances: counters are per process. Running N replicas behind a load balancer allows up to
@@ -27,6 +27,10 @@ export const MAP_STREAM_LIMIT: RateLimitPolicy = { name: "map-stream", max: 30, 
 export const INVITE_LIMIT: RateLimitPolicy = { name: "invite", max: 10, windowMs: 60_000 };
 /** Adding members by email/name tells the caller whether an account exists. */
 export const MEMBER_LOOKUP_LIMIT: RateLimitPolicy = { name: "member-lookup", max: 20, windowMs: 60_000 };
+/** Usage events sent by the browser (page views, encounters generated, ...). */
+export const TELEMETRY_LIMIT: RateLimitPolicy = { name: "telemetry", max: 120, windowMs: 60_000 };
+/** Browser error reports: a crash loop must not flood the error log. */
+export const ERROR_REPORT_LIMIT: RateLimitPolicy = { name: "error-report", max: 20, windowMs: 60_000 };
 /** Bulk import of up to 200+ rows per call. */
 export const IMPORT_LIMIT: RateLimitPolicy = { name: "import", max: 5, windowMs: 10 * 60_000 };
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { createCharacter, listCharacters } from "@/lib/data";
@@ -20,5 +21,6 @@ export async function POST(request: Request) {
   const input = parseCharacterInput(await readJson(request));
   if (!input) return jsonError(400, "Invalid character.");
   const result = await createCharacter(user, input);
+  if (result.ok) await recordEvent(user.id, "character.created", { mode: input.build ? "creator" : "manual", level: input.level });
   return result.ok ? NextResponse.json({ character: result.value }, { status: 201 }) : dataErrorResponse(result.error);
 }

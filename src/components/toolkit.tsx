@@ -6,6 +6,7 @@ import EncounterBuilder from "@/components/encounter-builder";
 import CampaignManager from "@/components/campaign-manager";
 import BestiaryBrowser from "@/components/bestiary-browser";
 import AdminUsers from "@/components/admin-users";
+import AdminAnalytics from "@/components/admin-analytics";
 import DataBackup from "@/components/data-backup";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { authClient } from "@/lib/auth-client";
@@ -15,6 +16,7 @@ import { sampleCreatures, type Creature } from "@/lib/rules";
 import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
 import { useDocumentTitle } from "@/lib/use-document-title";
+import { track } from "@/lib/telemetry-client";
 import { Spinner } from "./skeleton";
 import { LoadingShell } from "./loading-shell";
 import { Icon } from "./icons";
@@ -27,9 +29,12 @@ type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "ad
 const viewPaths: Record<View, string> = { home: "/", characters: "/characters", campaigns: "/campaigns", encounters: "/encounters", account: "/account", admin: "/admin" };
 /** `/characters/<id>` is the characters view with that character's full sheet open. */
 const characterPath = /^\/characters\/([^/]+)$/;
+/** The admin view has two tabs, each with its own URL. */
+const adminAnalyticsPath = "/admin/analytics";
 function viewFromPath(pathname: string): View {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   if (characterPath.test(normalized)) return "characters";
+  if (normalized === adminAnalyticsPath) return "admin";
   return (Object.keys(viewPaths) as View[]).find((candidate) => viewPaths[candidate] === normalized) ?? "home";
 }
 const characterIdFromPath = (pathname: string): string | null => {
@@ -126,6 +131,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const pathname = usePathname();
   const view = viewFromPath(pathname);
   const selectedCharacterId = characterIdFromPath(pathname);
+  const adminTab = view === "admin" && pathname.replace(/\/+$/, "") === adminAnalyticsPath ? "analytics" : "users";
   const setView = (next: View) => { if (next !== view) router.push(viewPaths[next]); };
   const [locale, setLocale] = useState<Locale>("en");
   const [theme, setTheme] = useState<Theme>("light");
@@ -250,11 +256,18 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     : !accountId || (meLoadedFor === accountId && !me) ? translate(locale, "title.gate")
     : me && me.status !== "approved" ? translate(locale, me.status === "blocked" ? "title.blocked" : "title.pending")
     : selectedCharacterName ? translate(locale, "title.character", { name: selectedCharacterName })
+    : adminTab === "analytics" ? translate(locale, "title.adminAnalytics")
     : translate(locale, `title.${view}`),
   );
   useEffect(() => {
     if (view === "admin" && me && me.role !== "admin") router.replace("/");
   }, [view, me, router]);
+  // One page view per section visited (the open sheet counts apart from the character list).
+  const viewedSection = selectedCharacterId ? "character-sheet" : view;
+  const approved = me?.status === "approved";
+  useEffect(() => {
+    if (approved) track("page.view", { section: viewedSection });
+  }, [approved, viewedSection]);
   useEffect(() => {
     if (!themeReady) return;
     document.documentElement.dataset.theme = theme;
@@ -318,7 +331,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
 
   const ownCharacters = characters.filter((character) => character.editable);
-  const title = t(`nav.${view}`);
+  const title = adminTab === "analytics" ? t("admin.tab.analytics") : t(`nav.${view}`);
 
   async function saveCharacter(draft: CharacterDraft, id?: string) {
     await api(id ? `/api/characters/${id}` : "/api/characters", { method: id ? "PUT" : "POST", body: draft });
@@ -498,8 +511,15 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       </main>}
 
       {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("admin.kicker")}</p><h1>{t("nav.admin")}</h1><p className="title-description">{t("admin.description")}</p></div></div>
-        <AdminUsers me={me} locale={locale} onPendingCount={setPendingCount} />
+        <div className="section-title page-title"><div><p className="eyebrow">{t("admin.kicker")}</p><h1>{t(adminTab === "analytics" ? "admin.analyticsTitle" : "nav.admin")}</h1><p className="title-description">{t(adminTab === "analytics" ? "admin.analyticsDescription" : "admin.description")}</p></div></div>
+        <nav className="admin-tabs" aria-label={t("admin.tabsAria")}>
+          {(["users", "analytics"] as const).map((tab) => <a key={tab} href={tab === "analytics" ? adminAnalyticsPath : viewPaths.admin} aria-current={adminTab === tab ? "page" : undefined}
+            onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); router.push(tab === "analytics" ? adminAnalyticsPath : viewPaths.admin); }}>
+            <span aria-hidden="true"><Icon name={tab === "analytics" ? "analytics" : "users"} /></span>{t(`admin.tab.${tab}`)}
+            {tab === "users" && pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}
+          </a>)}
+        </nav>
+        {adminTab === "analytics" ? <AdminAnalytics locale={locale} /> : <AdminUsers me={me} locale={locale} onPendingCount={setPendingCount} />}
       </main>}
       <footer className="app-footer"><span>{t("footer.brand")}</span><span>{t("footer.rules")}</span></footer>
     </div>

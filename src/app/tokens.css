@@ -11,6 +11,8 @@
  *   --surface        panels and cards, one step above --paper
  *   --gilt-text      gilt that is dark enough to carry text (--gilt itself is for rules and ornaments)
  *   --control-line   border of form fields, at least 3:1 against the panels they sit on (WCAG 1.4.11)
+ *   --status-critical  errors in charts (fixed in both themes); always paired with an icon or words
+ *   --good-text / --bad-text  text for a change that is good or bad news (>= 4.5:1 on --surface)
  */
 :root {
   --ink: #1e1a33;
@@ -24,6 +26,9 @@
   --gilt-text: #6b5313;
   --control-line: #7a7396;
   --leather-deep: #241a45;
+  --status-critical: #d03b3b;
+  --good-text: #1f6b2a;
+  --bad-text: #a3261f;
 
   --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
   --font-body: var(--f-alegreya), Georgia, serif;
@@ -47,5 +52,7 @@
   --gilt-text: #e0c36a;
   --control-line: #7f77a6;
   --leather-deep: #0c0916;
+  --good-text: #6fd38a;
+  --bad-text: #ff9a8f;
   color-scheme: dark;
 }

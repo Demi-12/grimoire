@@ -357,14 +357,15 @@ export async function readInvite(user: AppUser, token: string): Promise<InvitePr
 }
 
 /** Join the invite's campaign as a player; existing members keep their current role. */
-export async function acceptInvite(user: AppUser, token: string): Promise<DataResult<{ campaignId: string }>> {
+export async function acceptInvite(user: AppUser, token: string): Promise<DataResult<{ campaignId: string; joined: boolean }>> {
   const invite = await readInvite(user, token);
   if (!invite) return fail("not-found");
-  await pool.query(
+  const inserted = await pool.query(
     'INSERT INTO "campaign_member" ("campaignId", "userId", "role") VALUES ($1, $2, \'player\') ON CONFLICT ("campaignId", "userId") DO NOTHING',
     [invite.campaignId, user.id],
   );
-  return { ok: true, value: { campaignId: invite.campaignId } };
+  // `joined` is false when the account was already a member (the insert did nothing).
+  return { ok: true, value: { campaignId: invite.campaignId, joined: (inserted.rowCount ?? 0) > 0 } };
 }
 
 export async function listUsersForAdmin(): Promise<AdminUserView[]> {

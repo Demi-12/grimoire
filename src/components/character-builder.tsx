@@ -13,6 +13,7 @@ import { attackList } from "@/lib/character-sheet";
 import { alignments, backgrounds, classes, findClass, say, skillKeys, species as speciesList, standardLanguages, type Feature, type Text } from "@/lib/dnd2024";
 import { MAX_LEVEL } from "@/lib/levelup";
 import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
+import { track } from "@/lib/telemetry-client";
 import { useConfirm, useToast } from "./feedback";
 
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
@@ -148,6 +149,12 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     return () => window.removeEventListener("afterprint", resetPrintState);
   }, []);
 
+  /** Open the creator for a new character (counted to measure how many finish it). */
+  function startWizard(quick: boolean) {
+    setWizard(quick ? { quick: true } : {});
+    track("character.wizard_started", { quick });
+  }
+
   async function save(draft: CharacterDraft) {
     await onSave(draft, editing?.id);
     setShowEditor(false);
@@ -177,6 +184,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
         className: described.className, species: described.species, background: described.background, scores: described.scores }, record.id);
       setLevelingUp(null);
       toast.success(translate(locale, "character.leveledUp", { name: record.name, level: result.level }));
+      track("character.level_up", { level: result.level });
     } catch {
       setError(translate(locale, "character.saveError"));
     }
@@ -233,8 +241,8 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
           <button type="button" className="button button-primary" onClick={() => onSelect(null)}>‹ {translate(locale, "character.backToList")}</button></div>)}
     <div className={`section-heading builder-toolbar${listClass}`}>
       {!showEditor && !wizard && !levelingUp && <div className="builder-actions">
-        <button className="button button-quiet" onClick={() => setWizard({ quick: true })}>{translate(locale, "character.quickButton")}</button>
-        <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.newButton")}</button>
+        <button className="button button-quiet" onClick={() => startWizard(true)}>{translate(locale, "character.quickButton")}</button>
+        <button className="button button-primary" onClick={() => startWizard(false)}>{translate(locale, "character.newButton")}</button>
       </div>}
     </div>
     {wizard && <CharacterWizard locale={locale} quick={wizard.quick} onCancel={() => setWizard(null)} onSave={(result) => void saveFromWizard(result)}
@@ -244,7 +252,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     {showEditor && <CharacterEditor key={editing?.id ?? "new"} character={editing} campaigns={campaigns} locale={locale} onSave={save} onCancel={() => { setShowEditor(false); setEditing(undefined); }} />}
     {error && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
     {characters.length === 0 && !showEditor && !wizard && !levelingUp && !selectedId ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
-      <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.createFirst")}</button></div> :
+      <button className="button button-primary" onClick={() => startWizard(false)}>{translate(locale, "character.createFirst")}</button></div> :
       <div className={`character-grid${listClass}`}>{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
         <div className="character-card-top"><span className="avatar-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><span className="level-pill">{translate(locale, "character.levelPill", { level: character.level })}</span></div>
         <h3>{onSelect ? <Link className="character-name-link" href={`/characters/${encodeURIComponent(character.id)}`}>{character.name}</Link> : character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>

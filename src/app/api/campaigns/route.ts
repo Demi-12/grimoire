@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { createCampaign, listCampaigns } from "@/lib/data";
@@ -20,5 +21,6 @@ export async function POST(request: Request) {
   const input = parseCampaignInput(await readJson(request));
   if (!input) return jsonError(400, "Invalid campaign.");
   const result = await createCampaign(user, input);
+  if (result.ok) await recordEvent(user.id, "campaign.created");
   return result.ok ? NextResponse.json({ campaign: result.value }, { status: 201 }) : dataErrorResponse(result.error);
 }

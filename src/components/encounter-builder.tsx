@@ -1,6 +1,7 @@
 "use client";
 
 import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
+import { track } from "@/lib/telemetry-client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { translate, type Locale } from "@/lib/i18n";
 import {
@@ -262,9 +263,11 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
   const numberLocale = locale === "es" ? "es-ES" : "en-US";
 
   function generate() {
-    setSuggestions(suggestEncounters(pool, partyLevels, difficulty, Math.random, 4, roleProfile,
-      source === "custom" ? { maxCreatures: 20 } : { maxKinds, maxCreatures: 12 }));
+    const results = suggestEncounters(pool, partyLevels, difficulty, Math.random, 4, roleProfile,
+      source === "custom" ? { maxCreatures: 20 } : { maxKinds, maxCreatures: 12 });
+    setSuggestions(results);
     setRoll((current) => current + 1);
+    track("encounter.generated", { difficulty, source, party: partyLevels.length, results: results.length });
   }
 
   return (
