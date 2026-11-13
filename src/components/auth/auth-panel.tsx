@@ -1,13 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Spinner } from "@/components/skeleton";
 
 type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "reset-password" | "two-factor";
 type Locale = "en" | "es";
 
 const copy = {
   en: {
+    kickerSignIn: "BACK AT THE TABLE", kickerSignUp: "A NEW ADVENTURER", kickerForgot: "A LOST KEY", kickerReset: "A NEW KEY", kickerTwoFactor: "THE SECOND SEAL",
+    forgotTitle: "Recover your password", twoFactorTitle: "Two-step verification", backupLabel: "Backup code", or: "or",
+    ledeSignUp: "An admin approves new accounts before they can enter.", ledeForgot: "Enter your account email and we’ll send you a link to choose a new password.",
+    ledeReset: "A phrase of a few words is easy to remember and hard to guess.",
+    ledeTotp: "Open your authenticator app and enter the code it shows for Grimoire.", ledeBackup: "Enter one of the backup codes you saved when you turned on 2FA. Each one works once.",
+    newHere: "New to the Grimoire?", haveAccount: "Already have an account?", backToSignIn: "Back to sign in", showPassword: "Show password",
+    passwordHint: "At least 12 characters.", account: "Account",
     title: "Enter the Grimoire", kicker: "YOUR CAMPAIGN BOOK", name: "Adventurer name", email: "Email",
     password: "Password", confirm: "Confirm password", signIn: "Sign in", signUp: "Create account",
     createAccount: "Create an account", already: "Already have an account? Sign in", forgot: "Forgot password?",
@@ -22,8 +30,18 @@ const copy = {
     enterPassword: "Confirm your password", setup: "Scan the code with an authenticator app, or enter this key manually:",
     totpCode: "6-digit authenticator code", confirmSetup: "Confirm and enable 2FA", backupCodes: "Save these backup codes somewhere safe. Each can be used once.",
     twoFactorOn: "Authenticator-based 2FA is enabled.", signedIn: "Signed in as", signOut: "Sign out", copySecret: "Copy setup key",
+    invalidCode: "That code isn't valid. Check it and try again.", twoFactorExpired: "That sign-in attempt has expired. Enter your email and password again.",
+    tooManyRequests: "Too many attempts. Wait a few seconds and try again.", accountLocked: "Too many wrong codes. Your account is locked for a few minutes.",
+    sessionNotLoaded: "You're signed in, but the session couldn't be loaded. Reload the page.",
   },
   es: {
+    kickerSignIn: "DE VUELTA A LA MESA", kickerSignUp: "UNA NUEVA AVENTURA", kickerForgot: "UNA LLAVE PERDIDA", kickerReset: "UNA LLAVE NUEVA", kickerTwoFactor: "EL SEGUNDO SELLO",
+    forgotTitle: "Recupera tu contraseña", twoFactorTitle: "Verificación en dos pasos", backupLabel: "Código de recuperación", or: "o",
+    ledeSignUp: "Un admin aprueba las cuentas nuevas antes de que puedan entrar.", ledeForgot: "Escribe el correo de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.",
+    ledeReset: "Una frase de varias palabras es fácil de recordar y difícil de adivinar.",
+    ledeTotp: "Abre tu app autenticadora y escribe el código de 6 cifras que muestra para Grimoire.", ledeBackup: "Escribe uno de los códigos de recuperación que guardaste al activar 2FA. Cada uno sirve una sola vez.",
+    newHere: "¿Primera vez en el grimorio?", haveAccount: "¿Ya tienes cuenta?", backToSignIn: "Volver a iniciar sesión", showPassword: "Mostrar contraseña",
+    passwordHint: "Mínimo 12 caracteres.", account: "Cuenta",
     title: "Abre el grimorio", kicker: "TU CUADERNO DE CAMPAÑA", name: "Nombre de aventurero", email: "Correo electrónico",
     password: "Contraseña", confirm: "Confirmar contraseña", signIn: "Iniciar sesión", signUp: "Crear cuenta",
     createAccount: "Crear una cuenta", already: "¿Ya tienes cuenta? Inicia sesión", forgot: "¿Has olvidado la contraseña?",
@@ -38,27 +56,67 @@ const copy = {
     enterPassword: "Confirma tu contraseña", setup: "Escanea el código con una app autenticadora o introduce esta clave manualmente:",
     totpCode: "Código autenticador de 6 cifras", confirmSetup: "Confirmar y activar 2FA", backupCodes: "Guarda estos códigos de recuperación en un lugar seguro. Cada uno se puede usar una vez.",
     twoFactorOn: "La autenticación en dos pasos está activada.", signedIn: "Sesión iniciada como", signOut: "Cerrar sesión", copySecret: "Copiar clave de configuración",
+    invalidCode: "El código no es válido. Revísalo e inténtalo de nuevo.", twoFactorExpired: "Ese inicio de sesión ha caducado. Vuelve a introducir tu correo y contraseña.",
+    tooManyRequests: "Demasiados intentos. Espera unos segundos y vuelve a probar.", accountLocked: "Demasiados códigos incorrectos. La cuenta queda bloqueada unos minutos.",
+    sessionNotLoaded: "Has iniciado sesión, pero no se pudo cargar la sesión. Recarga la página.",
   },
 } as const;
 
-const panelStyle = {
-  width: "min(100%, 460px)", margin: "32px auto", padding: "clamp(22px, 5vw, 38px)",
-  border: "1px solid var(--auth-border)", borderRadius: "4px 14px 4px 14px", background: "var(--auth-panel)",
-  boxShadow: "var(--auth-shadow)",
-} as const;
-
-const inputStyle = {
-  width: "100%", minHeight: 44, padding: "10px 12px", border: "1px solid var(--auth-input-line)", borderRadius: 3,
-  background: "var(--auth-input)", color: "var(--ink)",
-} as const;
 
 function errorText(error: unknown, fallback: string) {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
   return fallback;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label style={{ display: "grid", gap: 6, color: "var(--auth-label)", fontSize: 13 }}>{label}{children}</label>;
+/** Map a failed 2FA verification to our own (translated) message; better-auth's messages are English-only. */
+function twoFactorProblem(error: { code?: string; status?: number }): "expired" | "invalidCode" | "tooManyRequests" | "accountLocked" | null {
+  switch (error.code) {
+    case "INVALID_TWO_FACTOR_COOKIE":
+    case "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE":
+      return "expired";
+    case "INVALID_CODE":
+    case "INVALID_BACKUP_CODE":
+      return "invalidCode";
+    case "ACCOUNT_TEMPORARILY_LOCKED":
+      return "accountLocked";
+  }
+  return error.status === 429 ? "tooManyRequests" : null;
+}
+
+/**
+ * One labelled control. The input sits alone in `.auth-control` (a flex row with no gap), so the icons and
+ * anchors that password managers inject next to it (LastPass, Dashlane, 1Password…) add no row and no
+ * spacing, and nothing around the field moves when an extension loads. `aside` (e.g. "Forgot password?")
+ * is drawn on the label row but comes after the input in tab order.
+ */
+function Field({ id, label, hint, aside, className = "", children }: { id: string; label: string; hint?: string; aside?: ReactNode; className?: string; children: ReactNode }) {
+  return <div className={`auth-field ${className}`.trim()}>
+    <label className="auth-label" htmlFor={id}>{label}</label>
+    <div className="auth-control">{children}</div>
+    {aside}
+    {hint && <p className="auth-hint" id={`${id}-hint`}>{hint}</p>}
+  </div>;
+}
+
+function Glyph({ children }: { children: ReactNode }) {
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{children}</svg>;
+}
+
+/**
+ * Password input with a show/hide button. The button sits outside the input box (joined to its right edge),
+ * so it never collides with the icon a password manager overlays inside the input; revealing only flips
+ * `type`, the element stays mounted so a manager's fill and React's value survive.
+ */
+function PasswordInput({ id, showLabel, hint, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "id"> & { id: string; showLabel: string; hint?: boolean }) {
+  const [revealed, setRevealed] = useState(false);
+  return <>
+    <input {...props} id={id} type={revealed ? "text" : "password"} className="auth-input auth-input-joined" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby={hint ? `${id}-hint` : undefined} />
+    <button type="button" className="auth-reveal" aria-label={showLabel} aria-pressed={revealed} aria-controls={id} onClick={() => setRevealed((value) => !value)}>
+      <Glyph>{revealed
+        ? <><path d="M3 3l18 18" /><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c5.5 0 9 5.5 9.6 7a14 14 0 0 1-3 3.9M6.6 6.6A14.5 14.5 0 0 0 2.4 12c.6 1.5 4.1 7 9.6 7a10 10 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>
+        : <><path d="M2.4 12C3 10.5 6.5 5 12 5s9 5.5 9.6 7c-.6 1.5-4.1 7-9.6 7s-9-5.5-9.6-7z" /><circle cx="12" cy="12" r="3" /></>}</Glyph>
+    </button>
+  </>;
 }
 
 export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: AuthMode; locale?: Locale }) {
@@ -86,10 +144,27 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
       setResetToken(token);
       setMode("reset-password");
     }
-    const showTwoFactor = () => setMode("two-factor");
-    window.addEventListener("grimoire:two-factor-required", showTwoFactor);
-    return () => window.removeEventListener("grimoire:two-factor-required", showTwoFactor);
   }, [locale]);
+
+  /**
+   * Load the new session into better-auth's store; Toolkit then swaps this panel for the app (no full reload,
+   * so the URL the person opened is kept). The sign-in calls pass `disableSignal` so better-auth doesn't fire
+   * its own refetch in parallel; this is the one that counts. If get-session fails (e.g. rate-limited), say so
+   * instead of silently showing the sign-in form again while the cookie is already set.
+   */
+  async function finishSignIn() {
+    await sessionState.refetch();
+    const loaded = (authClient.$store.atoms.session?.get() as { data?: { user?: unknown } | null } | undefined)?.data?.user;
+    if (!loaded) throw new Error(t.sessionNotLoaded);
+  }
+
+  function startTwoFactor() {
+    // The password is no longer needed: the server keeps the challenge in its short-lived two_factor cookie.
+    setPassword("");
+    setCode("");
+    setBackupMode(false);
+    setMode("two-factor");
+  }
 
   const notice = useCallback((text: string) => {
     setError("");
@@ -104,16 +179,17 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
     try {
       if (mode === "sign-up") {
         if (password !== confirmation) throw new Error(t.passwordMismatch);
-        const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: window.location.origin });
+        const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, fetchOptions: { disableSignal: true } });
         if (result.error) throw result.error;
         // The server signs the new account in directly.
-        if (result.data && "token" in result.data && result.data.token) window.location.assign("/");
+        if (result.data && "token" in result.data && result.data.token) await finishSignIn();
         else notice(t.created);
       } else if (mode === "sign-in") {
-        const result = await authClient.signIn.email({ email: email.trim(), password, callbackURL: window.location.origin });
+        // No callbackURL: with one, better-auth's redirect plugin navigates away on success and races this flow.
+        const result = await authClient.signIn.email({ email: email.trim(), password, fetchOptions: { disableSignal: true } });
         if (result.error) throw result.error;
-        if (result.data && "twoFactorRedirect" in result.data && (result.data as { twoFactorRedirect?: boolean }).twoFactorRedirect) setMode("two-factor");
-        else window.location.assign("/");
+        if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect) startTwoFactor();
+        else await finishSignIn();
       } else if (mode === "forgot-password") {
         const result = await authClient.requestPasswordReset({ email: email.trim(), redirectTo: `${window.location.origin}/?auth=reset-password` });
         if (result.error) throw result.error;
@@ -126,11 +202,23 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
         notice(language === "es" ? "Contraseña actualizada. Ya puedes iniciar sesión." : "Password updated. You can sign in now.");
         setMode("sign-in");
       } else if (mode === "two-factor") {
+        const fetchOptions = { disableSignal: true };
         const result = backupMode
-          ? await authClient.twoFactor.verifyBackupCode({ code: code.trim() })
-          : await authClient.twoFactor.verifyTotp({ code: code.trim(), trustDevice: false });
-        if (result.error) throw result.error;
-        window.location.assign("/");
+          ? await authClient.twoFactor.verifyBackupCode({ code: code.trim(), fetchOptions })
+          // Authenticator apps often show "123 456".
+          : await authClient.twoFactor.verifyTotp({ code: code.replace(/\s+/g, ""), trustDevice: false, fetchOptions });
+        if (result.error) {
+          const problem = twoFactorProblem(result.error);
+          if (problem === "expired") {
+            // The server consumed or expired the challenge: only a new password sign-in can start another one.
+            setCode("");
+            setMode("sign-in");
+            setError(t.twoFactorExpired);
+            return;
+          }
+          throw problem ? new Error(t[problem]) : result.error;
+        }
+        await finishSignIn();
       }
     } catch (cause) {
       setError(errorText(cause, t.genericError));
@@ -146,7 +234,7 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
       const result = await authClient.signIn.passkey({});
       const responseError = result.data && "error" in result.data ? result.data.error : undefined;
       if (result.error || responseError) throw result.error ?? responseError;
-      window.location.assign("/");
+      await finishSignIn();
     } catch (cause) {
       setError(errorText(cause, t.genericError));
     } finally {
@@ -158,35 +246,70 @@ export function AuthPanel({ initialMode = "sign-in", locale }: { initialMode?: A
     return <AccountSecurity locale={language} email={session.user.email} onSignOut={async () => { await authClient.signOut(); window.location.assign("/"); }} />;
   }
 
-  const title = mode === "reset-password" ? t.resetTitle : mode === "two-factor" ? t.twoFactor : mode === "sign-up" ? t.createAccount : t.title;
-  const needsPassword = mode === "sign-in" || mode === "sign-up" || mode === "reset-password";
+  const title = mode === "reset-password" ? t.resetTitle : mode === "two-factor" ? t.twoFactorTitle : mode === "sign-up" ? t.createAccount : mode === "forgot-password" ? t.forgotTitle : t.title;
+  const kicker = mode === "reset-password" ? t.kickerReset : mode === "two-factor" ? t.kickerTwoFactor : mode === "sign-up" ? t.kickerSignUp : mode === "forgot-password" ? t.kickerForgot : t.kickerSignIn;
+  const lede = mode === "reset-password" ? t.ledeReset : mode === "two-factor" ? (backupMode ? t.ledeBackup : t.ledeTotp) : mode === "sign-up" ? t.ledeSignUp : mode === "forgot-password" ? t.ledeForgot : "";
+  const submitLabel = mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : mode === "forgot-password" ? t.sendReset : mode === "reset-password" ? t.updatePassword : t.verify;
+  const backToSignIn = () => { setMessage(""); setError(""); setMode("sign-in"); };
 
   return (
-    <section aria-labelledby="auth-title" style={panelStyle}>
-      <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-title" style={{ font: "500 28px/1.2 var(--font-display)", margin: "8px 0 22px", color: "var(--ink)" }}>{title}</h1>
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 15 }}>
-        {mode === "sign-up" && <Field label={t.name}><input style={inputStyle} autoComplete="name" maxLength={100} required value={name} onChange={event => setName(event.target.value)} /></Field>}
-        {(["sign-in", "sign-up", "forgot-password"].includes(mode)) && <Field label={t.email}><input style={inputStyle} type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></Field>}
-        {needsPassword && <Field label={t.password}><input style={inputStyle} type="password" autoComplete={mode === "sign-in" ? "current-password webauthn" : "new-password"} minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} /></Field>}
-        {(mode === "sign-up" || mode === "reset-password") && <Field label={t.confirm}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} /></Field>}
-        {(mode === "two-factor") && <>
-          <Field label={backupMode ? t.backup : t.twoFactor}><input style={inputStyle} inputMode={backupMode ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={event => setCode(event.target.value)} /></Field>
-          <button type="button" className="button button-quiet" onClick={() => { setBackupMode(value => !value); setCode(""); }}>{backupMode ? t.useTotp : t.backup}</button>
+    <section className="auth-panel" aria-labelledby="auth-title" data-mode={mode}>
+      <header className="auth-head">
+        <p className="eyebrow"><span />{kicker}</p>
+        <h1 id="auth-title" className="auth-title">{title}</h1>
+        {lede && <p className="auth-lede" id="auth-lede">{lede}</p>}
+      </header>
+      {/* Live regions stay mounted across steps so a message set while switching step is still announced. */}
+      <div className="auth-feedback" role="status" aria-live="polite">{message && <p className="auth-notice auth-notice-ok">{message}</p>}</div>
+      <div className="auth-feedback" role="alert">{error && <p className="auth-notice auth-notice-error">{error}</p>}</div>
+      {/* One form per step (keyed by mode): password managers see a fresh form with the right autocomplete
+          tokens instead of one form whose fields change meaning under them. */}
+      <form key={mode} id={`auth-${mode}`} name={`auth-${mode}`} className="auth-form" method="post" onSubmit={handleSubmit} aria-describedby={lede ? "auth-lede" : undefined}>
+        {mode === "two-factor" && email && <div className="auth-account">
+          <Glyph><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Glyph>
+          <label className="sr-only" htmlFor="auth-account">{t.account}</label>
+          {/* The account this code is for, as `username`, so managers offer the TOTP saved with that login. */}
+          <input id="auth-account" name="username" className="auth-account-input" type="email" autoComplete="username" value={email} readOnly tabIndex={-1} />
+        </div>}
+        {mode === "sign-up" && <Field id="auth-name" label={t.name}>
+          <input id="auth-name" name="name" className="auth-input" autoComplete="nickname" autoCapitalize="words" maxLength={100} required value={name} onChange={event => setName(event.target.value)} />
+        </Field>}
+        {(mode === "sign-in" || mode === "sign-up" || mode === "forgot-password") && <Field id="auth-email" label={t.email}>
+          <input id="auth-email" name="email" className="auth-input" type="email" inputMode="email" autoComplete={mode === "sign-up" ? "email" : "username"} autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={254} required value={email} onChange={event => setEmail(event.target.value)} />
+        </Field>}
+        {mode === "sign-in" && <Field id="auth-password" label={t.password} aside={<button type="button" className="auth-link auth-field-aside" onClick={() => { setMessage(""); setError(""); setMode("forgot-password"); }}>{t.forgot}</button>}>
+          <PasswordInput id="auth-password" name="password" showLabel={t.showPassword} autoComplete="current-password webauthn" maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} />
+        </Field>}
+        {(mode === "sign-up" || mode === "reset-password") && <>
+          <Field id="auth-new-password" label={mode === "reset-password" ? t.newPassword : t.password} hint={t.passwordHint}>
+            <PasswordInput id="auth-new-password" name="new-password" showLabel={t.showPassword} hint autoComplete="new-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} />
+          </Field>
+          <Field id="auth-confirm-password" label={t.confirm}>
+            <PasswordInput id="auth-confirm-password" name="confirm-password" showLabel={t.showPassword} autoComplete="new-password" minLength={12} maxLength={128} required value={confirmation} onChange={event => setConfirmation(event.target.value)} />
+          </Field>
         </>}
-        {message && <p role="status" style={{ margin: 0, color: "var(--auth-ok)", lineHeight: 1.5 }}>{message}</p>}
-        {error && <p role="alert" style={{ margin: 0, color: "var(--auth-error)", lineHeight: 1.5 }}>{error}</p>}
-        <button className="button button-primary" type="submit" disabled={busy}>
-          {busy ? t.processing : mode === "sign-in" ? t.signIn : mode === "sign-up" ? t.signUp : mode === "forgot-password" ? t.sendReset : mode === "reset-password" ? t.updatePassword : t.verify}
+        {mode === "two-factor" && <Field id="auth-code" label={backupMode ? t.backupLabel : t.twoFactor} className="auth-field-code">
+          {/* A single input so OTP autofill (managers, SMS, iOS) can fill all six digits at once. */}
+          <input id="auth-code" name="code" className={`auth-input auth-code ${backupMode ? "is-backup" : "is-totp"}`} inputMode={backupMode ? "text" : "numeric"} autoComplete="one-time-code" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" autoFocus required minLength={backupMode ? undefined : 6} maxLength={backupMode ? 64 : undefined} value={code} onChange={event => setCode(backupMode ? event.target.value : event.target.value.replace(/\D/g, "").slice(0, 6))} />
+        </Field>}
+        <button className="button button-primary auth-submit" type="submit" disabled={busy} aria-busy={busy}>
+          {busy ? <><Spinner />{t.processing}</> : submitLabel}
         </button>
       </form>
-      {mode === "sign-in" && <div style={{ display: "grid", gap: 12, marginTop: 15 }}>
-        <button type="button" className="button button-quiet" onClick={signInWithPasskey} disabled={busy}>{t.passkey}</button>
-        <button type="button" className="button button-quiet" onClick={() => { setMessage(""); setError(""); setMode("forgot-password"); }}>{t.forgot}</button>
-        <button type="button" className="button button-quiet" onClick={() => { setMessage(""); setError(""); setMode("sign-up"); }}>{t.createAccount}</button>
-      </div>}
-      {mode === "sign-up" && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={() => setMode("sign-in")}>{t.already}</button>}
-      {(mode === "forgot-password" || mode === "reset-password" || mode === "two-factor") && <button type="button" className="button button-quiet" style={{ marginTop: 15, width: "100%" }} onClick={() => { setMessage(""); setError(""); setMode("sign-in"); }}>{t.signIn}</button>}
+      {mode === "sign-in" && <>
+        <div className="auth-divider" aria-hidden="true"><span>{t.or}</span></div>
+        <button type="button" className="button button-quiet auth-alt" onClick={signInWithPasskey} disabled={busy}>
+          <Glyph><circle cx="8" cy="15" r="4.5" /><path d="M11.2 11.8 20 3M16.5 6.5l3 3M18.5 4.5l2 2" /></Glyph>{t.passkey}
+        </button>
+      </>}
+      <footer className="auth-foot">
+        {mode === "sign-in" && <p>{t.newHere} <button type="button" className="auth-link" onClick={() => { setMessage(""); setError(""); setMode("sign-up"); }}>{t.createAccount}</button></p>}
+        {mode === "sign-up" && <p>{t.haveAccount} <button type="button" className="auth-link" onClick={() => setMode("sign-in")}>{t.signIn}</button></p>}
+        {mode === "two-factor" && <button type="button" className="auth-link" onClick={() => { setBackupMode(value => !value); setCode(""); document.getElementById("auth-code")?.focus(); }}>{backupMode ? t.useTotp : t.backup}</button>}
+        {(mode === "forgot-password" || mode === "reset-password" || mode === "two-factor") && <button type="button" className="auth-link auth-back" onClick={backToSignIn}>
+          <Glyph><path d="M19 12H5M11 6l-6 6 6 6" /></Glyph>{t.backToSignIn}
+        </button>}
+      </footer>
     </section>
   );
 }
@@ -296,16 +419,18 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
   };
 
   return (
-    <section aria-labelledby="auth-security-title" style={panelStyle}>
-      <p className="eyebrow"><span />{t.kicker}</p>
-      <h1 id="auth-security-title" style={{ font: "500 27px/1.2 var(--font-display)", margin: "8px 0 5px", color: "var(--ink)" }}>{t.settings}</h1>
-      <p style={{ color: "var(--muted)", marginTop: 0 }}>{t.signedIn} <strong>{email}</strong></p>
+    <section className="auth-panel auth-panel-account" aria-labelledby="auth-security-title">
+      <header className="auth-head">
+        <p className="eyebrow"><span />{t.kicker}</p>
+        <h1 id="auth-security-title" className="auth-title">{t.settings}</h1>
+        <p className="auth-lede">{t.signedIn} <strong>{email}</strong></p>
+      </header>
 
-      <div style={{ display: "grid", gap: 18, marginTop: 24 }}>
-        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>{t.passkeys}</h2>
-          {passkeys.length === 0 ? <p style={{ color: "var(--muted)" }}>{t.noPasskeys}</p> : <ul style={{ paddingLeft: 20, display: "grid", gap: 8 }}>
-            {passkeys.map(key => <li key={key.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+      <div className="auth-sections">
+        <section className="auth-section">
+          <h2 className="auth-section-title">{t.passkeys}</h2>
+          {passkeys.length === 0 ? <p className="auth-section-note">{t.noPasskeys}</p> : <ul className="auth-keys">
+            {passkeys.map(key => <li key={key.id}>
               <span>{key.name || (locale === "es" ? "Clave de acceso" : "Passkey")}</span>
               <button type="button" className="button button-quiet" disabled={busy} onClick={() => void removePasskey(key.id)}>{t.remove}</button>
             </li>)}
@@ -313,42 +438,51 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
           <button type="button" className="button button-primary" disabled={busy} onClick={() => void addPasskey()}>{busy ? t.processing : t.addPasskey}</button>
         </section>
 
-        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>2FA · TOTP</h2>
-          {twoFactorEnabled ? <>
-            <p style={{ color: "var(--auth-ok)" }}>{t.twoFactorOn}</p>
-            <Field label={t.enterPassword}><input style={inputStyle} type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} /></Field>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-              <button type="button" className="button button-quiet" disabled={busy || password.length < 12} onClick={() => void turnOffTwoFactor()}>{t.disableTwoFactor}</button>
-              <button type="button" className="button button-quiet" disabled={busy || password.length < 12} onClick={() => void rotateBackupCodes()}>{t.rotateCodes}</button>
-            </div>
-          </> : <>
-            <Field label={t.enterPassword}><input style={inputStyle} type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} /></Field>
+        <section className="auth-section">
+          <h2 className="auth-section-title">2FA · TOTP</h2>
+          {twoFactorEnabled && <p className="auth-section-note auth-section-ok">{t.twoFactorOn}</p>}
+          <Field id="security-2fa-password" label={t.enterPassword}>
+            <PasswordInput id="security-2fa-password" name="password" showLabel={t.showPassword} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
+          </Field>
+          {twoFactorEnabled ? <div className="auth-actions">
+            <button type="button" className="button button-quiet" disabled={busy || password.length < 12} onClick={() => void turnOffTwoFactor()}>{t.disableTwoFactor}</button>
+            <button type="button" className="button button-quiet" disabled={busy || password.length < 12} onClick={() => void rotateBackupCodes()}>{t.rotateCodes}</button>
+          </div> : <div className="auth-actions">
             <button type="button" className="button button-primary" disabled={busy || password.length < 12 || Boolean(totpUri)} onClick={() => void startTwoFactor()}>{t.enableTwoFactor}</button>
-          </>}
-          {totpUri && <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+          </div>}
+          {totpUri && <div className="auth-setup">
             <p>{t.setup}</p>
-            <code style={{ overflowWrap: "anywhere", padding: 10, background: "var(--auth-code)", border: "1px solid var(--line)" }}>{new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri}</code>
+            <code className="auth-secret">{new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri}</code>
             <button type="button" className="button button-quiet" onClick={() => { const key = new URLSearchParams(totpUri.split("?")[1] ?? "").get("secret") ?? totpUri; void navigator.clipboard?.writeText(key); }}>{t.copySecret}</button>
-            <Field label={t.totpCode}><input style={inputStyle} inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={event => setTotpCode(event.target.value)} /></Field>
+            <Field id="security-totp" label={t.totpCode} className="auth-field-code">
+              <input id="security-totp" name="code" className="auth-input auth-code is-totp" inputMode="numeric" autoComplete="one-time-code" autoCorrect="off" spellCheck={false} value={totpCode} onChange={event => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
+            </Field>
             <button type="button" className="button button-primary" disabled={busy || totpCode.length < 6} onClick={() => void confirmTwoFactor()}>{t.confirmSetup}</button>
           </div>}
-          {backupCodes.length > 0 && <div role="status" style={{ marginTop: 12 }}><p>{t.backupCodes}</p><code style={{ display: "block", whiteSpace: "pre-wrap", padding: 10, background: "var(--auth-code)" }}>{backupCodes.join("\n")}</code></div>}
+          {backupCodes.length > 0 && <div role="status" className="auth-setup"><p>{t.backupCodes}</p><code className="auth-secret auth-backup-codes">{backupCodes.join("\n")}</code></div>}
         </section>
 
-        <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16 }}>
-          <h2 style={{ font: "500 18px var(--font-display)", margin: "0 0 10px", color: "var(--ink)" }}>{t.changePassword}</h2>
-          <form onSubmit={event => void changePassword(event)} style={{ display: "grid", gap: 12 }}>
-            <Field label={t.currentPassword}><input style={inputStyle} type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} /></Field>
-            <Field label={t.newPassword}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={event => setNewPassword(event.target.value)} /></Field>
-            <Field label={t.confirm}><input style={inputStyle} type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPasswordConfirm} onChange={event => setNewPasswordConfirm(event.target.value)} /></Field>
-            <button type="submit" className="button button-primary" disabled={busy}>{busy ? t.processing : t.savePassword}</button>
+        <section className="auth-section">
+          <h2 className="auth-section-title">{t.changePassword}</h2>
+          <form id="auth-change-password" className="auth-form" method="post" onSubmit={event => void changePassword(event)}>
+            {/* Tells password managers which saved login to update. */}
+            <input className="sr-only" type="email" name="username" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />
+            <Field id="security-current-password" label={t.currentPassword}>
+              <PasswordInput id="security-current-password" name="current-password" showLabel={t.showPassword} autoComplete="current-password" minLength={12} maxLength={128} required value={password} onChange={event => setPassword(event.target.value)} />
+            </Field>
+            <Field id="security-new-password" label={t.newPassword} hint={t.passwordHint}>
+              <PasswordInput id="security-new-password" name="new-password" showLabel={t.showPassword} hint autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={event => setNewPassword(event.target.value)} />
+            </Field>
+            <Field id="security-confirm-password" label={t.confirm}>
+              <PasswordInput id="security-confirm-password" name="confirm-password" showLabel={t.showPassword} autoComplete="new-password" minLength={12} maxLength={128} required value={newPasswordConfirm} onChange={event => setNewPasswordConfirm(event.target.value)} />
+            </Field>
+            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? <><Spinner />{t.processing}</> : t.savePassword}</button>
           </form>
         </section>
       </div>
-      {message && <p role="status" style={{ color: "var(--auth-ok)" }}>{message}</p>}
-      {error && <p role="alert" style={{ color: "var(--auth-error)" }}>{error}</p>}
-      <button type="button" className="button button-quiet" style={{ marginTop: 20, width: "100%" }} onClick={onSignOut}>{t.signOut}</button>
+      <div className="auth-feedback" role="status" aria-live="polite">{message && <p className="auth-notice auth-notice-ok">{message}</p>}</div>
+      <div className="auth-feedback" role="alert">{error && <p className="auth-notice auth-notice-error">{error}</p>}</div>
+      <button type="button" className="button button-quiet auth-signout" onClick={onSignOut}>{t.signOut}</button>
     </section>
   );
 }

@@ -14,7 +14,8 @@ import { LEGACY_CHARACTERS_LOCATION, storageLocation } from "@/lib/storage";
 import { sampleCreatures, type Creature } from "@/lib/rules";
 import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
-import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
+import { Spinner } from "./skeleton";
+import { LoadingShell } from "./loading-shell";
 import { Icon } from "./icons";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
@@ -98,9 +99,18 @@ function toCreature(item: CatalogCreature): Creature {
   return { id: item.id, name: item.name, xp: item.xp, source: item.source, roleTags: item.roleTags as Creature["roleTags"], monsterSlug: item.monsterSlug };
 }
 
-export default function Toolkit() {
+/**
+ * `sessionHint`: the server saw a session cookie on this request (see (app)/layout.tsx). It only picks
+ * which skeleton to paint before get-session answers; access is decided by the real session.
+ */
+export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean }) {
   const authSession = authClient.useSession();
   const accountId = authSession.data?.user.id;
+  // better-auth sets `isPending` again on every refetch while signed out (sign-in, 2FA, passkey, tab focus).
+  // Only the first check may show the skeleton: unmounting AuthPanel later would drop its step (e.g. the
+  // 2FA code form) and what the person typed.
+  const [sessionChecked, setSessionChecked] = useState(false);
+  if (!sessionChecked && !authSession.isPending) setSessionChecked(true);
   const [me, setMe] = useState<Me | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [meLoadedFor, setMeLoadedFor] = useState<string | null>(null);
@@ -253,19 +263,11 @@ export default function Toolkit() {
     }
   }, [theme, themeReady]);
 
-  const loading = <main className="app-shell min-h-screen bg-paper text-ink" aria-busy="true">
-    <aside className="sidebar" aria-hidden="true"><div className="skeleton-shell-nav">{[0, 1, 2, 3, 4].map((item) => <Skeleton key={item} height={34} />)}</div></aside>
-    <div className="workspace">
-      <SkeletonRegion label={locale === "es" ? "Abriendo el grimorio…" : "Opening the Grimoire…"} className="page-content">
-        <div className="skeleton-grid">
-          <Skeleton width="38%" height={38} /><Skeleton width="55%" height={14} />
-          <div className="tool-grid">{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-card"><Skeleton width={28} height={28} className="skeleton-circle" /><Skeleton width="60%" height={14} /><Skeleton width="30%" height={26} /></div>)}</div>
-          {[0, 1, 2].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="45%" height={14} /></div></div>)}
-        </div>
-      </SkeletonRegion>
-    </div>
-  </main>;
-  if (authSession.isPending || (accountId && meLoadedFor !== accountId)) return loading;
+  // Signed-in shell only when a session is known (or, before the first check, the server saw its cookie);
+  // otherwise the sign-in page's shape, so a visitor never sees a dashboard flash before the gate.
+  const loading = <LoadingShell locale={locale} activeNav={(["home", "characters", "campaigns", "encounters", "account"] as View[]).indexOf(view)}
+    variant={accountId || (!sessionChecked && sessionHint) ? (view === "home" ? "home" : "section") : "gate"} />;
+  if (!sessionChecked || (accountId && meLoadedFor !== accountId)) return loading;
 
   function savePreference(preference: { locale: Locale } | { theme: Theme }) {
     if (accountId) api("/api/me", { method: "PATCH", body: preference }).catch(() => undefined);
@@ -281,11 +283,21 @@ export default function Toolkit() {
   // Everyone must sign in; new accounts wait for an admin before they see any shared data.
   if (!accountId || !me || me.status !== "approved") {
     const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
-    return <main className="gate-shell min-h-screen bg-paper text-ink">
-      <header className="gate-header"><span className="gate-brand">✳︎ GRIMOIRE</span>{controls}</header>
+    return <div className="gate-shell text-ink">
+      <header className="gate-header"><span className="gate-brand"><span aria-hidden="true">✳︎</span>GRIMOIRE</span>{controls}</header>
+      <main className="gate-main" id="main">
       {loadError ? <section className="gate-card" role="alert"><h1>{t("gate.errorTitle")}</h1><p>{t("gate.errorDescription")}</p>
         <button className="button button-primary" onClick={() => window.location.reload()}>{t("gate.retry")}</button></section>
-      : !accountId || !me ? <><p className="gate-intro">{t("gate.intro")}</p><AuthPanel locale={locale} /></>
+      : !accountId || !me ? <div className="gate-stage">
+        <div className="gate-cover">
+          <span className="gate-seal" aria-hidden="true">✳︎</span>
+          <p className="eyebrow gate-cover-kicker"><span />{t("gate.coverKicker")}</p>
+          <p className="gate-cover-title">{t("gate.coverTitle")}</p>
+          <p className="gate-intro">{t("gate.intro")}</p>
+          <ul className="gate-features">{(["characters", "campaigns", "encounters"] as const).map((name) => <li key={name}><Icon name={name} />{t(`nav.${name}`)}</li>)}</ul>
+        </div>
+        <AuthPanel locale={locale} />
+      </div>
       : <section className="gate-card" aria-labelledby="gate-title">
         <p className="eyebrow"><span />{t(me.status === "blocked" ? "gate.blockedKicker" : "gate.pendingKicker")}</p>
         <h1 id="gate-title">{t(me.status === "blocked" ? "gate.blockedTitle" : "gate.pendingTitle", { name: me.name })}</h1>
@@ -295,7 +307,8 @@ export default function Toolkit() {
           <button className="button button-quiet" onClick={() => void signOut()}>{t("gate.signOut")}</button>
         </div>
       </section>}
-    </main>;
+      </main>
+    </div>;
   }
   if (dataLoadedFor !== accountId) return loading;
 

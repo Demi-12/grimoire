@@ -73,6 +73,9 @@ export const auth = betterAuth({
     window: 60,
     max: 100,
     customRules: {
+      // Read-only and called on every page load, tab focus and sign-in step. Throttling it (100/min per IP by
+      // default, and per *proxy* IP if the client IP isn't resolved) made signed-in people look signed out.
+      "/get-session": false,
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 60, max: 5 },
       "/request-password-reset": { window: 60, max: 3 },
@@ -89,5 +92,9 @@ export const auth = betterAuth({
   advanced: {
     // Browsers drop Secure cookies over plain HTTP (e.g. http://192.168.x.x:3000), which would break sign-in.
     useSecureCookies: baseURL.startsWith("https://"),
+    // Client IP for rate limits. Behind the Cloudflare tunnel, CF-Connecting-IP is the visitor (one value, set by
+    // Cloudflare); X-Forwarded-For can hold a chain, which better-auth rejects, so every visitor would share one
+    // bucket. Without either (LAN, `next dev`), Next fills X-Forwarded-For with the socket address.
+    ipAddress: { ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"] },
   },
 });

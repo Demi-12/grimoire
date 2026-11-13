@@ -323,10 +323,6 @@ body {
 .editor-panel select,.party-campaign-select select{border:1px solid var(--line);background:#fcfbfd;border-radius:2px;padding:10px 11px;min-width:0;color:var(--ink);font-size:12px}
 .party-campaign-select{display:grid;gap:6px;margin:0 0 10px;color:var(--muted);font-size:var(--text-xs)}
 .party-campaign-select select{padding:8px}
-.gate-shell{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 16px 48px;background:radial-gradient(ellipse at 50% -10%,rgba(255,255,255,.55),transparent 60%),var(--paper)}
-.gate-header{width:min(1120px,100%);height:62px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}
-.gate-brand{font:13px var(--font-label);letter-spacing:.15em;color:var(--crimson)}
-.gate-intro{max-width:460px;margin:36px auto 0;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
 .gate-card{width:min(100%,520px);margin:56px auto 0;padding:clamp(22px,5vw,38px);border:1px solid var(--line);background:var(--surface);box-shadow:inset 0 0 0 4px var(--surface),inset 0 0 0 5px rgba(112,92,158,.35),0 16px 45px rgba(32,26,47,.12)}
 .gate-card h1{font:500 clamp(24px,4vw,30px)/1.2 var(--font-display);margin:6px 0 12px}
 .gate-card p:not(.eyebrow){color:var(--muted);line-height:1.6;font-size:13px}
@@ -365,7 +361,6 @@ body {
 .admin-actions button:disabled,.admin-actions select:disabled{opacity:.55;cursor:not-allowed}
 @media (max-width:720px){.admin-user{grid-template-columns:38px minmax(0,1fr)}.admin-actions{grid-column:1/-1;justify-content:flex-start}}
 :root[data-theme="dark"] .editor-panel select,:root[data-theme="dark"] .party-campaign-select select{background:#26232d;border-color:#3b3549;color:var(--ink)}
-:root[data-theme="dark"] .gate-shell{background:var(--paper)}
 :root[data-theme="dark"] .admin-error{color:#ffc1a7;border-color:#8d5141;background:rgba(131,56,45,.18)}
 
 /* Large screens: header, content and footer share one centred column so their edges line up. */
@@ -436,33 +431,199 @@ body { font-variant-emoji: text; }
   .import-banner>div .button{flex:1 1 120px}
 }
 
-/* Account / sign-in panel tokens (consumed by inline styles in auth-panel.tsx) */
+/* ───────────── Sign-in gate and account panel (auth-panel.tsx, the gate in toolkit.tsx) ───────────── */
 :root {
-  --auth-border: #8a7baf;
-  --auth-panel: rgba(238, 235, 245, .94);
-  --auth-shadow: 0 16px 45px rgba(32, 26, 47, .13);
-  --auth-input: #f6f5fa;
-  --auth-input-line: #a397be;
-  --auth-label: #3f3752;
-  --auth-ok: #4e4661;
-  --auth-error: #9b3a29;
-  --auth-code: #d8d1e8;
+  --auth-surface: var(--surface);
+  --auth-border: var(--line);
+  --auth-shadow: 0 1px 0 rgba(255, 255, 255, .7) inset, 0 22px 60px rgba(36, 26, 69, .16), 0 2px 6px rgba(36, 26, 69, .06);
+  --auth-input: #fdfcff;
+  --auth-input-hover: #f8f6fd;
+  --auth-input-line: var(--control-line);
+  --auth-input-line-hover: #554e78;
+  --auth-focus: var(--crimson);
+  --auth-focus-ring: rgba(90, 45, 156, .24);
+  /* Autofilled fields keep the theme: a faint violet wash instead of the browser's yellow or blue. */
+  --auth-autofill: #efe9fb;
+  --auth-label: #362e4f;
+  --auth-ok: #3d3466;
+  --auth-ok-bg: rgba(184, 150, 46, .11);
+  --auth-ok-line: #b8962e;
+  --auth-error: #8f3222;
+  --auth-error-bg: rgba(155, 58, 41, .07);
+  --auth-error-line: #c4806b;
+  --auth-code: #e7e2f2;
+  --auth-slot: #b3abcd;
 }
 :root[data-theme="dark"] {
-  --auth-border: #453d59;
-  --auth-panel: rgba(32, 30, 37, .94);
-  --auth-shadow: 0 16px 45px rgba(0, 0, 0, .45);
-  --auth-input: #141318;
-  --auth-input-line: #49405f;
-  --auth-label: #bfb8d1;
-  --auth-ok: #998db4;
-  --auth-error: #f0a58f;
-  --auth-code: #27232f;
+  --auth-shadow: 0 22px 60px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .3);
+  --auth-input: #0f0c1b;
+  --auth-input-hover: #141024;
+  --auth-input-line-hover: #a39ad0;
+  --auth-focus-ring: rgba(183, 156, 242, .28);
+  --auth-autofill: #1d1735;
+  --auth-label: #d9d3ee;
+  --auth-ok: #eadfb8;
+  --auth-ok-bg: rgba(224, 195, 106, .08);
+  --auth-ok-line: #a8913e;
+  --auth-error: #f5b4a1;
+  --auth-error-bg: rgba(240, 165, 143, .08);
+  --auth-error-line: #9a5a48;
+  --auth-code: #221c38;
+  --auth-slot: #5b5385;
+}
+
+/* The gate is not scaled by the desktop --ui-zoom: password-manager extensions place their in-field icons
+   from getBoundingClientRect(), and a zoomed <html> scales those positions a second time (off the input). */
+:root:has(.gate-shell) { --ui-zoom: 1; }
+.gate-shell{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:0 16px}
+.gate-header{width:min(980px,100%);min-height:64px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}
+.gate-brand{display:inline-flex;align-items:center;gap:10px;margin-right:auto;font:500 15px/1 var(--font-display);letter-spacing:.2em;color:var(--ink)}
+.gate-brand>span{font-size:18px;color:var(--gilt);letter-spacing:0}
+.gate-header .header-controls{display:inline-flex;align-items:center;gap:8px}
+.gate-header .header-select{display:inline-flex}
+.gate-header .header-control{box-sizing:border-box;height:36px;display:inline-flex;align-items:center;gap:7px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:500 14px/1 var(--font-display);letter-spacing:.03em;cursor:pointer}
+.gate-header select.header-control{padding-right:8px}
+.gate-header .header-control:hover{border-color:var(--gilt)}
+.gate-header .header-control:focus-visible{outline:2px solid var(--crimson);outline-offset:2px}
+.gate-main{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(20px,6vh,64px) 0 clamp(28px,6vh,64px)}
+.gate-main:focus{outline:none}
+.gate-stage{width:min(980px,100%);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1fr);background:var(--surface);border:1px solid var(--line);box-shadow:var(--auth-shadow)}
+.gate-cover{position:relative;display:flex;flex-direction:column;align-items:flex-start;padding:52px 46px 44px;color:#ddd6ee;background:radial-gradient(ellipse at 90% 8%,rgba(122,74,196,.5),transparent 55%),radial-gradient(ellipse at 0% 100%,rgba(216,170,85,.12),transparent 50%),linear-gradient(155deg,#38245a,#211631 70%);box-shadow:inset 0 0 0 8px #2a1b40,inset 0 0 0 9px rgba(216,170,85,.42)}
+.gate-seal{width:58px;height:58px;display:grid;place-items:center;margin-bottom:30px;border-radius:50%;border:1px solid rgba(226,180,92,.55);box-shadow:inset 0 0 0 4px rgba(226,180,92,.1),0 0 0 5px rgba(226,180,92,.07);color:#e8c06a;font-size:26px;line-height:1}
+.gate-cover .eyebrow.gate-cover-kicker{margin:0 0 12px;color:#dcc082;letter-spacing:.08em}
+.gate-cover .eyebrow.gate-cover-kicker>span{background:#e2b45c}
+.gate-cover-title{margin:0;max-width:15em;font:500 clamp(25px,2.6vw,31px)/1.2 var(--font-display);color:#f1edf9;text-wrap:balance}
+.gate-intro{margin:16px 0 0;max-width:30em;color:#c3b9db;font-size:15px;line-height:1.6}
+.gate-features{list-style:none;display:flex;flex-wrap:wrap;gap:8px 20px;margin:auto 0 0;padding:28px 0 0}
+.gate-features li{display:inline-flex;align-items:center;gap:8px;font:500 14px/1 var(--font-label);letter-spacing:.04em;color:#e3d2a6}
+.gate-features .icon{font-size:17px;color:#e2b45c}
+.gate-card{margin-top:0}
+
+.auth-panel{width:min(100%,460px);margin:32px auto;padding:clamp(22px,5vw,36px);background:var(--auth-surface);border:1px solid var(--auth-border);box-shadow:var(--auth-shadow);color:var(--ink)}
+.gate-stage .auth-panel{width:auto;margin:0;padding:48px clamp(28px,5vw,56px) 36px;border:0;background:transparent;box-shadow:none;display:flex;flex-direction:column}
+.auth-head{margin-bottom:24px}
+.auth-head .eyebrow{margin:0 0 10px}
+.auth-head .eyebrow>span{background:var(--gilt)}
+.auth-title{margin:0;font:500 clamp(27px,3vw,32px)/1.15 var(--font-display);letter-spacing:.01em;color:var(--ink);text-wrap:balance}
+.auth-lede{margin:10px 0 0;color:var(--muted);font-size:15.5px;line-height:1.55;overflow-wrap:anywhere}
+.auth-lede strong{color:var(--ink);font-weight:500}
+.auth-feedback>.auth-notice{margin:0 0 20px}
+.auth-notice{padding:11px 14px;border:1px solid;border-left-width:3px;font-size:15px;line-height:1.5}
+.auth-notice-ok{color:var(--auth-ok);background:var(--auth-ok-bg);border-color:var(--auth-ok-line)}
+.auth-notice-error{color:var(--auth-error);background:var(--auth-error-bg);border-color:var(--auth-error-line)}
+.auth-form{display:grid;gap:20px;animation:auth-step .2s ease-out}
+@keyframes auth-step{from{opacity:0}}
+
+/* Label row (label + optional aside), then the control, then a hint. The aside comes after the input in the
+   DOM (tab order: password, then "Forgot password?") but is drawn on the label row. */
+.auth-field{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"label aside" "control control" "hint hint";align-items:end;column-gap:12px;min-width:0}
+.auth-label{grid-area:label;margin-bottom:8px;font:500 15px/1.3 var(--font-statblock);letter-spacing:.01em;color:var(--auth-label)}
+.auth-field-aside{grid-area:aside;justify-self:end;margin-bottom:5px;font-size:14px}
+.auth-hint{grid-area:hint;margin:7px 0 0;font-size:14px;line-height:1.4;color:var(--muted)}
+/* The control row: the input alone (plus our reveal button). Flex with no gap, so anything an extension
+   injects beside the input takes no room; its fixed height keeps every field the same size from first paint. */
+.auth-control{grid-area:control;position:relative;display:flex;align-items:stretch;min-width:0;border-radius:4px;transition:box-shadow .15s}
+.auth-input{flex:1 1 auto;width:100%;min-width:0;height:48px;margin:0;padding:0 14px;border:1px solid var(--auth-input-line);border-radius:4px;background:var(--auth-input);color:var(--ink);font:400 16px/1.2 var(--font-statblock);letter-spacing:.01em;box-shadow:none;outline:none;appearance:none;transition:border-color .15s,background-color .15s}
+.auth-input:hover{border-color:var(--auth-input-line-hover)!important;background-color:var(--auth-input-hover)}
+.auth-input:focus{border-color:var(--auth-focus)!important;background-color:var(--auth-input)}
+.auth-input:focus-visible{outline:none}
+.auth-control:has(>.auth-input:focus){box-shadow:0 0 0 3px var(--auth-focus-ring)}
+.auth-input[aria-invalid="true"],.auth-input:user-invalid{border-color:var(--auth-error-line)!important}
+.auth-input::placeholder{color:var(--muted);opacity:.7}
+.auth-input::-ms-reveal,.auth-input::-ms-clear{display:none}
+/* Browser and extension autofill: keep our colours (Chrome paints its own background, which only an inset
+   shadow can cover) and fade nothing in, so a filled field doesn't flash yellow or blue. */
+.auth-input:-webkit-autofill,.auth-input:-webkit-autofill:hover,.auth-input:-webkit-autofill:focus{-webkit-text-fill-color:var(--ink);caret-color:var(--ink);-webkit-box-shadow:0 0 0 100px var(--auth-autofill) inset;box-shadow:0 0 0 100px var(--auth-autofill) inset;transition:background-color 100000s step-end,color 100000s step-end}
+.auth-input:autofill{-webkit-text-fill-color:var(--ink);box-shadow:0 0 0 100px var(--auth-autofill) inset}
+.auth-input-joined{border-right-width:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.auth-reveal{flex:none;width:48px;display:grid;place-items:center;margin:0;padding:0;border:1px solid var(--auth-input-line);border-left-width:0;border-radius:0 4px 4px 0;background:var(--auth-input);color:var(--muted);cursor:pointer;transition:color .15s,background-color .15s}
+.auth-reveal:hover{color:var(--ink);background:var(--auth-input-hover)}
+.auth-reveal[aria-pressed="true"]{color:var(--crimson)}
+.auth-reveal:focus-visible{outline:2px solid var(--auth-focus);outline-offset:2px}
+.auth-control:has(>.auth-input:focus)>.auth-reveal{border-color:var(--auth-focus)}
+.auth-control:has(>.auth-input:hover:not(:focus))>.auth-reveal{border-color:var(--auth-input-line-hover)}
+
+/* One-time code: one input (so OTP autofill fills all six digits), drawn as six slots. Tabular digits are
+   exactly 1ch wide, so a 1.6ch pitch (1ch digit + .6ch letter-spacing) lines each digit up over its slot. */
+.auth-field-code .auth-label{justify-self:start}
+.auth-field-code .auth-control:has(>.is-totp){justify-self:start}
+.auth-code.is-totp{--slot-pad:18px;--slot:var(--auth-slot);--code-bg:var(--auth-input);flex:none;width:calc(9.3ch + 2 * var(--slot-pad) + .5ch + 2px);height:64px;padding:0 calc(var(--slot-pad) + .5ch) 4px var(--slot-pad);font:500 28px/1 ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;font-variant-numeric:tabular-nums lining-nums;letter-spacing:.6ch;text-indent:.15ch;background-color:var(--code-bg);background-image:linear-gradient(90deg,var(--slot) 1.3ch,transparent 1.3ch),linear-gradient(var(--code-bg),var(--code-bg));background-size:1.6ch 2px,auto;background-repeat:repeat-x,no-repeat;background-position:0 calc(100% - 12px),0 0;background-origin:content-box,border-box;background-clip:content-box,border-box}
+.auth-code.is-totp:hover{--code-bg:var(--auth-input-hover)}
+.auth-code.is-totp:focus{--slot:var(--auth-focus);--code-bg:var(--auth-input)}
+.auth-code.is-backup{font:500 18px/1.2 var(--font-statblock);letter-spacing:.08em}
+.auth-account{display:flex;align-items:center;gap:10px;min-width:0;padding:9px 14px;border:1px dashed var(--line);border-radius:999px;color:var(--muted)}
+.auth-account>svg{flex:none}
+.auth-account-input{flex:1;min-width:0;height:auto;margin:0;padding:0;border:0!important;background:transparent;color:var(--ink);font:500 15px/1.3 var(--font-statblock);text-overflow:ellipsis;outline:none;pointer-events:none}
+
+.button.auth-submit{width:100%;min-height:50px;margin-top:4px;font-size:17px;letter-spacing:.03em}
+.auth-submit .spinner{margin-right:.6em}
+.auth-divider{display:flex;align-items:center;gap:14px;margin:22px 0 18px;color:var(--muted);font:500 14px/1 var(--font-label);letter-spacing:.08em}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.button.auth-alt{width:100%;min-height:48px;gap:10px;font-size:16px;background:transparent}
+.auth-alt svg{color:var(--crimson)}
+.auth-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 22px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px;text-align:center}
+.auth-foot:empty{display:none}
+.auth-foot p{margin:0}
+.auth-link{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0;border:0;background:none;color:var(--crimson);font-family:var(--font-body);font-weight:600;font-size:inherit;line-height:1.3;cursor:pointer;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-decoration-thickness:1px;text-underline-offset:3px}
+.auth-link:hover{text-decoration-color:currentColor}
+.auth-link:focus-visible{outline:2px solid var(--auth-focus);outline-offset:3px;border-radius:2px}
+.auth-back{text-decoration:none}
+.auth-back:hover{text-decoration:underline}
+
+/* Account security (signed in) */
+.auth-panel-account{width:min(100%,560px)}
+.auth-sections{display:grid;gap:26px}
+.auth-section{display:grid;gap:14px;padding-top:20px;border-top:1px solid var(--line)}
+.auth-section>.button{justify-self:start}
+.auth-section-title{margin:0;font:500 20px/1.2 var(--font-display);color:var(--ink)}
+.auth-section-note{margin:0;color:var(--muted)}
+.auth-section-ok{color:var(--auth-ok)}
+.auth-keys{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.auth-keys li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dotted var(--line)}
+.auth-actions{display:flex;flex-wrap:wrap;gap:8px}
+.auth-setup{display:grid;gap:12px}
+.auth-setup p{margin:0}
+.auth-setup>.button{justify-self:start}
+.auth-secret{display:block;padding:10px 12px;background:var(--auth-code);border:1px solid var(--line);overflow-wrap:anywhere;font-size:14px}
+.auth-backup-codes{white-space:pre-wrap}
+.auth-signout{width:100%;margin-top:22px}
+.auth-panel-account .auth-feedback>.auth-notice{margin:20px 0 0}
+
+@media (max-width: 820px) {
+  .gate-stage{grid-template-columns:minmax(0,1fr);width:min(520px,100%)}
+  .gate-cover{padding:26px 26px 24px}
+  .gate-seal{display:none}
+  .gate-cover-title{font-size:22px}
+  .gate-intro{margin-top:10px;font-size:14px;line-height:1.55}
+  .gate-features{display:none}
+  /* On small screens the cover is only shown with the first step, so later steps start with their form. */
+  .gate-stage:has(.auth-panel:not([data-mode="sign-in"])) .gate-cover{display:none}
+  .gate-stage .auth-panel{padding:30px 26px 26px}
+}
+@media (max-width: 480px) {
+  .gate-shell{padding:0 12px}
+  .gate-header{min-height:56px}
+  .gate-header .header-control{height:34px;padding:0 10px}
+  .gate-header .theme-label{display:none}
+  .gate-main{justify-content:flex-start;padding:14px 0 24px}
+  .gate-cover{padding:20px 20px 18px;box-shadow:inset 0 0 0 5px #2a1b40,inset 0 0 0 6px rgba(216,170,85,.42)}
+  .gate-cover .eyebrow.gate-cover-kicker{margin-bottom:8px}
+  .gate-cover-title{font-size:20px}
+  .gate-stage .auth-panel{padding:24px 20px 20px}
+  .auth-head{margin-bottom:20px}
+  .auth-title{font-size:26px}
+  .auth-form{gap:18px}
+  .auth-foot{gap:6px 18px}
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-form{animation:none}
+  .auth-input,.auth-reveal,.auth-control{transition:none}
 }
 
 /* Loading placeholders */
-.skeleton{display:block;position:relative;overflow:hidden;border-radius:4px;background:color-mix(in srgb,var(--line) 70%,transparent);min-height:12px}
-.skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--paper) 55%,transparent),transparent);animation:skeleton-shimmer 1.4s ease-in-out infinite}
+:root{--skeleton-fill:color-mix(in srgb,var(--line) 70%,transparent);--skeleton-shine:color-mix(in srgb,var(--paper) 55%,transparent)}
+.skeleton{display:block;position:relative;overflow:hidden;border-radius:4px;background:var(--skeleton-fill);min-height:12px}
+.skeleton::after,.skeleton-ghost::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,var(--skeleton-shine),transparent);animation:skeleton-shimmer 1.4s ease-in-out infinite}
 .skeleton-line{height:12px;margin:8px 0}
 .skeleton-text{display:block}
 .skeleton-circle{border-radius:50%}
@@ -470,11 +631,45 @@ body { font-variant-emoji: text; }
 .skeleton-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line)}
 .skeleton-row>.skeleton-grow{flex:1;min-width:0}
 .skeleton-grid{display:grid;gap:12px}
-.skeleton-shell-nav{display:grid;gap:10px;padding:14px}
+/* Loading shells (components/loading-shell.tsx): real layout classes with placeholders inside, so nothing moves when content lands. */
+/* One line of the surrounding text tall; clip-path draws the visible bar (and its shimmer) thinner and rounded. */
+.skeleton-lh{height:1.2em;height:1lh;min-height:0;max-width:100%;border-radius:0;clip-path:inset(18% 0 round 4px)}
+/* A real control/button box (same class, same size) painted as a placeholder. */
+.skeleton-ghost{position:relative;overflow:hidden;color:transparent!important;background:var(--skeleton-fill)!important;border-color:transparent!important;box-shadow:none!important;pointer-events:none;user-select:none}
+.skeleton-shell .header-control.skeleton-ghost,.skeleton-shell .edition-badge.skeleton-ghost{border-radius:6px}
+.skeleton-theme-control{width:88px}
+.skeleton-select-control{width:92px}
+.skeleton-icon-control{width:40px;min-height:40px}
+.skeleton-action{width:182px}
+.skeleton-action.button-primary{width:158px}
+.skeleton-tile{cursor:default}
+.skeleton-tile .tool-glyph{background:var(--skeleton-fill);box-shadow:none}
+.skeleton-tile b{width:100%}
+.skeleton-narrow-only{display:none}
+@media (max-width:650px){.skeleton-narrow-only{display:block}.skeleton-wide-only{display:none}}
+.skeleton-inline{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.skeleton-small-action{display:inline-block;width:12ch}
+/* Placeholders inside a kicker or nav button: the real rules size every child span as an icon/dot. */
+.skeleton-shell .eyebrow>span.skeleton-lh{height:1.2em;height:1lh;background:var(--skeleton-fill);border-radius:0}
+.skeleton-shell .side-nav button>.skeleton-lh{font-size:inherit;line-height:inherit}
+/* The leather sidebar is dark in both themes: lighter, gilt-tinted bars and a dimmer shine. */
+.skeleton-shell .sidebar{--skeleton-fill:rgba(219,197,159,.16);--skeleton-shine:rgba(255,255,255,.07)}
+.skeleton-shell .side-nav button{cursor:default}
+.skeleton-shell .sidebar-signout{display:block}
+@media (max-width:650px){.skeleton-shell .side-nav button{align-items:center}.skeleton-theme-control{width:40px}.skeleton-select-control{width:76px}.skeleton-shell .side-nav button>.skeleton-lh{max-width:70%}}
+/* Sign-in gate: the cover is dark in both themes, like the sidebar. */
+.skeleton-shell .gate-cover{--skeleton-fill:rgba(219,197,159,.16);--skeleton-shine:rgba(255,255,255,.07)}
+.skeleton-shell .gate-features li{min-width:0}
+.skeleton-shell .gate-cover>div{align-self:stretch}
+.skeleton-shell .auth-foot .auth-link{vertical-align:top}
+.gate-header .skeleton-theme-control{width:94px}
+.gate-header .skeleton-select-control{width:96px}
+@media (max-width:650px){.gate-header .skeleton-theme-control{width:40px}.gate-header .skeleton-select-control{width:95px}}
+.skeleton-shell .auth-divider>.skeleton-lh{flex:none}
 .spinner{display:inline-block;width:1em;height:1em;margin-right:.45em;vertical-align:-.15em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spinner-turn .7s linear infinite}
 @keyframes skeleton-shimmer{to{transform:translateX(100%)}}
 @keyframes spinner-turn{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.skeleton::after{animation:none;display:none}.spinner{animation-duration:1.6s}}
+@media (prefers-reduced-motion:reduce){.skeleton::after,.skeleton-ghost::after{animation:none;display:none}.spinner{animation-duration:1.6s}}
 /* Header controls: theme, language and edition share one height, radius, border and type */
 .workspace-header .header-controls{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
 .workspace-header .header-control,.workspace-header .edition-badge{box-sizing:border-box;height:34px;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;font:500 12px/1 var(--font-serif);letter-spacing:.04em;color:var(--ink)}
