@@ -7,6 +7,14 @@ export function Skeleton({ width, height, className = "", style }: BlockProps) {
   return <span aria-hidden="true" className={`skeleton ${className}`.trim()} style={{ width, height, ...style }} />;
 }
 
+/**
+ * A bar exactly one line of the surrounding text tall (the bar itself is drawn thinner), so a heading,
+ * label or button can keep its real tag/class and the placeholder takes the space the text will.
+ */
+export function SkeletonLine({ width, className = "" }: { width?: string | number; className?: string }) {
+  return <span aria-hidden="true" className={`skeleton skeleton-lh ${className}`.trim()} style={{ width }} />;
+}
+
 /** Announces a loading state to assistive tech while its children paint placeholders. */
 export function SkeletonRegion({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
   return <div role="status" aria-live="polite" aria-busy="true" className={className}>
