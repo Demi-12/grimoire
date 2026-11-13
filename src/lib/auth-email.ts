@@ -5,6 +5,8 @@ type AuthEmail = {
   to: string;
   subject: string;
   text: string;
+  /** Optional rich version; the plain-text part is always sent for clients that block HTML. */
+  html?: string;
 };
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | undefined;
