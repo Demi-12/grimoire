@@ -4,6 +4,7 @@ import { Skeleton, SkeletonRegion } from "./skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type AdminUser, type Me } from "@/lib/api-client";
 import type { AccountStatus, SiteRole } from "@/lib/permissions";
+import { useConfirm, useToast } from "./feedback";
 
 type Locale = "en" | "es";
 
@@ -16,8 +17,13 @@ const text = {
     joined: (date: string) => `joined ${date}`, you: "you",
     stats: (campaigns: number, characters: number) => `${campaigns} campaign${campaigns === 1 ? "" : "s"} · ${characters} character${characters === 1 ? "" : "s"}`,
     twoFactor: "2FA",
-    deleteConfirm: (name: string) => `Delete ${name}'s account? Their characters and the campaigns they created are deleted too. This can't be undone.`,
-    blockConfirm: (name: string) => `Block ${name}? They'll be signed out and can't sign in until you unblock them.`,
+    deleteConfirm: (name: string) => `Delete ${name}'s account?`,
+    deleteBody: "Their characters and the campaigns they created are deleted too. This can't be undone.",
+    blockConfirm: (name: string) => `Block ${name}?`,
+    blockBody: "They'll be signed out and can't sign in until you unblock them.",
+    approvedDone: (name: string) => `${name} can now use the Grimoire.`, blockedDone: (name: string) => `${name} is blocked.`,
+    unblocked: (name: string) => `${name} is unblocked.`, deleted: (name: string) => `${name}'s account was deleted.`,
+    roleChanged: (name: string, role: string) => `${name} is now ${role}.`,
     revoked: "Sessions closed.", error: "That change couldn't be saved.", loading: "Reading the roll of names…",
     roleHelp: "New sign-ups wait here until an admin approves them. Admins manage accounts; being a DM or a player depends on each campaign (its creator is the DM).",
   },
@@ -29,8 +35,13 @@ const text = {
     joined: (date: string) => `desde ${date}`, you: "tú",
     stats: (campaigns: number, characters: number) => `${campaigns} campaña${campaigns === 1 ? "" : "s"} · ${characters} personaje${characters === 1 ? "" : "s"}`,
     twoFactor: "2FA",
-    deleteConfirm: (name: string) => `¿Eliminar la cuenta de ${name}? También se borran sus personajes y las campañas que creó. No se puede deshacer.`,
-    blockConfirm: (name: string) => `¿Bloquear a ${name}? Se cerrarán sus sesiones y no podrá entrar hasta que lo desbloquees.`,
+    deleteConfirm: (name: string) => `¿Eliminar la cuenta de ${name}?`,
+    deleteBody: "También se borran sus personajes y las campañas que creó. No se puede deshacer.",
+    blockConfirm: (name: string) => `¿Bloquear a ${name}?`,
+    blockBody: "Se cerrarán sus sesiones y no podrá entrar hasta que lo desbloquees.",
+    approvedDone: (name: string) => `${name} ya puede usar el Grimorio.`, blockedDone: (name: string) => `${name} está bloqueado.`,
+    unblocked: (name: string) => `${name} está desbloqueado.`, deleted: (name: string) => `Se ha eliminado la cuenta de ${name}.`,
+    roleChanged: (name: string, role: string) => `${name} ahora es ${role}.`,
     revoked: "Sesiones cerradas.", error: "No se pudo guardar el cambio.", loading: "Leyendo el registro de nombres…",
     roleHelp: "Los registros nuevos esperan aquí hasta que un admin los apruebe. Los admins gestionan cuentas; ser DM o jugador depende de cada campaña (quien la crea es el DM).",
   },
@@ -41,8 +52,10 @@ export default function AdminUsers({ me, locale, onPendingCount }: { me: Me; loc
   const t = text[locale];
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [busyId, setBusyId] = useState("");
-  const [message, setMessage] = useState("");
+  /** Only a failed first load is shown inline; the outcome of each action is a toast. */
   const [error, setError] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const data = await api<{ users: AdminUser[] }>("/api/admin/users");
@@ -54,18 +67,28 @@ export default function AdminUsers({ me, locale, onPendingCount }: { me: Me; loc
 
   async function change(user: AdminUser, body: { role?: SiteRole; status?: AccountStatus; revokeSessions?: boolean } | "delete") {
     setBusyId(user.id);
-    setError("");
-    setMessage("");
     try {
       if (body === "delete") await api(`/api/admin/users/${user.id}`, { method: "DELETE" });
       else await api(`/api/admin/users/${user.id}`, { method: "PATCH", body });
-      if (body !== "delete" && body.revokeSessions) setMessage(t.revoked);
+      toast.success(body === "delete" ? t.deleted(user.name)
+        : body.revokeSessions ? t.revoked
+        : body.role ? t.roleChanged(user.name, t.roles[body.role])
+        : body.status === "blocked" ? t.blockedDone(user.name)
+        : user.status === "blocked" ? t.unblocked(user.name) : t.approvedDone(user.name));
       await load();
     } catch (cause) {
-      setError(cause instanceof ApiError && cause.status === 409 ? cause.message : t.error);
+      toast.error(cause instanceof ApiError && cause.status === 409 ? cause.message : t.error);
     } finally {
       setBusyId("");
     }
+  }
+
+  async function block(user: AdminUser) {
+    if (await confirm({ title: t.blockConfirm(user.name), message: t.blockBody, confirmLabel: t.block, tone: "danger" })) await change(user, { status: "blocked" });
+  }
+
+  async function remove(user: AdminUser) {
+    if (await confirm({ title: t.deleteConfirm(user.name), message: t.deleteBody, confirmLabel: t.delete, tone: "danger" })) await change(user, "delete");
   }
 
   if (!users) return error ? <p role="alert" className="admin-error">{error}</p> : <SkeletonRegion label={t.loading} className="skeleton-grid">{[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="35%" height={14} /><Skeleton width="55%" height={10} style={{ marginTop: 8 }} /></div><Skeleton width={90} height={32} /></div>)}</SkeletonRegion>;
@@ -78,8 +101,6 @@ export default function AdminUsers({ me, locale, onPendingCount }: { me: Me; loc
   ];
 
   return <div className="admin-users">
-    {message && <p role="status" className="admin-message">{message}</p>}
-    {error && <p role="alert" className="admin-error">{error}</p>}
     <p className="admin-help">{t.roleHelp}</p>
     {groups.map(({ status, title }) => {
       const members = users.filter((user) => user.status === status);
@@ -109,14 +130,14 @@ export default function AdminUsers({ me, locale, onPendingCount }: { me: Me; loc
                 </label>
                 {!isMe && status === "pending" && <>
                   <button type="button" className="button button-primary" disabled={busy} onClick={() => void change(user, { status: "approved" })}>{t.approve}</button>
-                  <button type="button" className="button button-quiet" disabled={busy} onClick={() => { if (window.confirm(t.blockConfirm(user.name))) void change(user, { status: "blocked" }); }}>{t.reject}</button>
+                  <button type="button" className="button button-quiet" disabled={busy} onClick={() => void block(user)}>{t.reject}</button>
                 </>}
                 {!isMe && status === "approved" && <>
                   <button type="button" className="button button-quiet" disabled={busy} onClick={() => void change(user, { revokeSessions: true })}>{t.signOut}</button>
-                  <button type="button" className="button button-quiet" disabled={busy} onClick={() => { if (window.confirm(t.blockConfirm(user.name))) void change(user, { status: "blocked" }); }}>{t.block}</button>
+                  <button type="button" className="button button-quiet" disabled={busy} onClick={() => void block(user)}>{t.block}</button>
                 </>}
                 {!isMe && status === "blocked" && <button type="button" className="button button-quiet" disabled={busy} onClick={() => void change(user, { status: "approved" })}>{t.unblock}</button>}
-                {!isMe && <button type="button" className="small-action danger-action" disabled={busy} onClick={() => { if (window.confirm(t.deleteConfirm(user.name))) void change(user, "delete"); }}>{t.delete}</button>}
+                {!isMe && <button type="button" className="small-action danger-action" disabled={busy} onClick={() => void remove(user)}>{t.delete}</button>}
               </div>
             </li>;
           })}

@@ -4,6 +4,7 @@ import { Skeleton, SkeletonRegion, SkeletonText } from "./skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Campaign, type SavedEncounter } from "@/lib/api-client";
 import { creatureTypeKey, creatureTypeLabel, formatChallenge } from "@/lib/monster-api";
+import { useConfirm, useToast } from "./feedback";
 import styles from "./encounter-journal.module.css";
 
 type Locale = "en" | "es";
@@ -16,7 +17,8 @@ const text = {
     planned: "Planned", played: "Played", xp: "XP", budget: "budget", cr: "CR",
     difficulty: { low: "Low", moderate: "Moderate", high: "High" },
     notes: "Notes", saveNotes: "Save notes", markPlayed: "Mark as played", markPlanned: "Back to planned",
-    remove: "Delete", confirmDelete: (title: string) => `Delete “${title}” from the journal?`,
+    remove: "Delete", confirmDelete: (title: string) => `Delete “${title}” from the journal?`, cannotUndo: "Its notes are deleted too. This can't be undone.",
+    deleted: (title: string) => `“${title}” was deleted.`, notesSaved: "Notes saved.", markedPlayed: (title: string) => `“${title}” marked as played.`, markedPlanned: (title: string) => `“${title}” is planned again.`,
     party: (levels: number[]) => `Party levels ${levels.join(", ")}`, by: (name: string) => `by ${name}`,
   },
   es: {
@@ -26,7 +28,8 @@ const text = {
     planned: "Planificados", played: "Jugados", xp: "XP", budget: "presupuesto", cr: "CR",
     difficulty: { low: "Baja", moderate: "Moderada", high: "Alta" },
     notes: "Notas", saveNotes: "Guardar notas", markPlayed: "Marcar como jugado", markPlanned: "Volver a planificado",
-    remove: "Borrar", confirmDelete: (title: string) => `¿Borrar «${title}» del diario?`,
+    remove: "Borrar", confirmDelete: (title: string) => `¿Borrar «${title}» del diario?`, cannotUndo: "También se borran sus notas. No se puede deshacer.",
+    deleted: (title: string) => `«${title}» se ha borrado.`, notesSaved: "Notas guardadas.", markedPlayed: (title: string) => `«${title}» marcado como jugado.`, markedPlanned: (title: string) => `«${title}» vuelve a planificados.`,
     party: (levels: number[]) => `Niveles del grupo ${levels.join(", ")}`, by: (name: string) => `de ${name}`,
   },
 };
@@ -36,8 +39,9 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
   const t = text[locale];
   const [items, setItems] = useState<SavedEncounter[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const campaignId = campaign.id;
 
@@ -50,22 +54,28 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
   }, [campaignId]);
   useEffect(() => { load(); }, [load]);
 
-  async function change(id: string, action: () => Promise<SavedEncounter | null>) {
+  async function change(id: string, action: () => Promise<SavedEncounter | null>, success: string) {
     setBusyId(id);
-    setError("");
     try {
       const updated = await action();
       setItems((current) => current && (updated ? current.map((item) => item.id === id ? updated : item) : current.filter((item) => item.id !== id)));
       if (updated) setDrafts((current) => { const { [id]: _drop, ...rest } = current; return rest; });
+      toast.success(success);
     } catch {
-      setError(t.error);
+      toast.error(t.error);
     } finally {
       setBusyId("");
     }
   }
 
-  const patch = (id: string, body: { notes?: string; status?: "planned" | "played" }) => change(id, async () =>
-    (await api<{ encounter: SavedEncounter }>(`/api/campaigns/${campaignId}/encounters/${id}`, { method: "PATCH", body })).encounter);
+  const patch = (item: SavedEncounter, body: { notes?: string; status?: "planned" | "played" }) => change(item.id, async () =>
+    (await api<{ encounter: SavedEncounter }>(`/api/campaigns/${campaignId}/encounters/${item.id}`, { method: "PATCH", body })).encounter,
+    body.status ? (body.status === "played" ? t.markedPlayed(item.title) : t.markedPlanned(item.title)) : t.notesSaved);
+
+  async function remove(item: SavedEncounter) {
+    if (!await confirm({ title: t.confirmDelete(item.title), message: t.cannotUndo, confirmLabel: t.remove, tone: "danger" })) return;
+    await change(item.id, async () => { await api(`/api/campaigns/${campaignId}/encounters/${item.id}`, { method: "DELETE" }); return null; }, t.deleted(item.title));
+  }
 
   if (loadFailed) return <div className={styles.journal}><p className={styles.error} role="alert">{t.loadError} <button type="button" className={styles.btn} onClick={load}>{t.retry}</button></p></div>;
   if (!items) return <div className={styles.journal}><SkeletonRegion label={t.loading} className="skeleton-grid">{[0, 1].map((item) => <div key={item} className="skeleton-card"><Skeleton width="40%" height={16} /><SkeletonText lines={2} /></div>)}</SkeletonRegion></div>;
@@ -79,7 +89,6 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
 
   return <div className={styles.journal}>
     <p className={styles.note}>{t.dmOnly}</p>
-    {error && <p className={styles.error} role="alert">{error}</p>}
     {!items.length && <p className={styles.empty}>{t.empty}</p>}
     {groups.map((group) => <section key={group.key} aria-label={group.label}>
       <h4 className={styles.group}>{group.label} · {group.list.length}</h4>
@@ -101,13 +110,13 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
           <textarea id={`journal-notes-${item.id}`} className={styles.notes} rows={2} maxLength={2000} value={draft}
             onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: event.target.value }))} />
           <div className={styles.actions}>
-            {draft !== item.notes && <button type="button" className={styles.btn} disabled={busy} onClick={() => void patch(item.id, { notes: draft })}>{t.saveNotes}</button>}
+            {draft !== item.notes && <button type="button" className={styles.btn} disabled={busy} onClick={() => void patch(item, { notes: draft })}>{t.saveNotes}</button>}
             <button type="button" className={`${styles.btn} ${item.status === "planned" ? styles.primary : ""}`} disabled={busy}
-              onClick={() => void patch(item.id, { status: item.status === "planned" ? "played" : "planned" })}>
+              onClick={() => void patch(item, { status: item.status === "planned" ? "played" : "planned" })}>
               {item.status === "planned" ? t.markPlayed : t.markPlanned}
             </button>
             <button type="button" className={`${styles.btn} ${styles.danger}`} disabled={busy}
-              onClick={() => { if (window.confirm(t.confirmDelete(item.title))) void change(item.id, async () => { await api(`/api/campaigns/${campaignId}/encounters/${item.id}`, { method: "DELETE" }); return null; }); }}>
+              onClick={() => void remove(item)}>
               {t.remove}
             </button>
           </div>

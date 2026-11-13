@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "@/lib/api-client";
 import type { CampaignRole } from "@/lib/permissions";
 import EncounterJournal from "@/components/encounter-journal";
+import { useConfirm, useToast } from "./feedback";
 import styles from "./campaign-manager.module.css";
 
 type Locale = "en" | "es";
@@ -28,8 +29,13 @@ const text = {
     newCampaign: "New campaign", placeholder: "Name your campaign", create: "Create campaign",
     rename: "Edit", save: "Save", cancel: "Cancel", remove: "Delete campaign", leave: "Leave campaign",
     description: "Description", descriptionPlaceholder: "Setting, schedule, house rules…",
-    deleteConfirm: (name: string) => `Delete “${name}”? Characters stay with their owners.`,
-    leaveConfirm: (name: string) => `Leave “${name}”? Your characters will be taken out of it.`,
+    deleteConfirm: (name: string) => `Delete “${name}”?`,
+    deleteBody: "Characters stay with their owners. The encounter journal, battle maps and invite links go with the campaign, and this can't be undone.",
+    deleted: (name: string) => `“${name}” was deleted.`, created: (name: string) => `“${name}” is ready. Invite your table.`, saved: "Campaign updated.",
+    leaveConfirm: (name: string) => `Leave “${name}”?`, leaveBody: "Your characters will be taken out of it. You'll need a new invitation to come back.",
+    left: (name: string) => `You left “${name}”.`,
+    removeMemberConfirm: (name: string) => `Remove ${name} from the table?`, removeMemberBody: "Their characters are taken out of this campaign; they keep them.",
+    memberRemoved: (name: string) => `${name} left the table.`,
     empty: "No campaigns yet.", owner: (name: string) => `Run by ${name}`,
     roles: { dm: "DM", player: "Player" } as Record<CampaignRole, string>,
     yourRole: "Your role", table: "The table", heroes: "Heroes",
@@ -41,7 +47,8 @@ const text = {
     nameRequired: "Enter a campaign name.",
     invites: "Invite links", createInvite: "Create invite link", inviteHint: "Anyone who opens the link and signs in joins as a player. Links expire after 7 days.",
     journal: "Encounter journal", map: "Battle map",
-    copyLink: "Copy link", copied: "Copied", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
+    copyLink: "Copy link", copied: "Copied", inviteCopied: "Invitation copied. Paste it in your group chat.",
+    copyManual: "Copy this link", copyManualBody: "Your browser didn't let us copy it. Select the link and copy it by hand.", inviteCreated: "New invite link ready.", share: "Share", shareTitle: (c: string) => `Join "${c}" on Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ${owner} is calling you to the table! Join the campaign "${c}" on Grimoire, build your hero and roll initiative.\n\n🎲 Your invitation (valid 7 days):`, revoke: "Revoke", noInvites: "No active links.", expires: "Expires",
   },
   es: {
@@ -50,8 +57,13 @@ const text = {
     newCampaign: "Nueva campaña", placeholder: "Nombre de la campaña", create: "Crear campaña",
     rename: "Editar", save: "Guardar", cancel: "Cancelar", remove: "Eliminar campaña", leave: "Salir de la campaña",
     description: "Descripción", descriptionPlaceholder: "Ambientación, horario, reglas de la casa…",
-    deleteConfirm: (name: string) => `¿Eliminar «${name}»? Los personajes se quedan con sus dueños.`,
-    leaveConfirm: (name: string) => `¿Salir de «${name}»? Tus personajes saldrán de ella.`,
+    deleteConfirm: (name: string) => `¿Eliminar «${name}»?`,
+    deleteBody: "Los personajes se quedan con sus dueños. El diario de encuentros, los mapas de batalla y los enlaces de invitación se borran con la campaña, y no se puede deshacer.",
+    deleted: (name: string) => `«${name}» se ha eliminado.`, created: (name: string) => `«${name}» está lista. Invita a tu mesa.`, saved: "Campaña actualizada.",
+    leaveConfirm: (name: string) => `¿Salir de «${name}»?`, leaveBody: "Tus personajes saldrán de ella. Para volver necesitarás una nueva invitación.",
+    left: (name: string) => `Has salido de «${name}».`,
+    removeMemberConfirm: (name: string) => `¿Quitar a ${name} de la mesa?`, removeMemberBody: "Sus personajes salen de esta campaña; los conserva.",
+    memberRemoved: (name: string) => `${name} ha dejado la mesa.`,
     empty: "Aún no hay campañas.", owner: (name: string) => `Dirigida por ${name}`,
     roles: { dm: "DM", player: "Jugador" } as Record<CampaignRole, string>,
     yourRole: "Tu papel", table: "La mesa", heroes: "Héroes",
@@ -63,7 +75,8 @@ const text = {
     nameRequired: "Escribe un nombre para la campaña.",
     invites: "Enlaces de invitación", createInvite: "Crear enlace de invitación", inviteHint: "Quien abra el enlace e inicie sesión se une como jugador. Los enlaces caducan a los 7 días.",
     journal: "Diario de encuentros", map: "Mapa de batalla",
-    copyLink: "Copiar enlace", copied: "Copiado", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
+    copyLink: "Copiar enlace", copied: "Copiado", inviteCopied: "Invitación copiada. Pégala en el chat de tu grupo.",
+    copyManual: "Copia este enlace", copyManualBody: "Tu navegador no nos deja copiarlo. Selecciona el enlace y cópialo a mano.", inviteCreated: "Nuevo enlace de invitación listo.", share: "Compartir", shareTitle: (c: string) => `Únete a «${c}» en Grimoire`,
     shareMessage: (owner: string, c: string) => `⚔️ ¡${owner} te convoca a la mesa! Únete a la campaña «${c}» en Grimoire, crea a tu héroe y prepárate para tirar iniciativa.\n\n🎲 Tu invitación (válida 7 días):`, revoke: "Revocar", noInvites: "No hay enlaces activos.", expires: "Caduca",
   },
 };
@@ -75,35 +88,54 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Only form validation stays inline; the outcome of an action is a toast, since the button may be far down the page. */
   const [error, setError] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
     setError("");
     try {
       await action();
       await onChanged();
+      if (success) toast.success(success);
       return true;
     } catch {
-      setError(t.error);
+      toast.error(t.error);
       return false;
     } finally {
       setBusy(false);
     }
   }
 
+  async function removeCampaign(campaign: Campaign) {
+    if (!await confirm({ title: t.deleteConfirm(campaign.name), message: t.deleteBody, confirmLabel: t.remove, tone: "danger" })) return;
+    await run(() => api(`/api/campaigns/${campaign.id}`, { method: "DELETE" }), t.deleted(campaign.name));
+  }
+
+  async function leaveCampaign(campaign: Campaign) {
+    if (!await confirm({ title: t.leaveConfirm(campaign.name), message: t.leaveBody, confirmLabel: t.leave, tone: "danger" })) return;
+    await run(() => api(`/api/campaigns/${campaign.id}/members/${me.id}`, { method: "DELETE" }), t.left(campaign.name));
+  }
+
+  async function removeMember(campaign: Campaign, member: { userId: string; name: string }) {
+    if (!await confirm({ title: t.removeMemberConfirm(member.name), message: t.removeMemberBody, confirmLabel: t.removeMember, tone: "danger" })) return;
+    await run(() => api(`/api/campaigns/${campaign.id}/members/${member.userId}`, { method: "DELETE" }), t.memberRemoved(member.name));
+  }
+
   async function createCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newName.trim();
     if (!name) { setError(t.nameRequired); return; }
-    if (await run(() => api("/api/campaigns", { method: "POST", body: { name, description: "" } }))) setNewName("");
+    if (await run(() => api("/api/campaigns", { method: "POST", body: { name, description: "" } }), t.created(name))) setNewName("");
   }
 
   async function saveCampaign(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
     const name = editName.trim();
     if (!name) { setError(t.nameRequired); return; }
-    if (await run(() => api(`/api/campaigns/${id}`, { method: "PATCH", body: { name, description: editDescription } }))) setEditingId(null);
+    if (await run(() => api(`/api/campaigns/${id}`, { method: "PATCH", body: { name, description: editDescription } }), t.saved)) setEditingId(null);
   }
 
   const moveCharacter = (character: Character, campaignId: string | null) => run(() => api(`/api/characters/${character.id}`, {
@@ -152,8 +184,8 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
               <div className={styles.actions}>
                 {campaign.myRole && <Link className={styles.mapLink} href={`/map/${encodeURIComponent(campaign.id)}`}>{t.map}</Link>}
                 {campaign.canManage && <button type="button" className={styles.quietButton} onClick={() => { setEditingId(campaign.id); setEditName(campaign.name); setEditDescription(campaign.description); setError(""); }}>{t.rename}</button>}
-                {canDelete && <button type="button" className={styles.deleteButton} disabled={busy} onClick={() => { if (window.confirm(t.deleteConfirm(campaign.name))) void run(() => api(`/api/campaigns/${campaign.id}`, { method: "DELETE" })); }}>{t.remove}</button>}
-                {!campaign.isOwner && campaign.myRole && <button type="button" className={styles.quietButton} disabled={busy} onClick={() => { if (window.confirm(t.leaveConfirm(campaign.name))) void run(() => api(`/api/campaigns/${campaign.id}/members/${me.id}`, { method: "DELETE" })); }}>{t.leave}</button>}
+                {canDelete && <button type="button" className={styles.deleteButton} disabled={busy} onClick={() => void removeCampaign(campaign)}>{t.remove}</button>}
+                {!campaign.isOwner && campaign.myRole && <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void leaveCampaign(campaign)}>{t.leave}</button>}
               </div>
             </>}
           </div>
@@ -170,7 +202,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
                   {member.role === "dm" ? t.makePlayer : t.makeDm}
                 </button>
                 <button type="button" className={styles.removeHero} disabled={busy} aria-label={`${t.removeMember}: ${member.name}`}
-                  onClick={() => void run(() => api(`/api/campaigns/${campaign.id}/members/${member.userId}`, { method: "DELETE" }))}>×</button>
+                  onClick={() => void removeMember(campaign, member)}>×</button>
               </>}
             </li>;
           })}</ul>
@@ -214,7 +246,7 @@ function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale
   const [role, setRole] = useState<CampaignRole>("player");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [failed, setFailed] = useState(false);
+  const toast = useToast();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -224,11 +256,10 @@ function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale
     try {
       const { name } = await api<{ name: string }>(`/api/campaigns/${campaignId}/members`, { method: "POST", body: { query: query.trim(), role } });
       setQuery("");
-      setFailed(false);
-      setMessage(t.added(name));
+      toast.success(t.added(name));
       await onAdded();
     } catch (cause) {
-      setFailed(true);
+      // Kept next to the field: it usually says the name or email didn't match anyone.
       setMessage(cause instanceof ApiError && cause.status !== 403 ? cause.message : t.error);
     } finally {
       setBusy(false);
@@ -246,7 +277,7 @@ function AddMember({ campaignId, locale, onAdded }: { campaignId: string; locale
       </select>
       <button type="submit" disabled={busy || !query.trim()}>{busy && <Spinner />}{t.add}</button>
     </form>
-    {message && <p className={failed ? styles.error : styles.noMembers} role={failed ? "alert" : "status"}>{message}</p>}
+    {message && <p className={styles.error} role="alert">{message}</p>}
   </>;
 }
 
@@ -255,8 +286,9 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
   const [invites, setInvites] = useState<Invite[]>([]);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState("");
-  const [failed, setFailed] = useState(false);
   const [canShare, setCanShare] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   useEffect(() => { setCanShare(typeof navigator.share === "function"); }, []);
   useEffect(() => {
@@ -265,14 +297,14 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
 
   const linkFor = (invite: Invite) => `${window.location.origin}/?invite=${invite.token}`;
 
-  async function change(action: () => Promise<unknown>) {
+  async function change(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
-    setFailed(false);
     try {
       await action();
       setInvites((await api<{ invites: Invite[] }>(`/api/campaigns/${campaignId}/invites`)).invites);
+      if (success) toast.success(success);
     } catch {
-      setFailed(true);
+      toast.error(t.error);
     } finally {
       setBusy(false);
     }
@@ -297,10 +329,15 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
       try { done = document.execCommand("copy"); } catch { /* handled below */ }
       document.body.removeChild(area);
       if (!done) {
-        window.prompt(t.copyLink, linkFor(invite));
+        const link = linkFor(invite);
+        await confirm({
+          title: t.copyManual, acknowledge: true,
+          message: <><p>{t.copyManualBody}</p><input readOnly value={link} aria-label={t.copyManual} onFocus={(event) => event.target.select()} /></>,
+        });
         return;
       }
     }
+    toast.success(t.inviteCopied);
     setCopiedId(invite.id);
     window.setTimeout(() => setCopiedId((current) => (current === invite.id ? "" : current)), 2500);
   }
@@ -316,7 +353,6 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
   return <>
     <h3 className={styles.subheading}>{t.invites}</h3>
     <p className={styles.noMembers}>{t.inviteHint}</p>
-    {failed && <p className={styles.error} role="alert">{t.error}</p>}
     {invites.length ? <ul className={styles.memberList}>{invites.map((invite) => <li key={invite.id}>
       <span className={styles.sigle}>⚑</span>
       <span className={styles.heroName}>…{invite.token.slice(-6)}<small>{t.expires} {new Date(invite.expiresAt).toLocaleDateString(locale === "es" ? "es-ES" : "en-US")}</small></span>
@@ -324,7 +360,7 @@ function InvitePanel({ campaignId, campaignName, ownerName, locale }: { campaign
       <button type="button" className={styles.quietButton} onClick={() => void copy(invite)}>{copiedId === invite.id ? t.copied : t.copyLink}</button>
       <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void change(() => api(`/api/campaigns/${campaignId}/invites/${invite.id}`, { method: "DELETE" }))}>{t.revoke}</button>
     </li>)}</ul> : <p className={styles.noMembers}>{t.noInvites}</p>}
-    <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); void change(() => api(`/api/campaigns/${campaignId}/invites`, { method: "POST" })); }}>
+    <form className={styles.addMember} onSubmit={(event) => { event.preventDefault(); void change(() => api(`/api/campaigns/${campaignId}/invites`, { method: "POST" }), t.inviteCreated); }}>
       <button type="submit" disabled={busy}>{busy && <Spinner />}{t.createInvite}</button>
     </form>
   </>;
