@@ -1,15 +1,63 @@
 import type { Metadata, Viewport } from "next";
-import { Alegreya, Alegreya_SC, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
+import localFont from "next/font/local";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
 import ErrorReporting from "@/components/error-reporting";
+import { FeedbackProvider } from "@/components/feedback";
 import "./tokens.css";
 import "./globals.css";
 import "./dnd-theme.css";
 
-const alegreya = Alegreya({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "700"], style: ["normal", "italic"], variable: "--f-alegreya", display: "swap" });
-const alegreyaSC = Alegreya_SC({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "700"], variable: "--f-alegreya-sc", display: "swap" });
-const alegreyaSans = Alegreya_Sans({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "700"], style: ["normal", "italic"], variable: "--f-alegreya-sans", display: "swap" });
-const alegreyaSansSC = Alegreya_Sans_SC({ subsets: ["latin", "latin-ext"], weight: ["500", "700"], variable: "--f-alegreya-sans-sc", display: "swap" });
+/**
+ * Self-hosted Alegreya faces (Latin + Latin Extended subsets, OFL: see fonts/OFL.txt). Kept in the repo rather than
+ * fetched by next/font/google so `next build` (CI, the Docker image, the home server) never depends on Google Fonts:
+ * its responses have broken the build before.
+ */
+// next/font needs literal options, so each face is listed in full.
+const alegreya = localFont({
+  src: [
+    { path: "./fonts/alegreya-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/alegreya-400-italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/alegreya-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/alegreya-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/alegreya-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/alegreya-700-italic.woff2", weight: "700", style: "italic" },
+  ],
+  variable: "--f-alegreya",
+  display: "swap",
+  adjustFontFallback: "Times New Roman",
+});
+const alegreyaSC = localFont({
+  src: [
+    { path: "./fonts/alegreya-sc-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/alegreya-sc-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/alegreya-sc-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--f-alegreya-sc",
+  display: "swap",
+  adjustFontFallback: "Times New Roman",
+});
+const alegreyaSans = localFont({
+  src: [
+    { path: "./fonts/alegreya-sans-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/alegreya-sans-400-italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/alegreya-sans-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/alegreya-sans-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/alegreya-sans-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/alegreya-sans-700-italic.woff2", weight: "700", style: "italic" },
+  ],
+  variable: "--f-alegreya-sans",
+  display: "swap",
+  adjustFontFallback: "Arial",
+});
+const alegreyaSansSC = localFont({
+  src: [
+    { path: "./fonts/alegreya-sans-sc-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/alegreya-sans-sc-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--f-alegreya-sans-sc",
+  display: "swap",
+  adjustFontFallback: "Arial",
+});
 const fontVars = [alegreya, alegreyaSC, alegreyaSans, alegreyaSansSC].map((f) => f.variable).join(" ");
 
 const description = "Your Dungeons & Dragons table, bound in a single book: characters, campaigns, encounters and a live battle map.";
@@ -35,7 +83,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={fontVars} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
-      <body><ErrorReporting />{children}</body>
+      <body><ErrorReporting /><FeedbackProvider>{children}</FeedbackProvider></body>
     </html>
   );
 }

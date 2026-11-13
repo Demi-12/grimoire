@@ -336,7 +336,6 @@ body {
 .import-message{margin:-10px 0 18px;font-size:12px;color:var(--crimson)}
 .admin-users{display:grid;gap:22px}
 .admin-help{margin:0;font-size:12px;color:var(--muted);line-height:1.6}
-.admin-message{margin:0;font-size:12px;color:var(--crimson)}
 .admin-error{margin:0;padding:9px 11px;font-size:12px;color:#9b3a29;border:1px solid #c99b83;background:rgba(155,58,41,.06)}
 .admin-loading{color:var(--muted)}
 .admin-group{border:1px solid var(--line);background:var(--surface);padding:18px 20px}

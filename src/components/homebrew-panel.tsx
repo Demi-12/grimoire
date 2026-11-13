@@ -6,6 +6,7 @@ import MonsterSheet from "@/components/monster-sheet";
 import { Skeleton, SkeletonRegion } from "@/components/skeleton";
 import { api, ApiError, type Campaign, type CatalogCreature, type HomebrewMonster, type Me } from "@/lib/api-client";
 import { homebrewSlug } from "@/lib/homebrew";
+import { useConfirm, useToast } from "./feedback";
 import styles from "./homebrew.module.css";
 
 type Locale = "en" | "es";
@@ -24,6 +25,8 @@ const copy = {
     empty: "No homebrew monsters here yet.", emptyMine: "You have not made any yet.", loading: "Opening the homebrew shelf…", loadError: "Could not load the homebrew monsters.", retry: "Retry",
     by: (name: string) => `by ${name}`, cr: "CR", visibility: { private: "Private", campaign: "Campaign", instance: "Server" }, locked: "Locked",
     edit: "Edit", remove: "Delete", confirmRemove: (name: string) => `Delete “${name}” for good?`,
+    removeBody: "Everyone you shared it with loses it too. This can't be undone.", removed: (name: string) => `“${name}” was deleted.`,
+    saved: (name: string) => `“${name}” saved.`, lockedDone: (name: string) => `“${name}” is locked and private.`, unlockedDone: (name: string) => `“${name}” is unlocked.`,
     add: "Add to encounter list", adding: "Adding…", added: "Added to encounter list",
     lock: "Lock and unpublish", unlock: "Unlock", moderation: "Moderation",
     lockedNote: "An admin locked this monster; it stays private until they unlock it.",
@@ -35,6 +38,8 @@ const copy = {
     empty: "Aún no hay monstruos homebrew aquí.", emptyMine: "Todavía no has creado ninguno.", loading: "Abriendo la estantería homebrew…", loadError: "No se han podido cargar los monstruos homebrew.", retry: "Reintentar",
     by: (name: string) => `de ${name}`, cr: "VD", visibility: { private: "Privado", campaign: "Campaña", instance: "Servidor" }, locked: "Bloqueado",
     edit: "Editar", remove: "Borrar", confirmRemove: (name: string) => `¿Borrar «${name}» para siempre?`,
+    removeBody: "Quien lo tuviera compartido también lo pierde. No se puede deshacer.", removed: (name: string) => `«${name}» se ha borrado.`,
+    saved: (name: string) => `«${name}» guardado.`, lockedDone: (name: string) => `«${name}» está bloqueado y es privado.`, unlockedDone: (name: string) => `«${name}» está desbloqueado.`,
     add: "Añadir al catálogo de encuentros", adding: "Añadiendo…", added: "Añadido al catálogo de encuentros",
     lock: "Bloquear y retirar", unlock: "Desbloquear", moderation: "Moderación",
     lockedNote: "Un admin ha bloqueado este monstruo; sigue privado hasta que lo desbloquee.",
@@ -54,8 +59,9 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ monster: HomebrewMonster | null } | null>(null);
-  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
   const [addedId, setAddedId] = useState("");
 
   useEffect(() => {
@@ -80,25 +86,24 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
       ? (current ?? []).map((item) => (item.id === monster.id ? monster : item))
       : [monster, ...(current ?? [])]), []);
 
-  async function run(work: () => Promise<void>) {
+  async function run(work: () => Promise<void>, success: string) {
     setBusy(true);
-    setMessage("");
-    try { await work(); } catch (cause) { setMessage(cause instanceof ApiError ? cause.message : t.actionError); } finally { setBusy(false); }
+    try { await work(); toast.success(success); } catch (cause) { toast.error(cause instanceof ApiError ? cause.message : t.actionError); } finally { setBusy(false); }
   }
 
-  const remove = (monster: HomebrewMonster) => {
-    if (!window.confirm(t.confirmRemove(monster.name))) return;
-    void run(async () => {
+  const remove = async (monster: HomebrewMonster) => {
+    if (!await confirm({ title: t.confirmRemove(monster.name), message: t.removeBody, confirmLabel: t.remove, tone: "danger" })) return;
+    await run(async () => {
       await api(`/api/homebrew/${monster.id}`, { method: "DELETE" });
       setMonsters((current) => (current ?? []).filter((item) => item.id !== monster.id));
       setSelectedId(null);
-    });
+    }, t.removed(monster.name));
   };
   const setLocked = (monster: HomebrewMonster, locked: boolean) => void run(async () => {
     const { monster: updated } = await api<{ monster: HomebrewMonster }>(`/api/homebrew/${monster.id}`, { method: "PATCH", body: { locked } });
     // Locking makes the monster private, so it leaves everyone else's list (an admin keeps seeing it to unlock it).
     replace(updated);
-  });
+  }, locked ? t.lockedDone(monster.name) : t.unlockedDone(monster.name));
   const addToEncounters = (monster: HomebrewMonster) => {
     if (!onAddCreature) return;
     onAddCreature({ name: monster.name, xp: monster.xp, source: "Homebrew", monsterSlug: homebrewSlug(monster.id), cr: monster.cr, type: monster.type || undefined, roleTags: monster.roleTags });
@@ -110,7 +115,7 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
       <h2 id="homebrew-heading" className="sr-only">{t.title}</h2>
       <HomebrewEditor locale={locale} campaigns={campaigns} initial={editing.monster} ownerName={me.name}
         onCancel={() => setEditing(null)}
-        onSaved={(monster) => { replace(monster); setSelectedId(monster.id); setEditing(null); setAddedId(""); }} />
+        onSaved={(monster) => { replace(monster); setSelectedId(monster.id); setEditing(null); setAddedId(""); toast.success(t.saved(monster.name)); }} />
     </section>;
   }
 
@@ -127,12 +132,10 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
       </div>
     </div>
 
-    {message && <p className={styles.error} role="alert">{message}</p>}
-
     {loadError ? <div className={styles.error} role="alert">{t.loadError} <button type="button" className="button button-quiet" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>
       : monsters === null ? <SkeletonRegion label={t.loading}><div className={styles.list}>{[0, 1, 2].map((item) => <Skeleton key={item} height={52} />)}</div></SkeletonRegion>
       : visible.length === 0 ? <div className={styles.empty}>{scope === "mine" && !monsters.some((m) => m.mine) ? t.emptyMine : t.empty}</div>
-      : <div className={styles.list}>{visible.map((monster) => <button type="button" key={monster.id} className={styles.row} aria-pressed={selectedId === monster.id} onClick={() => { setSelectedId(monster.id); setMessage(""); }}>
+      : <div className={styles.list}>{visible.map((monster) => <button type="button" key={monster.id} className={styles.row} aria-pressed={selectedId === monster.id} onClick={() => setSelectedId(monster.id)}>
         <span><span className={styles.rowName}>{monster.name}</span>
           <span className={styles.rowMeta}><span>{t.cr} {ratingLabel(monster.cr)}</span>{monster.type && <span>{monster.type}</span>}{!monster.mine && <span>{t.by(monster.ownerName)}</span>}</span></span>
         <span className={styles.badges}>
@@ -147,7 +150,7 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
       <div className={styles.actions}>
         {onAddCreature && <button type="button" className="button button-primary" disabled={addedId === selected.id} onClick={() => addToEncounters(selected)}>{addedId === selected.id ? t.added : t.add}</button>}
         {selected.mine && <button type="button" className="button button-quiet" disabled={busy} onClick={() => setEditing({ monster: selected })}>{t.edit}</button>}
-        {(selected.mine || (me.role === "admin" && selected.visibility !== "private")) && <button type="button" className="button button-quiet" disabled={busy} onClick={() => remove(selected)}>{t.remove}</button>}
+        {(selected.mine || (me.role === "admin" && selected.visibility !== "private")) && <button type="button" className="button button-quiet" disabled={busy} onClick={() => void remove(selected)}>{t.remove}</button>}
         {me.role === "admin" && !selected.mine && (selected.locked
           ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => setLocked(selected, false)}>{t.unlock}</button>
           : <button type="button" className="button button-quiet" disabled={busy} onClick={() => setLocked(selected, true)}>{t.lock}</button>)}

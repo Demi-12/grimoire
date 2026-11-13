@@ -13,6 +13,7 @@ import {
 } from "@/lib/battle-map";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { Spinner } from "./skeleton";
+import { useConfirm, useToast } from "./feedback";
 import styles from "./battle-map.module.css";
 
 type Locale = "en" | "es";
@@ -70,9 +71,11 @@ const text = {
     forgetExplored: "Forget what was explored",
     saves: "Saved maps", savesHint: "The map on the table is kept on its own after every change. Save a copy to switch to another map and come back to this one another day: it keeps tokens, walls, doors, the fog with what was explored and the background.",
     saveName: "Name", saveAction: "Save this map", saving: "Saving…", load: "Load", deleteSave: "Delete",
-    loadConfirm: (name: string) => `Replace the map on the table with "${name}"? Save the current one first if you want to keep it.`,
-    deleteConfirm: (name: string) => `Delete the saved map "${name}"?`,
-    newMap: "Start an empty map", newMapConfirm: "Clear the table and start an empty map? Save the current one first if you want to keep it.",
+    loadConfirm: (name: string) => `Replace the map on the table with "${name}"?`, keepCurrent: "Save the current one first if you want to keep it.",
+    deleteConfirm: (name: string) => `Delete the saved map "${name}"?`, cannotUndo: "This can't be undone.",
+    newMap: "Start an empty map", newMapConfirm: "Clear the table and start an empty map?",
+    savedMap: (name: string) => `Map "${name}" saved.`, loadedMap: (name: string) => `"${name}" is on the table.`,
+    deletedMap: (name: string) => `Saved map "${name}" deleted.`, newMapDone: "The table is clear.",
     noSaves: "No saved maps yet.", saveError: "That couldn't be done. A campaign keeps up to 20 saved maps.",
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} tokens · ${save.walls} walls${save.hasBackground ? " · picture" : ""} · ${date}`,
   },
@@ -122,9 +125,11 @@ const text = {
     forgetExplored: "Olvidar lo explorado",
     saves: "Mapas guardados", savesHint: "El mapa de la mesa se guarda solo tras cada cambio. Guarda una copia para cambiar a otro mapa y volver a este otro día: conserva fichas, muros, puertas, la niebla con lo explorado y el fondo.",
     saveName: "Nombre", saveAction: "Guardar este mapa", saving: "Guardando…", load: "Cargar", deleteSave: "Borrar",
-    loadConfirm: (name: string) => `¿Sustituir el mapa de la mesa por «${name}»? Guarda antes el actual si quieres conservarlo.`,
-    deleteConfirm: (name: string) => `¿Borrar el mapa guardado «${name}»?`,
-    newMap: "Empezar un mapa vacío", newMapConfirm: "¿Vaciar la mesa y empezar un mapa vacío? Guarda antes el actual si quieres conservarlo.",
+    loadConfirm: (name: string) => `¿Sustituir el mapa de la mesa por «${name}»?`, keepCurrent: "Guarda antes el actual si quieres conservarlo.",
+    deleteConfirm: (name: string) => `¿Borrar el mapa guardado «${name}»?`, cannotUndo: "No se puede deshacer.",
+    newMap: "Empezar un mapa vacío", newMapConfirm: "¿Vaciar la mesa y empezar un mapa vacío?",
+    savedMap: (name: string) => `Mapa «${name}» guardado.`, loadedMap: (name: string) => `«${name}» está en la mesa.`,
+    deletedMap: (name: string) => `Mapa guardado «${name}» borrado.`, newMapDone: "La mesa está vacía.",
     noSaves: "Aún no hay mapas guardados.", saveError: "No se pudo hacer. Una campaña guarda hasta 20 mapas.",
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} fichas · ${save.walls} muros${save.hasBackground ? " · imagen" : ""} · ${date}`,
   },
@@ -640,6 +645,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
   onSaved: (map: BattleMapView) => void; playersAudience: boolean; wallTool: WallTool | null; onWallTool: (tool: WallTool | null) => void;
 }) {
   const t = text[locale];
+  const confirm = useConfirm();
   const [name, setName] = useState("");
   const [count, setCount] = useState(1);
   const [size, setSize] = useState<TokenSize>(1);
@@ -744,7 +750,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
         </select>
         <button type="button" className={styles.smallButton} aria-label={`${t.remove}: ${token.label}`} onClick={() => void send([{ type: "remove", tokenId: token.id }])}>×</button>
       </li>)}</ul> : <p className={styles.empty}>{t.noMonsters}</p>}
-      {monsters.length > 0 && <button type="button" className="button button-quiet" onClick={() => { if (window.confirm(t.clearConfirm)) void send([{ type: "clear-monsters" }]); }}>{t.clearMonsters}</button>}
+      {monsters.length > 0 && <button type="button" className="button button-quiet" onClick={() => void confirm({ title: t.clearConfirm, confirmLabel: t.clearMonsters, tone: "danger" }).then((ok) => { if (ok) void send([{ type: "clear-monsters" }]); })}>{t.clearMonsters}</button>}
     </section>
 
     <section>
@@ -769,7 +775,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
         {(map.state.walls?.length ?? 0) > 0 && <small>{t.wallCount(map.state.walls!.length)}</small>}
       </div>
       {wallTool && <p className={styles.empty}>{wallTool === "erase" ? t.eraseHint : t.wallHint}</p>}
-      {(map.state.walls?.length ?? 0) > 0 && <button type="button" className="button button-quiet" onClick={() => { if (window.confirm(t.clearWallsConfirm)) void send([{ type: "clear-walls" }]); }}>{t.clearWalls}</button>}
+      {(map.state.walls?.length ?? 0) > 0 && <button type="button" className="button button-quiet" onClick={() => void confirm({ title: t.clearWallsConfirm, confirmLabel: t.clearWalls, tone: "danger" }).then((ok) => { if (ok) void send([{ type: "clear-walls" }]); })}>{t.clearWalls}</button>}
     </section>
 
     <section>
@@ -796,7 +802,8 @@ function SavedMaps({ map, locale, onLoaded, playersAudience }: { map: BattleMapV
   const [saves, setSaves] = useState<MapSaveSummary[] | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
   const base = `/api/campaigns/${encodeURIComponent(map.campaignId)}/map`;
   const query = playersAudience ? "?audience=players" : "";
 
@@ -804,10 +811,9 @@ function SavedMaps({ map, locale, onLoaded, playersAudience }: { map: BattleMapV
     api<{ saves: MapSaveSummary[] }>(`/api/campaigns/${encodeURIComponent(map.campaignId)}/map/saves`).then((data) => setSaves(data.saves)).catch(() => setSaves([]));
   }, [map.campaignId]);
 
-  async function run<T>(action: () => Promise<T>, done: (value: T) => void) {
+  async function run<T>(action: () => Promise<T>, done: (value: T) => void, success: string) {
     setBusy(true);
-    setFailed(false);
-    try { done(await action()); } catch { setFailed(true); } finally { setBusy(false); }
+    try { done(await action()); toast.success(success); } catch { toast.error(t.saveError); } finally { setBusy(false); }
   }
   const date = (iso: string) => new Date(iso).toLocaleString(locale === "es" ? "es-ES" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
 
@@ -816,24 +822,23 @@ function SavedMaps({ map, locale, onLoaded, playersAudience }: { map: BattleMapV
     <form className={styles.form} onSubmit={(event) => {
       event.preventDefault();
       const trimmed = name.trim();
-      if (trimmed) void run(() => api<{ saves: MapSaveSummary[] }>(`${base}/saves`, { method: "POST", body: { name: trimmed } }), (data) => { setSaves(data.saves); setName(""); });
+      if (trimmed) void run(() => api<{ saves: MapSaveSummary[] }>(`${base}/saves`, { method: "POST", body: { name: trimmed } }), (data) => { setSaves(data.saves); setName(""); }, t.savedMap(trimmed));
     }}>
       <label className={styles.grow}>{t.saveName}<input required maxLength={60} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <button type="submit" className="button button-primary" disabled={busy}>{busy ? t.saving : t.saveAction}</button>
     </form>
     {saves && (saves.length ? <ul className={styles.list}>{saves.map((save) => <li key={save.id}>
       <span className={styles.itemName}>{save.name}<small>{t.saveSummary(save, date(save.createdAt))}</small></span>
-      <button type="button" className={styles.smallButton} disabled={busy} onClick={() => {
-        if (window.confirm(t.loadConfirm(save.name))) void run(() => api<{ map: BattleMapView }>(`${base}/saves/${save.id}${query}`, { method: "POST" }), (data) => onLoaded(data.map));
+      <button type="button" className={styles.smallButton} disabled={busy} onClick={async () => {
+        if (await confirm({ title: t.loadConfirm(save.name), message: t.keepCurrent, confirmLabel: t.load })) void run(() => api<{ map: BattleMapView }>(`${base}/saves/${save.id}${query}`, { method: "POST" }), (data) => onLoaded(data.map), t.loadedMap(save.name));
       }}>{t.load}</button>
-      <button type="button" className={styles.smallButton} disabled={busy} aria-label={`${t.deleteSave}: ${save.name}`} onClick={() => {
-        if (window.confirm(t.deleteConfirm(save.name))) void run(() => api<{ saves: MapSaveSummary[] }>(`${base}/saves/${save.id}`, { method: "DELETE" }), (data) => setSaves(data.saves));
+      <button type="button" className={styles.smallButton} disabled={busy} aria-label={`${t.deleteSave}: ${save.name}`} onClick={async () => {
+        if (await confirm({ title: t.deleteConfirm(save.name), message: t.cannotUndo, confirmLabel: t.deleteSave, tone: "danger" })) void run(() => api<{ saves: MapSaveSummary[] }>(`${base}/saves/${save.id}`, { method: "DELETE" }), (data) => setSaves(data.saves), t.deletedMap(save.name));
       }}>×</button>
     </li>)}</ul> : <p className={styles.empty}>{t.noSaves}</p>)}
-    <button type="button" className="button button-quiet" disabled={busy} onClick={() => {
-      if (window.confirm(t.newMapConfirm)) void run(() => api<{ map: BattleMapView }>(`${base}/reset${query}`, { method: "POST" }), (data) => onLoaded(data.map));
+    <button type="button" className="button button-quiet" disabled={busy} onClick={async () => {
+      if (await confirm({ title: t.newMapConfirm, message: t.keepCurrent, confirmLabel: t.newMap, tone: "danger" })) void run(() => api<{ map: BattleMapView }>(`${base}/reset${query}`, { method: "POST" }), (data) => onLoaded(data.map), t.newMapDone);
     }}>{t.newMap}</button>
-    {failed && <p className={styles.error} role="alert">{t.saveError}</p>}
     <p className={styles.empty}>{t.savesHint}</p>
   </section>;
 }

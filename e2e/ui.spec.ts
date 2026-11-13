@@ -170,3 +170,45 @@ for (const theme of themes) {
     });
   }
 }
+
+// Confirmations use the app's modal dialog (not window.confirm) and outcomes show up as toasts.
+for (const theme of themes) {
+  for (const width of [360, 1280]) {
+    test(`confirm dialog and toast, ${theme} theme, ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: theme });
+      await mockApi(page);
+      const deletes: string[] = [];
+      await page.route("**/api/characters/ch1", async (route) => {
+        if (route.request().method() === "DELETE") deletes.push(route.request().url());
+        await route.fulfill({ status: 204, body: "" });
+      });
+      page.on("dialog", (dialog) => { throw new Error(`Native ${dialog.type()} dialog: ${dialog.message()}`); });
+      await page.addInitScript((value) => {
+        localStorage.setItem("grimoire.theme.v1", value);
+        localStorage.setItem("grimoire.locale.v1", "en");
+      }, theme);
+      await page.goto("/characters");
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+
+      const dialog = page.getByRole("dialog", { name: "Delete Thorin Oakenshield?" });
+      await expect(dialog).toBeVisible();
+      // A destructive question starts on Cancel, and Escape answers no.
+      await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+      const contrast = await new AxeBuilder({ page }).include("dialog").withRules(["color-contrast"]).analyze();
+      expect(contrast.violations.flatMap((violation) => violation.nodes.map((node) => node.target.join(" ")))).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      expect(deletes).toEqual([]);
+
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+      await dialog.getByRole("button", { name: "Delete" }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByRole("region", { name: "Notifications" })).toContainText("Thorin Oakenshield was deleted.");
+      expect(deletes).toHaveLength(1);
+
+      const scroll = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(scroll, "toast widened the page").toBeLessThanOrEqual(0);
+    });
+  }
+}

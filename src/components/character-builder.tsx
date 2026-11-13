@@ -14,6 +14,7 @@ import { alignments, backgrounds, classes, findClass, say, skillKeys, species as
 import { MAX_LEVEL } from "@/lib/levelup";
 import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
 import { track } from "@/lib/telemetry-client";
+import { useConfirm, useToast } from "./feedback";
 
 const blankScores: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 const standardArray: AbilityScores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
@@ -136,6 +137,8 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   const [levelingUp, setLevelingUp] = useState<Character | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
 
   useEffect(() => {
     const resetPrintState = () => {
@@ -156,6 +159,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     await onSave(draft, editing?.id);
     setShowEditor(false);
     setEditing(undefined);
+    toast.success(translate(locale, "character.saved", { name: draft.name }));
   }
 
   async function saveFromWizard(result: WizardResult) {
@@ -166,6 +170,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
       await onSave({ name: result.name, level: result.level, notes: result.notes, build: result.build, campaignId: record?.campaignId ?? null,
         className: described.className, species: described.species, background: described.background, scores: described.scores }, record?.id);
       setWizard(null);
+      toast.success(translate(locale, "character.saved", { name: result.name }));
     } catch {
       setError(translate(locale, "character.saveError"));
     }
@@ -178,6 +183,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
       await onSave({ name: record.name, level: result.level, notes: record.notes, build: result.build, campaignId: record.campaignId,
         className: described.className, species: described.species, background: described.background, scores: described.scores }, record.id);
       setLevelingUp(null);
+      toast.success(translate(locale, "character.leveledUp", { name: record.name, level: result.level }));
       track("character.level_up", { level: result.level });
     } catch {
       setError(translate(locale, "character.saveError"));
@@ -195,12 +201,18 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   }
 
   async function remove(record: Character) {
-    if (!window.confirm(translate(locale, "character.deleteConfirm", { name: record.name }))) return;
-    setError("");
+    const confirmed = await confirm({
+      title: translate(locale, "character.deleteConfirm", { name: record.name }),
+      message: translate(locale, "character.deleteWarning"),
+      confirmLabel: translate(locale, "character.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     try {
       await onDelete(record.id);
+      toast.success(translate(locale, "character.deleted", { name: record.name }));
     } catch {
-      setError(translate(locale, "character.deleteError"));
+      toast.error(translate(locale, "character.deleteError"));
     }
   }
 
