@@ -5,14 +5,16 @@ import { abilities, abilityModifier, type AbilityKey, type AbilityScores } from 
 import { translate, type Locale } from "@/lib/i18n";
 import {
   alignments, backgrounds, classes, findBackground, findClass, findSpecies, magicInitiateLists, originFeats,
-  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, speciesSources, STANDARD_ARRAY, standardLanguages,
+  POINT_BUY_BUDGET, pointBuyCost, say, skillKeys, skills, species, speciesNeedsSpellAbility, speciesSizeNames, speciesSizeOptions, speciesSources,
+  speciesSpellAbilities, STANDARD_ARRAY, standardLanguages,
   type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
 } from "@/lib/dnd2024";
 import {
-  backgroundBonuses, characterFeats, deriveSheet, duplicatesBackgroundFeat, finalScores, pointBuySpent, rollAbilityPool, speciesSkillsOf, stepIssues,
+  backgroundBonuses, characterFeats, chosenSize, deriveSheet, duplicatesBackgroundFeat, finalScores, pointBuySpent, rollAbilityPool, speciesSkillsOf, stepIssues,
   validBaseScores, type AbilityMethod, type CharacterBuild,
 } from "@/lib/character-sheet";
 import { featInfo } from "@/lib/levelup-data";
+import { speciesTraits } from "@/lib/character-view";
 import { chosenSubclassId, subclassLabel, unlockedFeatures } from "@/lib/levelup";
 import { findSubclass, subclassesFor } from "@/lib/subclasses";
 import type { BackgroundData, ClassData } from "@/lib/dnd2024";
@@ -49,6 +51,8 @@ const copy = {
     abilitiesLabel: "Ability increases", feat: "Origin feat", skills: "Skill proficiencies", tool: "Tool proficiency",
     speciesIntro: "Your species grants traits such as size, speed and senses. It no longer changes your ability scores.",
     size: "Size", speed: "Speed", darkvision: "Darkvision", traits: "Traits", ft: "ft.", source: "Source", creatureType: "Creature type", speciesSkills: "Skills",
+    chooseSize: "Choose your size", sizeHelp: { medium: "About 4 to 7 feet tall", small: "About 2 to 4 feet tall" },
+    spellAbility: "Spellcasting ability for species spells", spellAbilityHelp: "Usually the one your class casts with.", classCasts: "your class",
     chooseSkill: (n: number) => n === 1 ? "Choose 1 skill" : `Choose ${n} skills`, chooseFeat: "Versatile: choose an Origin feat",
     spellList: "Spell list", abilitiesIntro: "Generate your six scores, then apply your background's increases (maximum 20).",
     methods: { standard: "Standard array", pointBuy: "Point buy", rolled: "Roll 4d6" } as Record<AbilityMethod, string>,
@@ -71,7 +75,7 @@ const copy = {
     summaryIntro: "Review the sheet. Everything here is calculated from your choices.",
     ac: "Armor Class", hp: "Hit Points", initiative: "Initiative", proficiency: "Proficiency", passive: "Passive Perception", spellDc: "Spell save DC", spellAtk: "Spell attack",
     issues: {
-      lineage: "Choose a lineage or ancestry.", speciesSkills: "Choose the species skill.", speciesFeat: "Choose the Origin feat.",
+      lineage: "Choose a lineage or ancestry.", spellAbility: "Choose the ability for your species spells.", speciesSkills: "Choose the species skill.", speciesFeat: "Choose the Origin feat.",
       scores: "Assign valid scores for the chosen method.", roll: "Roll the dice to get your scores.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
       duplicateFeat: "Your background already grants that feat: choose another one (Magic Initiate only with another spell list).",
       featSkills: "Choose 3 skills for Skilled.", expertise: "Choose your Expertise skills.", languages: "Choose two languages.", name: "Give your character a name.",
@@ -92,6 +96,8 @@ const copy = {
     abilitiesLabel: "Aumentos de característica", feat: "Dote de origen", skills: "Competencias en habilidades", tool: "Competencia con herramienta",
     speciesIntro: "La especie otorga rasgos como tamaño, velocidad y sentidos. Ya no modifica tus características.",
     size: "Tamaño", speed: "Velocidad", darkvision: "Visión en la oscuridad", traits: "Rasgos", ft: "pies", source: "Fuente", creatureType: "Tipo de criatura", speciesSkills: "Habilidades",
+    chooseSize: "Elige tu tamaño", sizeHelp: { medium: "Entre 1,2 y 2,1 m de altura", small: "Entre 0,6 y 1,2 m de altura" },
+    spellAbility: "Característica para los conjuros de la especie", spellAbilityHelp: "Normalmente, la que usa tu clase para lanzar conjuros.", classCasts: "tu clase",
     chooseSkill: (n: number) => n === 1 ? "Elige 1 habilidad" : `Elige ${n} habilidades`, chooseFeat: "Versátil: elige una dote de origen",
     spellList: "Lista de conjuros", abilitiesIntro: "Genera tus seis puntuaciones y aplica los aumentos del trasfondo (máximo 20).",
     methods: { standard: "Matriz estándar", pointBuy: "Compra por puntos", rolled: "Tirar 4d6" } as Record<AbilityMethod, string>,
@@ -114,7 +120,7 @@ const copy = {
     summaryIntro: "Revisa la ficha. Todo se calcula a partir de tus elecciones.",
     ac: "Clase de armadura", hp: "Puntos de golpe", initiative: "Iniciativa", proficiency: "Competencia", passive: "Percepción pasiva", spellDc: "CD de conjuros", spellAtk: "Ataque de conjuro",
     issues: {
-      lineage: "Elige un linaje o ascendencia.", speciesSkills: "Elige la habilidad de la especie.", speciesFeat: "Elige la dote de origen.",
+      lineage: "Elige un linaje o ascendencia.", spellAbility: "Elige la característica para los conjuros de la especie.", speciesSkills: "Elige la habilidad de la especie.", speciesFeat: "Elige la dote de origen.",
       scores: "Asigna puntuaciones válidas para el método elegido.", roll: "Tira los dados para obtener tus puntuaciones.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
       duplicateFeat: "Tu trasfondo ya otorga esa dote: elige otra (Iniciado en la magia solo con otra lista de conjuros).",
       featSkills: "Elige 3 habilidades para Habilidoso.", expertise: "Elige tus habilidades de Pericia.", languages: "Elige dos idiomas.", name: "Ponle nombre a tu personaje.",
@@ -217,6 +223,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const feats = characterFeats(build);
   const bgSkills = new Set<SkillKey>(bg.skills);
   const fixedSpeciesSkills = sp.skills ?? [];
+  const chosenLineage = sp.lineages?.find((item) => item.id === build.lineageId);
+  const sizeOptions = speciesSizeOptions(sp);
   const beforeClass = new Set<SkillKey>([...bg.skills, ...speciesSkillsOf(build)]);
   const show = (target: number) => quick || step === target;
   const issues = quick
@@ -254,7 +262,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     if (speciesId === build.speciesId) return;
     // Skills the new species grants outright replace the same class or Skilled picks.
     const granted = findSpecies(speciesId)?.skills ?? [];
-    const patch = pruneSkills(granted, { speciesId, lineageId: undefined, speciesSkills: [], speciesFeat: undefined });
+    const patch = pruneSkills(granted, { speciesId, lineageId: undefined, size: undefined, speciesSkills: [], speciesFeat: undefined });
     const proficient = new Set([...bg.skills, ...granted, ...(patch.classSkills ?? []), ...(bg.feat === "skilled" ? patch.featSkills ?? [] : [])]);
     update({ ...patch, expertise: build.expertise.filter((skill) => proficient.has(skill)) });
   }
@@ -384,14 +392,27 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
             <div><dt>{c.size}</dt><dd>{say(sp.size, locale)}</dd></div>
             <div><dt>{c.speed}</dt><dd>{sp.speed} {c.ft}</dd></div>
             {sp.darkvision && <div><dt>{c.darkvision}</dt><dd>{sp.darkvision} {c.ft}</dd></div>}
-            <div><dt>{c.traits}</dt><dd>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}</dd></div>
             {fixedSpeciesSkills.length > 0 && <div><dt>{c.speciesSkills}</dt><dd>{fixedSpeciesSkills.map((skill) => translate(locale, `skill.${skill}`)).join(", ")}</dd></div>}
           </dl>
+          <h4 className={styles.subhead}>{c.traits}</h4>
+          <dl className={styles.traitList}>{sp.traits.map((trait) => <div key={trait.name.en}><dt>{say(trait.name, locale)}</dt><dd>{say(trait.tip, locale)}</dd></div>)}</dl>
           {sp.lineages && <fieldset className={styles.group}><legend>{say(sp.lineageLabel, locale)}</legend><div className={styles.pills}>
             {sp.lineages.map((lineage) => <Choice key={lineage.id} selected={lineage.id === build.lineageId} onClick={() => update({ lineageId: lineage.id })}>
               <strong>{say(lineage.name, locale)}</strong>{lineage.detail && <small>{say(lineage.detail, locale)}</small>}
             </Choice>)}
+          </div>
+            {chosenLineage?.description && <p className={styles.lineageText}><b>{say(chosenLineage.name, locale)}.</b> {say(chosenLineage.description, locale)}</p>}
+          </fieldset>}
+          {sizeOptions.length > 0 && <fieldset className={styles.group}><legend>{c.chooseSize}</legend><div className={styles.pills}>
+            {sizeOptions.map((size) => <Choice key={size} selected={chosenSize(build) === size} onClick={() => update({ size })}>
+              <strong>{say(speciesSizeNames[size], locale)}</strong><small>{c.sizeHelp[size]}</small>
+            </Choice>)}
           </div></fieldset>}
+          {speciesNeedsSpellAbility(sp, build.lineageId) && <fieldset className={styles.group}><legend>{c.spellAbility}</legend><div className={styles.pills}>
+            {speciesSpellAbilities.map((ability) => <Choice key={ability} selected={build.speciesSpellAbility === ability} onClick={() => update({ speciesSpellAbility: ability })}>
+              <strong>{translate(locale, `ability.${ability}`)}</strong>{cls.spellcasting?.ability === ability && <small>✦ {c.classCasts}</small>}
+            </Choice>)}
+          </div><p className={styles.note}>{c.spellAbilityHelp}</p></fieldset>}
           {sp.skillChoice && <fieldset className={styles.group}><legend>{c.chooseSkill(sp.skillChoice.count)}</legend>
             <SkillPicker locale={locale} lockedLabel={c.already} options={sp.skillChoice.options.length ? sp.skillChoice.options : skillKeys} chosen={build.speciesSkills}
               limit={sp.skillChoice.count} locked={new Set([...bgSkills, ...fixedSpeciesSkills])} onChange={(speciesSkills) => update({ speciesSkills, classSkills: build.classSkills.filter((skill) => !speciesSkills.includes(skill)) })} />
@@ -533,7 +554,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
               <i>{sheet.skills[skill].expertise ? "◆" : sheet.skills[skill].proficient ? "●" : "○"}</i>{translate(locale, `skill.${skill}`)}<b>{signed(sheet.skills[skill].bonus)}</b></li>)}</ul></section>
             <section>
               <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature.name, locale)).join(" · ")}</p>
-              <h4>{c.traits}</h4><p>{sp.traits.map((trait) => say(trait.name, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}</p>
+              <h4>{c.traits}</h4><p>{speciesTraits(build).map((trait) => say(trait.name, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}{sheet.speciesSpells ? ` · ${c.spellDc} ${sheet.speciesSpells.saveDc}, ${c.spellAtk} ${signed(sheet.speciesSpells.attack)}` : ""}</p>
               <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(featInfo(feat).name, locale)).join(" · ")}</p>
               {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)} · {say(cls.spellcasting.slots, locale)}</p></>}
               <h4>{c.languages}</h4><p>{[locale === "es" ? "Común" : "Common", ...build.languages.map((index) => say(standardLanguages[index], locale))].join(", ")}</p>

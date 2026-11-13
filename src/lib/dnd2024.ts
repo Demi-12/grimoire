@@ -517,7 +517,15 @@ export const speciesSources: Record<SpeciesSource, Text> = {
   eberron2025: { en: "Eberron: Forge of the Artificer (2025)", es: "Eberron: Forge of the Artificer (2025)" },
   motm2022: { en: "Monsters of the Multiverse (2022)", es: "Monstruos del Multiverso (2022)" },
 };
-export interface Lineage { id: string; name: Text; detail?: Text; speed?: number; darkvision?: number }
+/**
+ * A lineage, ancestry or legacy. `detail` is the short line on its button; `description`, when given, is the full summary
+ * shown once it is chosen (on the creator and on the sheet).
+ */
+export interface Lineage { id: string; name: Text; detail?: Text; description?: Text; speed?: number; darkvision?: number; spellAbilityChoice?: boolean }
+export type SpeciesSize = "medium" | "small";
+export const speciesSizeNames: Record<SpeciesSize, Text> = { medium: { en: "Medium", es: "Mediano" }, small: { en: "Small", es: "Pequeño" } };
+/** Abilities a species lets you pick for the spells it grants. */
+export const speciesSpellAbilities: AbilityKey[] = ["int", "wis", "cha"];
 export interface SpeciesData {
   id: SpeciesId;
   name: Text;
@@ -536,31 +544,42 @@ export interface SpeciesData {
   skills?: SkillKey[];
   /** Human Versatile: choose an origin feat. */
   originFeat?: boolean;
+  /** Its spells are cast with Intelligence, Wisdom or Charisma, chosen when the species is picked. */
+  spellAbilityChoice?: boolean;
 }
+
+/** Whether the species (or the chosen lineage) casts its spells with Intelligence, Wisdom or Charisma at the player's choice. */
+export const speciesNeedsSpellAbility = (sp: SpeciesData | undefined, lineageId?: string): boolean =>
+  !!sp && (!!sp.spellAbilityChoice || !!sp.lineages?.find((item) => item.id === lineageId)?.spellAbilityChoice);
+/** Sizes the player can pick for this species: two when it is "Medium or Small", none otherwise. */
+export const speciesSizeOptions = (sp: Pick<SpeciesData, "size">): SpeciesSize[] => (/ or /.test(sp.size.en) ? ["medium", "small"] : []);
 
 export const species: SpeciesData[] = [
   {
     id: "aasimar", name: t("Aasimar", "Aasimar"), source: "phb2024", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
     traits: [
       f("Celestial Resistance", "Resistencia celestial", "Resistance to necrotic and radiant damage.", "Resistencia al daño necrótico y radiante."),
-      f("Healing Hands", "Manos curativas", "Magic action: touch a creature to heal it a number of d4 equal to your proficiency bonus. Once per Long Rest.", "Acción mágica: tocas a una criatura y la curas tantos d4 como tu bonificador por competencia. Una vez por descanso largo."),
+      f("Healing Hands", "Manos curativas", "Magic action: touch a creature and roll a number of d4 equal to your proficiency bonus; it regains that many hit points. Once per Long Rest.", "Acción mágica: tocas a una criatura y tiras tantos d4 como tu bonificador por competencia; recupera ese número de puntos de golpe. Una vez por descanso largo."),
       f("Light Bearer", "Portador de luz", "You know the Light cantrip; Charisma is your spellcasting ability for it.", "Conoces el truco Luz; lo lanzas con Carisma."),
-      f("Celestial Revelation (level 3)", "Revelación celestial (nivel 3)", "Bonus action: transform for 1 minute (spectral wings, a frightening aura or searing light) and deal extra radiant damage once per turn. Once per Long Rest.", "Acción adicional: te transformas durante 1 minuto (alas espectrales, un aura aterradora o luz abrasadora) y haces daño radiante extra una vez por turno. Una vez por descanso largo."),
+      f("Celestial Revelation (level 3)", "Revelación celestial (nivel 3)", "Bonus action: transform for 1 minute. Once per turn, one target you damage with an attack or a spell takes extra damage equal to your proficiency bonus (radiant, or necrotic with Necrotic Shroud). Each time, choose: Heavenly Wings (fly speed equal to your speed), Inner Radiance (you shed light and creatures within 10 feet take radiant damage equal to your proficiency bonus at the end of your turns) or Necrotic Shroud (creatures within 10 feet make a Charisma save, DC 8 + Charisma + proficiency bonus, or are Frightened until the end of your next turn). Once per Long Rest.", "Acción adicional: te transformas durante 1 minuto. Una vez por turno, un objetivo al que dañes con un ataque o un conjuro recibe daño extra igual a tu bonificador por competencia (radiante, o necrótico con Sudario necrótico). Cada vez eliges: Alas celestiales (velocidad de vuelo igual a tu velocidad), Resplandor interior (emites luz y las criaturas a 10 pies reciben daño radiante igual a tu bonificador por competencia al final de tus turnos) o Sudario necrótico (las criaturas a 10 pies hacen una salvación de Carisma, CD 8 + Carisma + bonificador por competencia, o quedan asustadas hasta el final de tu siguiente turno). Una vez por descanso largo."),
     ],
   },
   {
     id: "dragonborn", name: t("Dragonborn", "Dracónido"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
     traits: [
-      f("Breath Weapon", "Arma de aliento", "Replace one attack with a 15-foot cone or 30-foot line of your ancestry's damage (1d10, Dexterity save halves it). Uses equal to your proficiency bonus per Long Rest.", "Sustituyes un ataque por un cono de 15 pies o una línea de 30 pies del daño de tu ascendencia (1d10, salvación de Destreza para la mitad). Tantos usos como tu bonificador por competencia por descanso largo."),
+      f("Breath Weapon", "Arma de aliento", "When you take the Attack action, replace one attack with a 15-foot cone or a 30-foot line (5 feet wide) of your ancestry's damage: Dexterity save (DC 8 + Constitution + proficiency bonus), 1d10 damage or half on a success. The damage rises to 2d10 at level 5, 3d10 at 11 and 4d10 at 17. Uses equal to your proficiency bonus per Long Rest.", "Cuando haces la acción de Atacar, sustituyes un ataque por un cono de 15 pies o una línea de 30 pies (5 de ancho) del daño de tu ascendencia: salvación de Destreza (CD 8 + Constitución + bonificador por competencia), 1d10 de daño o la mitad si la supera. El daño sube a 2d10 al nivel 5, 3d10 al 11 y 4d10 al 17. Tantos usos como tu bonificador por competencia por descanso largo."),
       f("Damage Resistance", "Resistencia al daño", "Resistance to the damage type of your draconic ancestry.", "Resistencia al tipo de daño de tu ascendencia dracónica."),
-      f("Draconic Flight (level 5)", "Vuelo dracónico (nivel 5)", "Bonus action: sprout spectral wings and gain a fly speed for 10 minutes. Once per Long Rest.", "Acción adicional: te salen alas espectrales y ganas velocidad de vuelo durante 10 minutos. Una vez por descanso largo."),
+      f("Draconic Flight (level 5)", "Vuelo dracónico (nivel 5)", "Bonus action: sprout spectral wings and gain a fly speed equal to your speed for 10 minutes. Once per Long Rest.", "Acción adicional: te salen alas espectrales y ganas una velocidad de vuelo igual a tu velocidad durante 10 minutos. Una vez por descanso largo."),
     ],
     lineageLabel: t("Draconic Ancestry", "Ascendencia dracónica"),
     lineages: [
-      ["black", "Black", "Negro", "Acid", "Ácido"], ["blue", "Blue", "Azul", "Lightning", "Relámpago"], ["brass", "Brass", "Latón", "Fire", "Fuego"],
-      ["bronze", "Bronze", "Bronce", "Lightning", "Relámpago"], ["copper", "Copper", "Cobre", "Acid", "Ácido"], ["gold", "Gold", "Oro", "Fire", "Fuego"],
-      ["green", "Green", "Verde", "Poison", "Veneno"], ["red", "Red", "Rojo", "Fire", "Fuego"], ["silver", "Silver", "Plata", "Cold", "Frío"], ["white", "White", "Blanco", "Cold", "Frío"],
-    ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
+      ["black", "Black", "Negro", "Acid", "Ácido", "acid", "ácido"], ["blue", "Blue", "Azul", "Lightning", "Relámpago", "lightning", "relámpago"],
+      ["brass", "Brass", "Latón", "Fire", "Fuego", "fire", "fuego"], ["bronze", "Bronze", "Bronce", "Lightning", "Relámpago", "lightning", "relámpago"],
+      ["copper", "Copper", "Cobre", "Acid", "Ácido", "acid", "ácido"], ["gold", "Gold", "Oro", "Fire", "Fuego", "fire", "fuego"],
+      ["green", "Green", "Verde", "Poison", "Veneno", "poison", "veneno"], ["red", "Red", "Rojo", "Fire", "Fuego", "fire", "fuego"],
+      ["silver", "Silver", "Plata", "Cold", "Frío", "cold", "frío"], ["white", "White", "Blanco", "Cold", "Frío", "cold", "frío"],
+    ].map(([id, en, es, den, des, type, tipo]) => ({ id, name: t(en, es), detail: t(den, des),
+      description: t(`Your Breath Weapon deals ${type} damage and you have resistance to ${type} damage.`, `Tu Arma de aliento hace daño de ${tipo} y tienes resistencia al daño de ${tipo}.`) })),
   },
   {
     id: "dwarf", name: t("Dwarf", "Enano"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
@@ -573,52 +592,67 @@ export const species: SpeciesData[] = [
   {
     id: "elf", name: t("Elf", "Elfo"), source: "phb2024", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
     traits: [
+      f("Elven Lineage", "Linaje élfico", "Your lineage grants a cantrip, a level 1 spell at level 3 and a level 2 spell at level 5. Those spells are always prepared; cast each once per Long Rest without a slot, or with your slots. You cast them with the ability you choose: Intelligence, Wisdom or Charisma.", "Tu linaje te da un truco, un conjuro de nivel 1 al nivel 3 y uno de nivel 2 al nivel 5. Esos conjuros están siempre preparados; lanzas cada uno una vez por descanso largo sin espacio, o con tus espacios. Los lanzas con la característica que elijas: Inteligencia, Sabiduría o Carisma."),
       f("Fey Ancestry", "Linaje feérico", "Advantage on saves to avoid or end the Charmed condition.", "Ventaja en salvaciones para evitar o terminar el estado hechizado."),
       f("Keen Senses", "Sentidos agudos", "Proficiency in Insight, Perception or Survival.", "Competencia en Perspicacia, Percepción o Supervivencia."),
-      f("Trance", "Trance", "You don't need to sleep; 4 hours of meditative trance give you the benefits of a Long Rest.", "No necesitas dormir; 4 horas de trance meditativo te dan los beneficios de un descanso largo."),
+      f("Trance", "Trance", "You don't need to sleep and magic can't put you to sleep; 4 hours of meditative trance give you the benefits of a Long Rest.", "No necesitas dormir y la magia no puede dormirte; 4 horas de trance meditativo te dan los beneficios de un descanso largo."),
     ],
     lineageLabel: t("Elven Lineage", "Linaje élfico"),
     lineages: [
-      { id: "drow", name: t("Drow", "Drow"), detail: t("Darkvision 120 ft.", "Visión en la oscuridad 120 pies"), darkvision: 120 },
-      { id: "high", name: t("High Elf", "Alto elfo"), detail: t("Prestidigitation cantrip", "Truco Prestidigitación") },
-      { id: "wood", name: t("Wood Elf", "Elfo de los bosques"), detail: t("Speed 35 ft.", "Velocidad 35 pies"), speed: 35 },
+      { id: "drow", name: t("Drow", "Drow"), darkvision: 120,
+        detail: t("Darkvision 120 ft.; Dancing Lights, Faerie Fire, Darkness", "Visión en la oscuridad 120 pies; Luces danzantes, Fuego feérico, Oscuridad"),
+        description: t("Your Darkvision reaches 120 feet. You know Dancing Lights; Faerie Fire at level 3 and Darkness at level 5.", "Tu visión en la oscuridad llega a 120 pies. Conoces Luces danzantes; Fuego feérico al nivel 3 y Oscuridad al nivel 5.") },
+      { id: "high", name: t("High Elf", "Alto elfo"),
+        detail: t("Prestidigitation, Detect Magic, Misty Step", "Prestidigitación, Detectar magia, Paso brumoso"),
+        description: t("You know Prestidigitation, and after a Long Rest you can swap it for another Wizard cantrip; Detect Magic at level 3 and Misty Step at level 5.", "Conoces Prestidigitación y, tras un descanso largo, puedes cambiarlo por otro truco de mago; Detectar magia al nivel 3 y Paso brumoso al nivel 5.") },
+      { id: "wood", name: t("Wood Elf", "Elfo de los bosques"), speed: 35,
+        detail: t("Speed 35 ft.; Druidcraft, Longstrider, Pass without Trace", "Velocidad 35 pies; Saber druídico, Zancada prodigiosa, Pasar sin rastro"),
+        description: t("Your speed is 35 feet. You know Druidcraft; Longstrider at level 3 and Pass without Trace at level 5.", "Tu velocidad es de 35 pies. Conoces Saber druídico; Zancada prodigiosa al nivel 3 y Pasar sin rastro al nivel 5.") },
     ],
     skillChoice: { count: 1, options: ["insight", "perception", "survival"] },
+    spellAbilityChoice: true,
   },
   {
     id: "gnome", name: t("Gnome", "Gnomo"), source: "phb2024", size: t("Small", "Pequeño"), speed: 30, darkvision: 60,
     traits: [
       f("Gnomish Cunning", "Astucia gnoma", "Advantage on Intelligence, Wisdom and Charisma saving throws.", "Ventaja en las salvaciones de Inteligencia, Sabiduría y Carisma."),
+      f("Gnomish Lineage", "Linaje gnomo", "Your lineage grants spells that you cast with the ability you choose: Intelligence, Wisdom or Charisma.", "Tu linaje te da conjuros que lanzas con la característica que elijas: Inteligencia, Sabiduría o Carisma."),
     ],
     lineageLabel: t("Gnomish Lineage", "Linaje gnomo"),
     lineages: [
-      { id: "forest", name: t("Forest Gnome", "Gnomo de los bosques"), detail: t("Minor Illusion, Speak with Animals", "Ilusión menor, Hablar con los animales") },
-      { id: "rock", name: t("Rock Gnome", "Gnomo de las rocas"), detail: t("Mending, Prestidigitation, tinkering", "Reparar, Prestidigitación, artilugios") },
+      { id: "forest", name: t("Forest Gnome", "Gnomo de los bosques"),
+        detail: t("Minor Illusion, Speak with Animals", "Ilusión menor, Hablar con los animales"),
+        description: t("You know Minor Illusion. Speak with Animals is always prepared and you can cast it without a slot a number of times equal to your proficiency bonus per Long Rest.", "Conoces Ilusión menor. Hablar con los animales está siempre preparado y puedes lanzarlo sin espacio tantas veces como tu bonificador por competencia por descanso largo.") },
+      { id: "rock", name: t("Rock Gnome", "Gnomo de las rocas"),
+        detail: t("Mending, Prestidigitation, clockwork devices", "Reparar, Prestidigitación, artilugios mecánicos"),
+        description: t("You know Mending and Prestidigitation. Spending 10 minutes casting Prestidigitation, you build a Tiny clockwork device (AC 5, 1 HP) that reproduces one of that spell's effects; you can keep three at a time and each lasts 8 hours.", "Conoces Reparar y Prestidigitación. Si pasas 10 minutos lanzando Prestidigitación, construyes un artilugio mecánico diminuto (CA 5, 1 PG) que reproduce uno de los efectos de ese conjuro; puedes tener tres a la vez y cada uno dura 8 horas.") },
     ],
+    spellAbilityChoice: true,
   },
   {
     id: "goliath", name: t("Goliath", "Goliat"), source: "phb2024", size: t("Medium", "Mediano"), speed: 35,
     traits: [
+      f("Giant Ancestry", "Ascendencia gigante", "A supernatural boon from your giant ancestors; you can use it a number of times equal to your proficiency bonus per Long Rest.", "Un don sobrenatural de tus antepasados gigantes; puedes usarlo tantas veces como tu bonificador por competencia por descanso largo."),
       f("Large Form (level 5)", "Forma grande (nivel 5)", "Bonus action: become Large for 10 minutes, with advantage on Strength checks and +10 feet of speed. Once per Long Rest.", "Acción adicional: pasas a tamaño grande durante 10 minutos, con ventaja en pruebas de Fuerza y +10 pies de velocidad. Una vez por descanso largo."),
       f("Powerful Build", "Complexión poderosa", "Advantage on checks to end the Grappled condition, and you count as one size larger for carrying capacity.", "Ventaja en pruebas para terminar el estado agarrado, y cuentas como un tamaño mayor para la capacidad de carga."),
     ],
     lineageLabel: t("Giant Ancestry", "Ascendencia gigante"),
     lineages: [
-      ["cloud", "Cloud's Jaunt", "Paso de las nubes", "Bonus action: teleport up to 30 feet", "Acción adicional: te teletransportas hasta 30 pies"],
-      ["fire", "Fire's Burn", "Quemadura de fuego", "+1d10 fire damage when you hit", "+1d10 de daño de fuego al impactar"],
-      ["frost", "Frost's Chill", "Gélido de escarcha", "+1d6 cold damage and −10 feet speed to the target when you hit", "+1d6 de daño de frío y −10 pies de velocidad al objetivo al impactar"],
-      ["hill", "Hill's Tumble", "Derribo de colina", "Knock a Large or smaller target Prone when you hit", "Derribas a un objetivo grande o menor al impactar"],
-      ["stone", "Stone's Endurance", "Aguante de piedra", "Reaction: reduce damage taken by 1d12 + Constitution", "Reacción: reduces el daño recibido en 1d12 + Constitución"],
-      ["storm", "Storm's Thunder", "Trueno de tormenta", "Reaction: deal 1d8 thunder damage to a creature that damages you", "Reacción: haces 1d8 de daño de trueno a quien te daña"],
+      ["cloud", "Cloud's Jaunt", "Paso de las nubes", "Bonus action: teleport up to 30 feet to a space you can see", "Acción adicional: te teletransportas hasta 30 pies a un espacio que veas"],
+      ["fire", "Fire's Burn", "Quemadura de fuego", "+1d10 fire damage when you hit with an attack roll", "+1d10 de daño de fuego al impactar con una tirada de ataque"],
+      ["frost", "Frost's Chill", "Gélido de escarcha", "+1d6 cold damage and −10 feet speed to the target until your next turn when you hit with an attack roll", "+1d6 de daño de frío y −10 pies de velocidad al objetivo hasta tu siguiente turno al impactar con una tirada de ataque"],
+      ["hill", "Hill's Tumble", "Derribo de colina", "Knock a Large or smaller target Prone when you hit with an attack roll", "Derribas a un objetivo grande o menor al impactar con una tirada de ataque"],
+      ["stone", "Stone's Endurance", "Aguante de piedra", "Reaction when you take damage: reduce it by 1d12 + Constitution", "Reacción al recibir daño: lo reduces en 1d12 + Constitución"],
+      ["storm", "Storm's Thunder", "Trueno de tormenta", "Reaction when a creature within 60 feet damages you: it takes 1d8 thunder damage", "Reacción cuando una criatura a 60 pies te daña: recibe 1d8 de daño de trueno"],
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(`${den} (proficiency bonus uses per Long Rest)`, `${des} (tantos usos como tu bonificador por competencia por descanso largo)`) })),
   },
   {
     id: "halfling", name: t("Halfling", "Mediano"), source: "phb2024", size: t("Small", "Pequeño"), speed: 30,
     traits: [
       f("Brave", "Valiente", "Advantage on saves to avoid or end the Frightened condition.", "Ventaja en salvaciones para evitar o terminar el estado asustado."),
-      f("Halfling Nimbleness", "Agilidad mediana", "You can move through the space of any creature larger than you.", "Puedes atravesar el espacio de cualquier criatura más grande que tú."),
+      f("Halfling Nimbleness", "Agilidad mediana", "You can move through the space of any creature larger than you, but you can't stop there.", "Puedes atravesar el espacio de cualquier criatura más grande que tú, pero no detenerte en él."),
       f("Luck", "Suerte", "When you roll a 1 on a d20 test, reroll it and use the new roll.", "Cuando sacas un 1 en una prueba de d20, repites la tirada y usas el nuevo resultado."),
-      f("Naturally Stealthy", "Sigiloso por naturaleza", "You can try to hide behind a creature at least one size larger than you.", "Puedes intentar esconderte detrás de una criatura al menos un tamaño mayor que tú."),
+      f("Naturally Stealthy", "Sigiloso por naturaleza", "You can take the Hide action even when only obscured by a creature at least one size larger than you.", "Puedes hacer la acción de Esconderte aunque solo te cubra una criatura al menos un tamaño mayor que tú."),
     ],
   },
   {
@@ -640,14 +674,22 @@ export const species: SpeciesData[] = [
   {
     id: "tiefling", name: t("Tiefling", "Tiflin"), source: "phb2024", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
     traits: [
+      f("Fiendish Legacy", "Legado infernal", "Your legacy grants a damage resistance, a cantrip, a level 1 spell at level 3 and a level 2 spell at level 5. Those spells are always prepared; cast each once per Long Rest without a slot, or with your slots. You cast them with the ability you choose: Intelligence, Wisdom or Charisma.", "Tu legado te da una resistencia al daño, un truco, un conjuro de nivel 1 al nivel 3 y uno de nivel 2 al nivel 5. Esos conjuros están siempre preparados; lanzas cada uno una vez por descanso largo sin espacio, o con tus espacios. Los lanzas con la característica que elijas: Inteligencia, Sabiduría o Carisma."),
       f("Otherworldly Presence", "Presencia de otro mundo", "You know the Thaumaturgy cantrip, cast with the same ability as your Fiendish Legacy spells.", "Conoces el truco Taumaturgia, que lanzas con la misma característica que los conjuros de tu legado infernal."),
     ],
     lineageLabel: t("Fiendish Legacy", "Legado infernal"),
     lineages: [
-      { id: "abyssal", name: t("Abyssal", "Abisal"), detail: t("Poison resistance", "Resistencia al veneno") },
-      { id: "chthonic", name: t("Chthonic", "Ctónico"), detail: t("Necrotic resistance", "Resistencia al daño necrótico") },
-      { id: "infernal", name: t("Infernal", "Infernal"), detail: t("Fire resistance", "Resistencia al fuego") },
+      { id: "abyssal", name: t("Abyssal", "Abisal"),
+        detail: t("Poison resistance; Poison Spray, Ray of Sickness, Hold Person", "Resistencia al veneno; Rociada venenosa, Rayo nauseabundo, Inmovilizar persona"),
+        description: t("Resistance to poison damage. You know Poison Spray; Ray of Sickness at level 3 and Hold Person at level 5.", "Resistencia al daño de veneno. Conoces Rociada venenosa; Rayo nauseabundo al nivel 3 e Inmovilizar persona al nivel 5.") },
+      { id: "chthonic", name: t("Chthonic", "Ctónico"),
+        detail: t("Necrotic resistance; Chill Touch, False Life, Ray of Enfeeblement", "Resistencia al daño necrótico; Toque gélido, Falsa vida, Rayo debilitante"),
+        description: t("Resistance to necrotic damage. You know Chill Touch; False Life at level 3 and Ray of Enfeeblement at level 5.", "Resistencia al daño necrótico. Conoces Toque gélido; Falsa vida al nivel 3 y Rayo debilitante al nivel 5.") },
+      { id: "infernal", name: t("Infernal", "Infernal"),
+        detail: t("Fire resistance; Fire Bolt, Hellish Rebuke, Darkness", "Resistencia al fuego; Descarga de fuego, Reprensión infernal, Oscuridad"),
+        description: t("Resistance to fire damage. You know Fire Bolt; Hellish Rebuke at level 3 and Darkness at level 5.", "Resistencia al daño de fuego. Conoces Descarga de fuego; Reprensión infernal al nivel 3 y Oscuridad al nivel 5.") },
     ],
+    spellAbilityChoice: true,
   },
 
   // --- Eberron: Forge of the Artificer (2025), already written for the 2024 rules ---
@@ -708,7 +750,7 @@ export const species: SpeciesData[] = [
 
   // --- Mordenkainen Presents: Monsters of the Multiverse (2022) ---
   {
-    id: "aarakocra", name: t("Aarakocra", "Aarakocra"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    id: "aarakocra", name: t("Aarakocra", "Aarakocra"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, spellAbilityChoice: true,
     traits: [
       f("Flight", "Vuelo", "Fly speed equal to your walking speed, as long as you aren't wearing Medium or Heavy armor.", "Velocidad de vuelo igual a tu velocidad caminando, si no llevas armadura media ni pesada."),
       f("Talons", "Garras", "Your unarmed strikes can deal 1d6 + Strength slashing damage.", "Tus ataques sin armas pueden hacer 1d6 + Fuerza de daño cortante."),
@@ -737,7 +779,7 @@ export const species: SpeciesData[] = [
     skillChoice: { count: 1, options: ["animalHandling", "medicine", "nature", "survival"] },
   },
   {
-    id: "deepGnome", name: t("Deep Gnome", "Gnomo de las profundidades"), source: "motm2022", size: t("Small", "Pequeño"), speed: 30, darkvision: 120,
+    id: "deepGnome", name: t("Deep Gnome", "Gnomo de las profundidades"), source: "motm2022", size: t("Small", "Pequeño"), speed: 30, darkvision: 120, spellAbilityChoice: true,
     traits: [
       f("Gift of the Svirfneblin (level 3)", "Don de los svirfneblin (nivel 3)", "Cast Disguise Self (level 3) and Nondetection (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Disfrazarse (nivel 3) e Indetectable (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
       f("Gnomish Magic Resistance", "Resistencia mágica gnoma", "Advantage on Intelligence, Wisdom and Charisma saves against spells.", "Ventaja en salvaciones de Inteligencia, Sabiduría y Carisma contra conjuros."),
@@ -745,7 +787,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "duergar", name: t("Duergar", "Duergar"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 120,
+    id: "duergar", name: t("Duergar", "Duergar"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 120, spellAbilityChoice: true,
     traits: [
       f("Duergar Magic (level 3)", "Magia duergar (nivel 3)", "Cast Enlarge/Reduce (level 3) and Invisibility (level 5) on yourself once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Agrandar/reducir (nivel 3) e Invisibilidad (nivel 5) sobre ti una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
       f("Dwarven Resilience", "Resistencia enana", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),
@@ -770,14 +812,14 @@ export const species: SpeciesData[] = [
     ].map(([id, en, es, den, des]) => ({ id, name: t(en, es), detail: t(den, des) })),
   },
   {
-    id: "fairy", name: t("Fairy", "Hada"), source: "motm2022", creatureType: t("Fey", "Feérico"), size: t("Small", "Pequeño"), speed: 30,
+    id: "fairy", name: t("Fairy", "Hada"), source: "motm2022", creatureType: t("Fey", "Feérico"), size: t("Small", "Pequeño"), speed: 30, spellAbilityChoice: true,
     traits: [
       f("Fairy Magic", "Magia feérica", "You know Druidcraft; cast Faerie Fire (level 3) and Enlarge/Reduce (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces Saber druídico; lanzas Fuego feérico (nivel 3) y Agrandar/reducir (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
       f("Flight", "Vuelo", "Fly speed equal to your walking speed, as long as you aren't wearing Medium or Heavy armor.", "Velocidad de vuelo igual a tu velocidad caminando, si no llevas armadura media ni pesada."),
     ],
   },
   {
-    id: "firbolg", name: t("Firbolg", "Firbolg"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    id: "firbolg", name: t("Firbolg", "Firbolg"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, spellAbilityChoice: true,
     traits: [
       f("Firbolg Magic", "Magia firbolg", "Cast Detect Magic and Disguise Self once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Detectar magia y Disfrazarse una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
       f("Hidden Step", "Paso oculto", "Bonus action: turn invisible until the start of your next turn or until you attack, deal damage or force a save. Uses equal to your proficiency bonus per Long Rest.", "Acción adicional: te vuelves invisible hasta el inicio de tu siguiente turno o hasta que ataques, hagas daño u obligues a una salvación. Tantos usos como tu bonificador por competencia por descanso largo."),
@@ -786,7 +828,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "genasi", name: t("Genasi", "Genasi"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    id: "genasi", name: t("Genasi", "Genasi"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60, spellAbilityChoice: true,
     traits: [
       f("Elemental Magic", "Magia elemental", "Your element grants a cantrip, a level 1 spell at level 3 and a level 2 spell at level 5 (once per Long Rest each without a slot), using Intelligence, Wisdom or Charisma.", "Tu elemento te da un truco, un conjuro de nivel 1 al nivel 3 y uno de nivel 2 al nivel 5 (una vez por descanso largo cada uno sin espacio), con Inteligencia, Sabiduría o Carisma."),
     ],
@@ -799,7 +841,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "githyanki", name: t("Githyanki", "Githyanki"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    id: "githyanki", name: t("Githyanki", "Githyanki"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, spellAbilityChoice: true,
     traits: [
       f("Astral Knowledge", "Conocimiento astral", "After each Long Rest, gain proficiency in one skill and one weapon or tool of your choice until the next one.", "Tras cada descanso largo, ganas competencia en una habilidad y en un arma o herramienta a tu elección hasta el siguiente."),
       f("Githyanki Psionics", "Psiónica githyanki", "You know an invisible Mage Hand; cast Jump (level 3) and Misty Step (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces una Mano de mago invisible; lanzas Salto (nivel 3) y Paso brumoso (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
@@ -808,7 +850,7 @@ export const species: SpeciesData[] = [
     skillChoice: { count: 1, options: [] },
   },
   {
-    id: "githzerai", name: t("Githzerai", "Githzerai"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30,
+    id: "githzerai", name: t("Githzerai", "Githzerai"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, spellAbilityChoice: true,
     traits: [
       f("Githzerai Psionics", "Psiónica githzerai", "You know an invisible Mage Hand; cast Shield (level 3) and Detect Thoughts (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Conoces una Mano de mago invisible; lanzas Escudo (nivel 3) y Detectar pensamientos (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
       f("Mental Discipline", "Disciplina mental", "Advantage on saves to avoid or end the Charmed and Frightened conditions.", "Ventaja en salvaciones para evitar o terminar los estados hechizado y asustado."),
@@ -859,7 +901,7 @@ export const species: SpeciesData[] = [
     lineages: [
       { id: "craftiness", name: t("Craftiness", "Astucia"), detail: t("Proficiency in Arcana, Investigation, Medicine, Sleight of Hand or Survival", "Competencia en Arcanos, Investigación, Medicina, Juego de manos o Supervivencia") },
       { id: "defiance", name: t("Defiance", "Desafío"), detail: t("Advantage on saves to avoid or end the Frightened condition", "Ventaja en salvaciones para evitar o terminar el estado asustado") },
-      { id: "sorcery", name: t("Draconic Sorcery", "Hechicería dracónica"), detail: t("A Sorcerer cantrip, cast with Intelligence, Wisdom or Charisma", "Un truco de hechicero, lanzado con Inteligencia, Sabiduría o Carisma") },
+      { id: "sorcery", name: t("Draconic Sorcery", "Hechicería dracónica"), detail: t("A Sorcerer cantrip, cast with Intelligence, Wisdom or Charisma", "Un truco de hechicero, lanzado con Inteligencia, Sabiduría o Carisma"), spellAbilityChoice: true },
     ],
   },
   {
@@ -935,7 +977,7 @@ export const species: SpeciesData[] = [
     skillChoice: { count: 1, options: ["animalHandling", "medicine", "nature", "perception", "stealth", "survival"] },
   },
   {
-    id: "triton", name: t("Triton", "Tritón"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60,
+    id: "triton", name: t("Triton", "Tritón"), source: "motm2022", size: t("Medium", "Mediano"), speed: 30, darkvision: 60, spellAbilityChoice: true,
     traits: [
       f("Amphibious", "Anfibio", "You can breathe air and water, and you have a swim speed equal to your walking speed.", "Respiras aire y agua, y tienes velocidad nadando igual a tu velocidad caminando."),
       f("Control Air and Water", "Controlar aire y agua", "Cast Fog Cloud, Gust of Wind (level 3) and Water Walk (level 5) once per Long Rest each without a slot, using Intelligence, Wisdom or Charisma.", "Lanzas Nube de niebla, Ráfaga de viento (nivel 3) y Caminar sobre el agua (nivel 5) una vez por descanso largo cada uno sin espacio, con Inteligencia, Sabiduría o Carisma."),
@@ -944,7 +986,7 @@ export const species: SpeciesData[] = [
     ],
   },
   {
-    id: "yuanTi", name: t("Yuan-ti", "Yuan-ti"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60,
+    id: "yuanTi", name: t("Yuan-ti", "Yuan-ti"), source: "motm2022", size: t("Medium or Small", "Mediano o pequeño"), speed: 30, darkvision: 60, spellAbilityChoice: true,
     traits: [
       f("Magic Resistance", "Resistencia mágica", "Advantage on saving throws against spells.", "Ventaja en las salvaciones contra conjuros."),
       f("Poison Resilience", "Resistencia al veneno", "Resistance to poison damage and advantage on saves to avoid or end the Poisoned condition.", "Resistencia al daño de veneno y ventaja en salvaciones para evitar o terminar el estado envenenado."),

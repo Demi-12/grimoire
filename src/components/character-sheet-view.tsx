@@ -138,6 +138,7 @@ export default function CharacterSheetView({ character, campaignName, locale, on
         {traits.length > 0 && <section className={styles.panel} aria-labelledby="sheet-traits">
           <h3 id="sheet-traits">{t("character.sheetSpeciesTraits")}</h3>
           <FeatureList items={traits} locale={locale} />
+          {sheet?.speciesSpells && <p className={styles.text}><b>{t("character.speciesSpells")}:</b> {t("character.spellDc")} {sheet.speciesSpells.saveDc} · {t("character.spellAttack")} {signed(sheet.speciesSpells.attack)}</p>}
         </section>}
 
         {cls && <section className={styles.panel} aria-labelledby="sheet-proficiencies">
