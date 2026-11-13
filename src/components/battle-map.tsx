@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import Link from "next/link";
+import { track } from "@/lib/telemetry-client";
 import { api, ApiError, type SavedEncounter } from "@/lib/api-client";
 import type { MapSaveSummary } from "@/lib/battle-map-data";
 import {
@@ -195,6 +196,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const audience = tableMode || playersView ? "players" : "auto";
   const audienceRef = useRef(audience);
   useEffect(() => { audienceRef.current = audience; }, [audience]);
+  useEffect(() => { track("page.view", { section: "map" }); }, [campaignId]);
   useDocumentTitle(map ? t.docTitle(map.campaignName) : null);
 
   useEffect(() => {

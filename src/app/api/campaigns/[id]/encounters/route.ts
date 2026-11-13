@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { createEncounter, listEncounters } from "@/lib/data";
@@ -27,5 +28,6 @@ export async function POST(request: Request, { params }: Context) {
   const input = parseEncounterInput(await readJson(request));
   if (!input) return jsonError(400, "Invalid encounter.");
   const result = await createEncounter(user, id, input);
+  if (result.ok) await recordEvent(user.id, "encounter.saved", { status: result.value.status, difficulty: result.value.difficulty });
   return result.ok ? NextResponse.json({ encounter: result.value }, { status: 201 }) : dataErrorResponse(result.error);
 }

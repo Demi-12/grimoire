@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { MEMBER_LOOKUP_LIMIT } from "@/lib/rate-limit";
 import { addCampaignMemberByQuery, setCampaignMemberRole } from "@/lib/data";
@@ -27,6 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const query = body.query.trim();
     if (!query || query.length > 254) return jsonError(400, "Invalid member.");
     const added = await addCampaignMemberByQuery(user, id, query, body.role);
+    if (added.ok) await recordEvent(user.id, "campaign.joined", { via: "added" });
     if (added.ok) return NextResponse.json({ name: added.value.name }, { status: 201 });
     if (added.error in addMessages) {
       const [status, message] = addMessages[added.error as keyof typeof addMessages];

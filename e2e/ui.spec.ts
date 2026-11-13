@@ -28,6 +28,31 @@ const adminUsers = [{
   emailVerified: true, twoFactorEnabled: false, createdAt: "2026-01-01T00:00:00Z", campaignCount: 1, characterCount: 1,
 }];
 
+/** A month of made-up usage with a couple of grouped errors, for the analytics dashboard. */
+const analyticsDays = Array.from({ length: 30 }, (_, index) => {
+  const date = new Date(Date.UTC(2026, 9, 15 + index)).toISOString().slice(0, 10);
+  return { date, activeUsers: [2, 3, 5, 4, 6, 8, 3][index % 7], characters: index % 4 === 0 ? 2 : index % 3 === 0 ? 1 : 0, encounters: [0, 3, 6, 1, 4, 9, 2][index % 7], campaigns: index % 9 === 0 ? 1 : 0, errors: index % 6 === 0 ? 3 : index === 28 ? 7 : 0 };
+});
+const analyticsReport = {
+  range: { days: 30, timeZone: "UTC", from: analyticsDays[0].date, to: analyticsDays[29].date, generatedAt: "2026-11-13T18:00:00Z" },
+  kpis: {
+    activeUsers: { current: 9, previous: 7 }, activeToday: 3, approvedUsers: 12, newUsers: { current: 2, previous: 1 },
+    charactersCreated: { current: 23, previous: 25, creator: 19, manual: 4 },
+    encountersGenerated: { current: 112, previous: 80 }, encountersSaved: { current: 14, previous: 9 },
+    campaignsCreated: { current: 4, previous: 4 }, campaignsJoined: { current: 7, previous: 2 },
+    errors: { current: 22, previous: 30, users: 3, server: 15, client: 7 }, wizard: { started: 31, completed: 19 },
+  },
+  daily: analyticsDays,
+  sections: [
+    { section: "encounters", views: 240, users: 8 }, { section: "characters", views: 190, users: 9 }, { section: "character-sheet", views: 133, users: 7 },
+    { section: "campaigns", views: 96, users: 6 }, { section: "map", views: 51, users: 5 }, { section: "home", views: 44, users: 9 }, { section: "account", views: 6, users: 3 },
+  ],
+  errors: [
+    { fingerprint: "f1", source: "server", name: "error", message: "duplicate key value violates unique constraint \"campaign_member_pkey\" for a very long constraint name that has to wrap", route: "/api/campaigns/[id]/members", method: "POST", count: 15, users: 2, firstSeen: "2026-10-20T10:00:00Z", lastSeen: "2026-11-13T17:40:00Z", stack: "error: duplicate key value violates unique constraint\n    at Parser.parseErrorMessage (node_modules/pg-protocol/dist/parser.js:283:98)\n    at addCampaignMemberByQuery (src/lib/data.ts:260:5)", digest: "3201749273", userAgent: "Chrome 131 · Android" },
+    { fingerprint: "f2", source: "client", name: "TypeError", message: "Cannot read properties of undefined (reading 'hitPoints')", route: "/characters/:id", method: null, count: 7, users: 1, firstSeen: "2026-11-02T10:00:00Z", lastSeen: "2026-11-11T09:00:00Z", stack: null, digest: null, userAgent: "Safari 18 · iOS" },
+  ],
+};
+
 /** Replaces every API call with canned data so the app runs without a database. */
 async function mockApi(page: Page) {
   await page.route("**/api/**", async (route) => {
@@ -43,11 +68,12 @@ async function mockApi(page: Page) {
     if (/^\/api\/campaigns\/[^/]+\/invites$/.test(pathname)) return json({ invites: [] });
     if (/^\/api\/campaigns\/[^/]+\/encounters$/.test(pathname)) return json({ encounters: [] });
     if (pathname === "/api/admin/users") return json({ users: adminUsers });
+    if (pathname === "/api/admin/analytics") return json({ report: analyticsReport });
     return json({});
   });
 }
 
-const routes = ["/", "/characters", "/characters/ch1", "/campaigns", "/encounters", "/account", "/admin"];
+const routes = ["/", "/characters", "/characters/ch1", "/campaigns", "/encounters", "/account", "/admin", "/admin/analytics"];
 const widths = [320, 360, 390, 1280];
 const themes = ["light", "dark"] as const;
 
@@ -76,6 +102,16 @@ for (const theme of themes) {
             await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
             await expect(page.getByRole("heading", { name: "Attacks" })).toBeVisible();
             await expect(page.locator(".character-grid")).toBeHidden();
+          }
+
+          if (route === "/admin/analytics") {
+            // The dashboard rendered its figures, both charts and the grouped error log.
+            await expect(page.getByRole("heading", { name: "Analytics", level: 1 })).toBeVisible();
+            await expect(page.getByRole("link", { name: "Analytics" })).toHaveAttribute("aria-current", "page");
+            await expect(page.getByRole("heading", { name: "Active accounts", level: 3 })).toBeVisible();
+            await expect(page.getByRole("group", { name: "Active accounts per day" }).locator("svg")).toBeVisible();
+            await expect(page.getByRole("group", { name: "Errors per day" }).locator("svg")).toBeVisible();
+            await expect(page.getByText("Cannot read properties of undefined (reading 'hitPoints')")).toBeVisible();
           }
 
           // (a) No horizontal page scroll.

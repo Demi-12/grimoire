@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
 import { deleteCharacter, updateCharacter } from "@/lib/data";
@@ -29,5 +30,6 @@ export async function DELETE(_request: Request, { params }: Context) {
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");
   const result = await deleteCharacter(user, id);
+  if (result.ok) await recordEvent(user.id, "character.deleted");
   return result.ok ? new NextResponse(null, { status: 204 }) : dataErrorResponse(result.error);
 }

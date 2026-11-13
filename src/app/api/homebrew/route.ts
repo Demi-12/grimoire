@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics-server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { createHomebrew, listHomebrew } from "@/lib/data";
 import { parseHomebrewInput } from "@/lib/homebrew";
@@ -23,5 +24,6 @@ export async function POST(request: Request) {
   const parsed = parseHomebrewInput(await readJson(request));
   if (!parsed.ok) return jsonError(400, parsed.error);
   const result = await createHomebrew(user, parsed.value, parsed.summary);
+  if (result.ok) await recordEvent(user.id, "homebrew.created");
   return result.ok ? NextResponse.json({ monster: result.value }, { status: 201 }) : dataErrorResponse(result.error);
 }

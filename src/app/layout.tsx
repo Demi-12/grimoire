@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Alegreya, Alegreya_SC, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
+import ErrorReporting from "@/components/error-reporting";
 import "./tokens.css";
 import "./globals.css";
 import "./dnd-theme.css";
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={fontVars} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
-      <body>{children}</body>
+      <body><ErrorReporting />{children}</body>
     </html>
   );
 }

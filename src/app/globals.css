@@ -766,3 +766,11 @@ body { font-variant-emoji: text; }
   .app-shell { min-height: calc(100vh / var(--ui-zoom)); }
   .sidebar { height: calc(100vh / var(--ui-zoom)); }
 }
+
+/* Admin area tabs (Users / Analytics): each tab is its own URL. */
+.admin-tabs{display:flex;gap:4px;margin:-8px 0 20px;border-bottom:1px solid var(--line);overflow-x:auto}
+.admin-tabs a{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--muted);text-decoration:none;font:600 13px var(--font-statblock);white-space:nowrap}
+.admin-tabs a:hover{color:var(--ink)}
+.admin-tabs a[aria-current="page"]{color:var(--crimson);border-bottom-color:var(--crimson)}
+.admin-tabs a:focus-visible{outline:2px solid var(--crimson);outline-offset:-2px}
+.admin-tabs .nav-alert{margin-left:2px}
