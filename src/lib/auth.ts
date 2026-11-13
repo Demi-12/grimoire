@@ -4,9 +4,11 @@ import { APIError } from "better-auth/api";
 import { passkey } from "@better-auth/passkey";
 import { twoFactor } from "better-auth/plugins";
 import { sendAuthEmail } from "@/lib/auth-email";
+import { resetPasswordEmail } from "@/lib/auth-email-templates";
 import { pool } from "@/lib/db";
 import { parseAdminEmails } from "@/lib/permissions";
 
+const RESET_PASSWORD_MINUTES = 30;
 const baseURL = process.env.BETTER_AUTH_URL?.trim() || "http://localhost:3000";
 /** Extra origins allowed to sign in, e.g. the LAN address alongside a public HTTPS URL. */
 const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
@@ -53,14 +55,10 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 12,
     maxPasswordLength: 128,
-    resetPasswordTokenExpiresIn: 30 * 60,
+    resetPasswordTokenExpiresIn: RESET_PASSWORD_MINUTES * 60,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmail({
-        to: user.email,
-        subject: "Restablece tu contraseña de Grimoire",
-        text: `Has solicitado restablecer la contraseña de tu cuenta de Grimoire. Abre este enlace antes de 30 minutos y úsalo una sola vez:\n\n${url}\n\nSi no lo solicitaste, ignora este correo.`,
-      });
+      await sendAuthEmail({ to: user.email, ...resetPasswordEmail({ name: user.name, url, expiresInMinutes: RESET_PASSWORD_MINUTES }) });
     },
   },
   session: {
