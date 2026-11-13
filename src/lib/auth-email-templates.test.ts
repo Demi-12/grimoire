@@ -25,4 +25,14 @@ describe("resetPasswordEmail", () => {
     expect(resetPasswordEmail({ name: "  ", url, expiresInMinutes: 30 }).text).toMatch(/^Hola:/);
     expect(resetPasswordEmail({ url, expiresInMinutes: 30 }).text).toMatch(/^Hola:/);
   });
+
+  it("keeps the light palette inline and adds dark overrides for clients that support them", () => {
+    const html = resetPasswordEmail({ name: "Ana", url, expiresInMinutes: 30 }).html;
+    // Gmail may drop the <style> block, so the light colours must still be inline.
+    expect(html).toContain('style="background-color:#f4f2fa;');
+    expect(html).toContain('<meta name="color-scheme" content="light dark">');
+    expect(html).toContain("@media (prefers-color-scheme: dark)");
+    expect(html).toContain("[data-ogsc] .g-ink{color:#e8e4f5!important}");
+    expect(html).toContain("[data-ogsb] .g-card{background-color:#1a1630!important");
+  });
 });
