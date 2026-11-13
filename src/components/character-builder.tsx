@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Spinner } from "./skeleton";
 import { useEffect, useState, type FormEvent } from "react";
 import { abilities, abilityModifier, type AbilityKey, type AbilityScores, proficiencyBonus } from "@/lib/rules";
@@ -234,7 +235,7 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
       <button className="button button-primary" onClick={() => setWizard({})}>{translate(locale, "character.createFirst")}</button></div> :
       <div className={`character-grid${listClass}`}>{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
         <div className="character-card-top"><span className="avatar-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><span className="level-pill">{translate(locale, "character.levelPill", { level: character.level })}</span></div>
-        <h3>{character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
+        <h3>{onSelect ? <Link className="character-name-link" href={`/characters/${encodeURIComponent(character.id)}`}>{character.name}</Link> : character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
         {campaignName(character.campaignId) && <p className="character-subtitle">⚑ {campaignName(character.campaignId)}</p>}
         <div className="export-only export-sheet-content">
           <section className="sheet-page sheet-page-main">

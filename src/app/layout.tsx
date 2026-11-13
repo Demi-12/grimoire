@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Alegreya, Alegreya_SC, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
 import "./tokens.css";
@@ -11,9 +11,21 @@ const alegreyaSans = Alegreya_Sans({ subsets: ["latin", "latin-ext"], weight: ["
 const alegreyaSansSC = Alegreya_Sans_SC({ subsets: ["latin", "latin-ext"], weight: ["500", "700"], variable: "--f-alegreya-sans-sc", display: "swap" });
 const fontVars = [alegreya, alegreyaSC, alegreyaSans, alegreyaSansSC].map((f) => f.variable).join(" ");
 
+const description = "Your Dungeons & Dragons table, bound in a single book: characters, campaigns, encounters and a live battle map.";
+
+// The favicon comes from icon.svg, favicon.ico and apple-icon.png next to this file (Next adds the links).
 export const metadata: Metadata = {
-  title: "Grimoire | D&D Toolkit",
-  description: "Tools for building Dungeons & Dragons characters and encounters.",
+  title: "Grimoire · Your D&D table",
+  description,
+  applicationName: "Grimoire",
+  openGraph: { type: "website", siteName: "Grimoire", title: "Grimoire · Your D&D table", description },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#e6e3ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#110e1f" },
+  ],
 };
 
 export const dynamic = "force-dynamic"; // the CSP nonce is per request, so even /_not-found must render on demand

@@ -187,7 +187,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
           <h3 className={styles.subheading}>{t.heroes}</h3>
           {heroes.length ? <ul className={styles.memberList}>{heroes.map((character) => <li key={character.id}>
             <span className={styles.sigle}>✦</span>
-            <span className={styles.heroName}>{character.name}<small>{t.level(character.level)}{character.className ? ` · ${character.className}` : ""} · {t.by(character.ownerName)}</small></span>
+            <span className={styles.heroName}>{onOpenCharacter ? <Link className={styles.heroLink} href={`/characters/${encodeURIComponent(character.id)}`}>{character.name}</Link> : character.name}<small>{t.level(character.level)}{character.className ? ` · ${character.className}` : ""} · {t.by(character.ownerName)}</small></span>
             {onOpenCharacter && <button type="button" className={styles.quietButton} onClick={() => onOpenCharacter(character.id)} aria-label={`${t.viewSheet}: ${character.name}`}>{t.viewSheet}</button>}
             {(campaign.canManage || character.editable) && <button type="button" className={styles.removeHero} disabled={busy} aria-label={`${t.removeHero}: ${character.name}`}
               onClick={() => void run(() => api(`/api/campaigns/${campaign.id}/characters/${character.id}`, { method: "DELETE" }))}>×</button>}

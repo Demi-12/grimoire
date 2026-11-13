@@ -50,6 +50,9 @@
 .memberList li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 9px; border: 1px solid #b6accd; background: rgba(255,255,255,.28); }
 .sigle { color: #a27a39; font-size: 17px; }
 .heroName { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.heroLink { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 28%, transparent); text-underline-offset: 3px; transition: text-decoration-color .15s, color .15s; }
+.heroLink:hover { color: var(--crimson); text-decoration-color: currentColor; }
+.heroLink:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; border-radius: 2px; }
 .heroName small { display: block; margin-top: 3px; color: var(--campaign-muted); font: var(--text-xs) var(--font-label); }
 .removeHero { padding: 2px 7px; font-size: 16px; }
 .assign { display: block; max-width: 440px; margin-top: 14px; }

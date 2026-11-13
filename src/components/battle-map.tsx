@@ -10,6 +10,7 @@ import {
   DEFAULT_HERO_VISION, MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX, VISION_ANGLES,
   type Facing, type MapHero, type MapOp, type MapWall, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@/lib/battle-map";
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { Spinner } from "./skeleton";
 import styles from "./battle-map.module.css";
 
@@ -23,7 +24,7 @@ interface BattleMapView {
 
 const text = {
   en: {
-    back: "Campaigns", kicker: "BATTLE MAP", live: "Live", connecting: "Connecting…", offline: "Reconnecting…",
+    back: "Campaigns", kicker: "BATTLE MAP", docTitle: (name: string) => `${name} · Battle map · Grimoire`, live: "Live", connecting: "Connecting…", offline: "Reconnecting…",
     tableMode: "Table display", exitTable: "Exit table display", dmView: "DM view", playersView: "Players' view",
     viewToggle: "What players see", loading: "Unrolling the map…",
     signIn: "Sign in to see this map.", signInAction: "Go to sign in", notFound: "This map isn't available: you're not in that campaign, or it no longer exists.",
@@ -75,7 +76,7 @@ const text = {
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} tokens · ${save.walls} walls${save.hasBackground ? " · picture" : ""} · ${date}`,
   },
   es: {
-    back: "Campañas", kicker: "MAPA DE BATALLA", live: "En directo", connecting: "Conectando…", offline: "Reconectando…",
+    back: "Campañas", kicker: "MAPA DE BATALLA", docTitle: (name: string) => `${name} · Mapa de batalla · Grimoire`, live: "En directo", connecting: "Conectando…", offline: "Reconectando…",
     tableMode: "Modo mesa", exitTable: "Salir del modo mesa", dmView: "Vista del DM", playersView: "Vista de jugadores",
     viewToggle: "Lo que ven los jugadores", loading: "Desplegando el mapa…",
     signIn: "Inicia sesión para ver este mapa.", signInAction: "Ir a iniciar sesión", notFound: "Este mapa no está disponible: no estás en esa campaña o ya no existe.",
@@ -194,6 +195,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const audience = tableMode || playersView ? "players" : "auto";
   const audienceRef = useRef(audience);
   useEffect(() => { audienceRef.current = audience; }, [audience]);
+  useDocumentTitle(map ? t.docTitle(map.campaignName) : null);
 
   useEffect(() => {
     const lang = document.documentElement.lang;
