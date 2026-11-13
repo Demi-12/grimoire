@@ -441,7 +441,7 @@ body { font-variant-emoji: text; }
   --auth-input-line: var(--control-line);
   --auth-input-line-hover: #554e78;
   --auth-focus: var(--crimson);
-  --auth-focus-ring: rgba(90, 45, 156, .24);
+  --auth-focus-ring: rgba(90, 45, 156, .3);
   /* Autofilled fields keep the theme: a faint violet wash instead of the browser's yellow or blue. */
   --auth-autofill: #efe9fb;
   --auth-label: #362e4f;
@@ -459,7 +459,7 @@ body { font-variant-emoji: text; }
   --auth-input: #0f0c1b;
   --auth-input-hover: #141024;
   --auth-input-line-hover: #a39ad0;
-  --auth-focus-ring: rgba(183, 156, 242, .28);
+  --auth-focus-ring: rgba(183, 156, 242, .4);
   --auth-autofill: #1d1735;
   --auth-label: #d9d3ee;
   --auth-ok: #eadfb8;
