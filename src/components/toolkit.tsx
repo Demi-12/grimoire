@@ -18,7 +18,7 @@ import { useDocumentTitle } from "@/lib/use-document-title";
 import { Spinner } from "./skeleton";
 import { LoadingShell } from "./loading-shell";
 import { Icon } from "./icons";
-import { BrandMark, GateBackdrop } from "./brand";
+import { ArcaneBackdrop, BrandMark } from "./brand";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
 
@@ -285,7 +285,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   if (!accountId || !me || me.status !== "approved") {
     const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
     return <div className="gate-shell text-ink">
-      <GateBackdrop />
+      <ArcaneBackdrop />
       <header className="gate-header"><span className="gate-brand"><BrandMark size={26} />GRIMOIRE</span>{controls}</header>
       <main className="gate-main" id="main">
       {loadError ? <section className="gate-card" role="alert"><h1>{t("gate.errorTitle")}</h1><p>{t("gate.errorDescription")}</p>
@@ -411,6 +411,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   }
 
   return <div className="app-shell min-h-screen bg-paper text-ink">
+    <ArcaneBackdrop variant="app" />
     <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">
       <button className="brand" onClick={() => setView("home")}><BrandMark size={26} /><b>GRIMOIRE</b></button>

@@ -499,43 +499,65 @@ body { font-variant-emoji: text; }
 .gate-features .icon{font-size:17px;color:#e2b45c}
 .gate-card{margin-top:0}
 
+/* A character card's name opens its sheet (same as "View sheet"). A faint underline marks it as a link even without hover (touch). */
+.character-name-link{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 28%,transparent);text-underline-offset:4px;text-decoration-thickness:1px;transition:color .15s,text-decoration-color .15s}
+.character-name-link:hover{color:var(--crimson);text-decoration-color:currentColor}
+.character-name-link:focus-visible{outline:2px solid var(--crimson);outline-offset:3px;border-radius:2px}
+@media (prefers-reduced-motion:reduce){.character-name-link{transition:none}}
+
 /* Brand mark (BrandMark in brand.tsx): the favicon's drawing next to the wordmark. */
 .brand-mark{flex:none;display:block;border-radius:22%;box-shadow:0 1px 3px rgba(20,12,36,.25)}
 .mobile-brand .brand-mark{display:inline-block;vertical-align:-5px;margin-right:4px}
 
-/* Sign-in backdrop (GateBackdrop in brand.tsx): violet glows, a slowly turning arcane circle and gilt motes. */
-.gate-shell{position:relative;isolation:isolate}
-.gate-backdrop{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+/* Arcane backdrop (ArcaneBackdrop in brand.tsx): violet glows, a slowly turning arcane circle and gilt motes.
+   The gate centres it behind the sign-in card; the app tucks a quieter one into the bottom corner. */
+.gate-shell,.app-shell{position:relative;isolation:isolate}
+.arcane-backdrop{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   --sigil:rgba(90,45,156,.22);--sigil-gilt:rgba(165,118,38,.5);--mote:rgba(190,140,50,.85);
   background:
     radial-gradient(ellipse 55% 50% at 50% 54%,rgba(122,74,196,.2),transparent 70%),
     radial-gradient(ellipse 40% 35% at 12% 90%,rgba(216,170,85,.2),transparent 70%),
     radial-gradient(ellipse 45% 40% at 90% 8%,rgba(150,110,220,.24),transparent 70%),
     radial-gradient(ellipse 130% 95% at 50% 50%,transparent 50%,rgba(58,36,100,.16))}
-:root[data-theme="dark"] .gate-backdrop{--sigil:rgba(196,168,255,.16);--sigil-gilt:rgba(226,180,92,.38);--mote:rgba(244,206,128,.95);
+:root[data-theme="dark"] .arcane-backdrop{--sigil:rgba(196,168,255,.16);--sigil-gilt:rgba(226,180,92,.38);--mote:rgba(244,206,128,.95);
   background:
     radial-gradient(ellipse 55% 50% at 50% 54%,rgba(122,74,196,.32),transparent 70%),
     radial-gradient(ellipse 40% 35% at 12% 90%,rgba(216,170,85,.1),transparent 70%),
     radial-gradient(ellipse 45% 40% at 90% 8%,rgba(150,110,220,.22),transparent 70%),
     radial-gradient(ellipse 130% 95% at 50% 50%,transparent 45%,rgba(4,2,10,.55))}
-.gate-sigil{position:absolute;left:50%;top:54%;width:min(1240px,140vmax);height:auto;aspect-ratio:1;transform:translate(-50%,-50%);fill:none;stroke:var(--sigil);stroke-width:1.6;overflow:visible}
-.gate-sigil .sigil-faint{stroke-width:.9}
-.gate-sigil .sigil-gilt{fill:var(--sigil-gilt);stroke:none}
-.gate-sigil .sigil-gilt-line{stroke:var(--sigil-gilt);stroke-width:1.2}
-.gate-sigil .sigil-node{fill:var(--paper);stroke:var(--sigil-gilt);stroke-width:2.4}
-.gate-sigil-outer,.gate-sigil-inner{transform-box:view-box;transform-origin:50% 50%}
-.gate-sigil-outer{animation:gate-sigil-turn 300s linear infinite}
-.gate-sigil-inner{animation:gate-sigil-turn 200s linear infinite reverse}
-@keyframes gate-sigil-turn{to{transform:rotate(360deg)}}
-.gate-mote{position:absolute;border-radius:50%;background:var(--mote);box-shadow:0 0 8px 1px var(--mote);opacity:0;animation:gate-mote-drift 8s ease-in-out infinite}
-@keyframes gate-mote-drift{0%,100%{opacity:0;transform:translateY(8px)}50%{opacity:.9;transform:translateY(-14px)}}
+.arcane-sigil{position:absolute;left:50%;top:54%;width:min(1240px,140vmax);aspect-ratio:1;transform:translate(-50%,-50%)}
+.arcane-sigil>svg{position:absolute;inset:0;width:100%;height:100%;fill:none;stroke:var(--sigil);stroke-width:1.6;overflow:visible;will-change:transform}
+.arcane-sigil .sigil-faint{stroke-width:.9}
+.arcane-sigil .sigil-gilt{fill:var(--sigil-gilt);stroke:none}
+.arcane-sigil .sigil-gilt-line{stroke:var(--sigil-gilt);stroke-width:1.2}
+.arcane-sigil .sigil-node{fill:var(--paper);stroke:var(--sigil-gilt);stroke-width:2.4}
+.arcane-sigil-outer{animation:arcane-sigil-turn 300s linear infinite}
+.arcane-sigil-inner{animation:arcane-sigil-turn 200s linear infinite reverse}
+@keyframes arcane-sigil-turn{to{transform:rotate(360deg)}}
+.arcane-mote{position:absolute;border-radius:50%;background:var(--mote);box-shadow:0 0 8px 1px var(--mote);opacity:0;animation:arcane-mote-drift 8s ease-in-out infinite}
+@keyframes arcane-mote-drift{0%,100%{opacity:0;transform:translateY(8px)}50%{opacity:.9;transform:translateY(-14px)}}
 .gate-stage{box-shadow:var(--auth-shadow),0 0 0 1px rgba(216,170,85,.12),0 30px 120px rgba(90,45,156,.22)}
 :root[data-theme="dark"] .gate-stage{box-shadow:var(--auth-shadow),0 0 0 1px rgba(216,170,85,.16),0 0 140px rgba(122,74,196,.35)}
-@media (max-width:820px){.gate-sigil{top:34%;width:125vmax}}
+@media (max-width:820px){.arcane-sigil{top:34%;width:125vmax}}
+/* Inside the app the circle sits half off-screen in the bottom corner, fainter and slower, so it never competes with the panels. */
+.arcane-backdrop-app{--sigil:rgba(90,45,156,.1);--sigil-gilt:rgba(165,118,38,.24);--mote:rgba(190,140,50,.45);
+  background:
+    radial-gradient(ellipse 50% 45% at 100% 100%,rgba(122,74,196,.15),transparent 70%),
+    radial-gradient(ellipse 40% 30% at 40% 0%,rgba(150,110,220,.1),transparent 70%)}
+:root[data-theme="dark"] .arcane-backdrop-app{--sigil:rgba(196,168,255,.1);--sigil-gilt:rgba(226,180,92,.22);--mote:rgba(244,206,128,.55);
+  background:
+    radial-gradient(ellipse 50% 45% at 100% 100%,rgba(122,74,196,.22),transparent 70%),
+    radial-gradient(ellipse 40% 30% at 40% 0%,rgba(150,110,220,.1),transparent 70%)}
+.arcane-backdrop-app .arcane-sigil{left:auto;top:auto;right:-340px;bottom:-400px;width:1040px;transform:none}
+.arcane-backdrop-app .arcane-sigil-outer{animation-duration:420s}
+.arcane-backdrop-app .arcane-mote{animation-duration:14s!important}
+.arcane-backdrop-app .arcane-sigil-inner{animation-duration:300s}
+@media (max-width:820px){.arcane-backdrop-app .arcane-sigil{right:-280px;bottom:-260px;width:680px}}
 @media (prefers-reduced-motion:reduce){
-  .gate-sigil-outer,.gate-sigil-inner{animation:none}
-  .gate-mote{animation:none;opacity:.55}
+  .arcane-sigil-outer,.arcane-sigil-inner{animation:none}
+  .arcane-mote{animation:none;opacity:.55}
 }
+@media print{.arcane-backdrop{display:none}}
 
 .auth-panel{width:min(100%,460px);margin:32px auto;padding:clamp(22px,5vw,36px);background:var(--auth-surface);border:1px solid var(--auth-border);box-shadow:var(--auth-shadow);color:var(--ink)}
 .gate-stage .auth-panel{width:auto;margin:0;padding:48px clamp(28px,5vw,56px) 36px;border:0;background:transparent;box-shadow:none;display:flex;flex-direction:column}

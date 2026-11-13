@@ -33,13 +33,18 @@ const MOTES = Array.from({ length: 34 }, (_, index) => {
 });
 
 /**
- * Sign-in backdrop: a slowly turning arcane circle behind the gate and drifting gilt motes.
- * Pure decoration, behind everything (see `.gate-backdrop` in globals.css); still under prefers-reduced-motion.
+ * Arcane backdrop: a slowly turning arcane circle and drifting gilt motes over violet glows.
+ * "gate": centred behind the sign-in card. "app": quieter, tucked into the bottom corner behind the workspace.
+ * Pure decoration, behind everything (see `.arcane-backdrop` in globals.css); still under prefers-reduced-motion.
  */
-export function GateBackdrop() {
-  return <div className="gate-backdrop" aria-hidden="true">
-    <svg className="gate-sigil" viewBox="-500 -500 1000 1000">
-      <g className="gate-sigil-outer">
+export function ArcaneBackdrop({ variant = "gate" }: { variant?: "gate" | "app" }) {
+  // Fewer motes inside the app: there the backdrop sits behind work, not behind a single card.
+  const motes = variant === "app" ? MOTES.slice(0, 10) : MOTES;
+  return <div className={`arcane-backdrop arcane-backdrop-${variant}`} aria-hidden="true">
+    {/* Two stacked SVGs, each turned as a whole element, so the compositor rotates them without repainting. */}
+    <div className="arcane-sigil">
+    <svg className="arcane-sigil-outer" viewBox="-500 -500 1000 1000">
+      <g>
         <circle r="488" className="sigil-faint" />
         <circle r="470" />
         {Array.from({ length: 96 }, (_, index) => <path key={index} d={`M${polar(470, index * 3.75)}L${polar(index % 4 ? 458 : 446, index * 3.75)}`} />)}
@@ -47,7 +52,9 @@ export function GateBackdrop() {
         {Array.from({ length: 24 }, (_, index) => <path key={index} className="sigil-gilt" d={`M${polar(420, index * 15)}m0 -7l6 7l-6 7l-6 -7Z`} />)}
         <circle r="404" />
       </g>
-      <g className="gate-sigil-inner">
+    </svg>
+    <svg className="arcane-sigil-inner" viewBox="-500 -500 1000 1000">
+      <g>
         <path d={polygon(404, 4)} />
         <path d={polygon(404, 4, 45)} />
         <circle r="286" className="sigil-faint" />
@@ -58,6 +65,7 @@ export function GateBackdrop() {
         {Array.from({ length: 8 }, (_, index) => <circle key={index} className="sigil-node" r="11" transform={`translate(${polar(404, index * 45).replace(" ", ",")})`} />)}
       </g>
     </svg>
-    {MOTES.map((mote, index) => <span key={index} className="gate-mote" style={{ left: `${mote.left}%`, top: `${mote.top}%`, width: mote.size, height: mote.size, animationDelay: `${mote.delay}s`, animationDuration: `${mote.duration}s` }} />)}
+    </div>
+    {motes.map((mote, index) => <span key={index} className="arcane-mote" style={{ left: `${mote.left}%`, top: `${mote.top}%`, width: mote.size, height: mote.size, animationDelay: `${mote.delay}s`, animationDuration: `${mote.duration}s` }} />)}
   </div>;
 }

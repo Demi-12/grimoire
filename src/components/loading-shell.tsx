@@ -1,5 +1,5 @@
 import { Skeleton, SkeletonLine, SkeletonRegion } from "./skeleton";
-import { BrandMark, GateBackdrop } from "./brand";
+import { ArcaneBackdrop, BrandMark } from "./brand";
 
 /**
  * What the Toolkit paints while the session (and then /api/me) loads. It reuses the real layout
@@ -22,6 +22,7 @@ export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: Loa
   if (variant === "gate") return <GateSkeleton label={label} />;
 
   return <div className="app-shell min-h-screen bg-paper text-ink skeleton-shell" aria-busy="true">
+    <ArcaneBackdrop variant="app" />
     <aside className="sidebar" aria-hidden="true" inert>
       <div className="brand"><BrandMark size={26} /><b>GRIMOIRE</b></div>
       <div className="sidebar-caption"><SkeletonLine width="9ch" /></div>
@@ -101,7 +102,7 @@ function SectionSkeleton() {
  */
 function GateSkeleton({ label }: { label: string }) {
   return <div className="gate-shell text-ink skeleton-shell" aria-busy="true">
-    <GateBackdrop />
+    <ArcaneBackdrop />
     <header className="gate-header" aria-hidden="true" inert><span className="gate-brand"><BrandMark size={26} />GRIMOIRE</span><HeaderControls /></header>
     <main className="gate-main">
       <SkeletonRegion label={label} className="gate-stage">
