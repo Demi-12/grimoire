@@ -1,0 +1,122 @@
+/* Confirmation dialogs and toasts (feedback.tsx). Colours come from the theme tokens in tokens.css. */
+
+.dialog {
+  --fb-danger: #8f3222;
+  --fb-danger-hover: #772818;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  overflow: visible;
+}
+.dialog::backdrop { background: rgba(17, 14, 31, .55); backdrop-filter: blur(2px); }
+.dialog[open] { animation: fb-rise .18s ease-out; }
+.dialog[open]::backdrop { animation: fb-fade .18s ease-out; }
+
+.card {
+  position: relative;
+  padding: 26px 24px 20px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gilt);
+  background: var(--surface);
+  box-shadow: 0 22px 60px rgba(17, 14, 31, .35), 0 2px 6px rgba(17, 14, 31, .18);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.cardDanger { border-top-color: var(--fb-danger); }
+.sigil { display: block; margin-bottom: 8px; font-size: 20px; line-height: 1; color: var(--gilt-text); }
+.cardDanger .sigil { color: var(--fb-danger); }
+.title { margin: 0; font: 500 22px/1.2 var(--font-display); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.message { margin-top: 10px; font-size: 15px; line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; }
+.message p { margin: 0 0 8px; }
+.message p:last-child { margin-bottom: 0; }
+.message input { width: 100%; margin-top: 4px; padding: 9px 10px; border: 1px solid var(--control-line); background: var(--paper); color: var(--ink); font: 13px var(--font-statblock); }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.actions :global(.button) { min-height: 42px; min-width: 110px; }
+/* Specific enough to beat the themed .button-primary (including its dark-mode rule). */
+.dialog .actions button.dangerButton { background: var(--fb-danger); color: #fff; box-shadow: none; }
+.dialog .actions button.dangerButton:hover { background: var(--fb-danger-hover); }
+
+:global(:root[data-theme="dark"]) .dialog { --fb-danger: #b5452f; --fb-danger-hover: #9c3a26; }
+:global(:root[data-theme="dark"]) .dialog::backdrop { background: rgba(4, 3, 10, .7); }
+:global(:root[data-theme="dark"]) .cardDanger .sigil { color: #f5b4a1; }
+
+/* Toasts: bottom right on desktop, above the bottom nav on phones. */
+.toaster {
+  position: fixed;
+  z-index: 60;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  --fb-accent: var(--gilt);
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 8px 11px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--fb-accent);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 32px rgba(17, 14, 31, .22), 0 1px 3px rgba(17, 14, 31, .12);
+  animation: fb-slide .22s ease-out;
+}
+.success { --fb-accent: var(--gilt); }
+.info { --fb-accent: var(--crimson); }
+.error { --fb-accent: #a83a26; }
+.toastIcon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--fb-accent);
+  color: #fff;
+  font: 700 13px/1 var(--font-statblock);
+}
+.success .toastIcon { color: #2a2110; }
+.toastText { margin: 2px 0 0; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.toastClose {
+  width: 30px;
+  height: 30px;
+  margin: -4px 0 -4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toastClose:hover { color: var(--ink); }
+.toastClose:focus-visible { outline: 2px solid var(--crimson); outline-offset: 1px; }
+
+:global(:root[data-theme="dark"]) .toast { box-shadow: 0 14px 36px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .3); }
+:global(:root[data-theme="dark"]) .error { --fb-accent: #e07a62; }
+:global(:root[data-theme="dark"]) .error .toastIcon,
+:global(:root[data-theme="dark"]) .info .toastIcon { color: #110e1f; }
+
+@media (max-width: 650px) {
+  .toaster { left: 16px; right: 16px; bottom: 80px; width: auto; align-items: stretch; }
+  .actions :global(.button) { flex: 1 1 120px; }
+}
+
+@keyframes fb-rise { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes fb-fade { from { opacity: 0; } }
+@keyframes fb-slide { from { opacity: 0; transform: translateY(10px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open], .dialog[open]::backdrop, .toast { animation: none; }
+}

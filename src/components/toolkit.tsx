@@ -19,6 +19,7 @@ import { Spinner } from "./skeleton";
 import { LoadingShell } from "./loading-shell";
 import { Icon } from "./icons";
 import { ArcaneBackdrop, BrandMark } from "./brand";
+import { useToast } from "./feedback";
 
 type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
 
@@ -119,7 +120,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [localImport, setLocalImport] = useState<LocalImport | null>(null);
   const [importBusy, setImportBusy] = useState(false);
-  const [importMessage, setImportMessage] = useState("");
+  const toast = useToast();
   const [loadError, setLoadError] = useState("");
   const router = useRouter();
   const pathname = usePathname();
@@ -335,11 +336,13 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     setInviteError("");
     try {
       await api(`/api/invites/${encodeURIComponent(inviteToken)}`, { method: "POST" });
+      const joined = invite?.campaignName;
       clearPendingInvite();
       setInviteToken(null);
       setInvite(null);
       await reloadData();
       setView("campaigns");
+      if (joined) toast.success(t("invite.joined", { campaign: joined }));
     } catch {
       setInviteError(t("invite.error"));
     } finally {
@@ -364,11 +367,11 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     try {
       const { imported } = await api<{ imported: { characters: number; campaigns: number; creatures?: number } }>("/api/import", { method: "POST", body: localImport });
       finishImport();
-      setImportMessage(t("import.done", { characters: imported.characters, campaigns: imported.campaigns, creatures: imported.creatures ?? 0 }));
+      toast.success(t("import.done", { characters: imported.characters, campaigns: imported.campaigns, creatures: imported.creatures ?? 0 }));
       await reloadData();
       await loadCreatures();
     } catch {
-      setImportMessage(t("import.error"));
+      toast.error(t("import.error"));
     } finally {
       setImportBusy(false);
     }
@@ -383,24 +386,24 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
 
   /** Saves a creature server-side (deduplicated by monsterSlug there) and merges the stored copy into the list. */
   async function saveCreature(input: Omit<CatalogCreature, "id">): Promise<boolean> {
-    setCatalogError("");
     try {
       const { creature } = await api<{ creature: CatalogCreature }>("/api/creatures", { method: "POST", body: input });
       setOwnCreatures((current) => [toCreature(creature), ...current.filter((item) => item.id !== creature.id)]);
+      toast.success(t("catalog.added", { name: creature.name }));
       return true;
     } catch {
-      setCatalogError("save");
+      toast.error(t("catalog.error.save"));
       return false;
     }
   }
 
-  async function removeCreature(id: string) {
-    setCatalogError("");
+  async function removeCreature(creature: Creature) {
     try {
-      await api(`/api/creatures/${encodeURIComponent(id)}`, { method: "DELETE" });
-      setOwnCreatures((current) => current.filter((item) => item.id !== id));
+      await api(`/api/creatures/${encodeURIComponent(creature.id)}`, { method: "DELETE" });
+      setOwnCreatures((current) => current.filter((item) => item.id !== creature.id));
+      toast.success(t("catalog.removed", { name: creature.name }));
     } catch {
-      setCatalogError("remove");
+      toast.error(t("catalog.error.remove"));
     }
   }
 
@@ -441,7 +444,6 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       {view === "home" && <main className="page-content" id="main" tabIndex={-1}>
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length, creatures: localImport.creatures.length })}</p>
           <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{importBusy && <Spinner />}{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
-        {importMessage && <p className="import-message" role="status">{importMessage}</p>}
         <header className="desk-head">
           <div><h1>{t("home.title")}</h1><p>{t("home.signedIn", { name: me.name })}</p></div>
           <div className="desk-actions">
@@ -485,7 +487,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
         {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
-          <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => void removeCreature(creature.id)}>{t("catalog.remove")}</button>}</div>)}</div>
+          <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => void removeCreature(creature)}>{t("catalog.remove")}</button>}</div>)}</div>
         </section>}
       </main>}
 

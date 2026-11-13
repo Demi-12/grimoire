@@ -14,6 +14,7 @@ import {
   type PartyRoleProfile,
 } from "@/lib/rules";
 import MonsterSheet from "@/components/monster-sheet";
+import { useToast } from "./feedback";
 import { creatureTypeKey, creatureTypeLabel, fetchSrdCatalog, formatChallenge, type CatalogMonster, type SourceSummary } from "@/lib/monster-api";
 import { api, type Campaign, type Character, type EncounterDraft } from "@/lib/api-client";
 
@@ -68,8 +69,8 @@ function SaveToCampaign({ suggestion, partyLevels, campaigns, locale, creatureNa
   const [open, setOpen] = useState(false);
   const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
   const [title, setTitle] = useState(defaultTitle);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [savedTo, setSavedTo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const selectedId = campaigns.some((campaign) => campaign.id === campaignId) ? campaignId : campaigns[0]?.id ?? "";
 
   if (!campaigns.length) return <p className="encounter-footnote">{translate(locale, "encounter.save.noCampaign")}</p>;
@@ -89,13 +90,15 @@ function SaveToCampaign({ suggestion, partyLevels, campaigns, locale, creatureNa
         ...(creature.source ? { source: creature.source.slice(0, 60) } : {}),
       })),
     };
-    setStatus("saving");
+    setSaving(true);
     try {
       await api(`/api/campaigns/${campaign.id}/encounters`, { method: "POST", body: draft });
-      setSavedTo(campaign.name);
-      setStatus("saved");
+      toast.success(translate(locale, "encounter.save.done", { campaign: campaign.name }));
+      setOpen(false);
     } catch {
-      setStatus("error");
+      toast.error(translate(locale, "encounter.save.error"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -105,21 +108,18 @@ function SaveToCampaign({ suggestion, partyLevels, campaigns, locale, creatureNa
       {open && (
         <form onSubmit={(event) => void save(event)} className="manual-party" style={{ marginTop: 10 }}>
           <label>{translate(locale, "encounter.save.campaign")}
-            <select value={selectedId} onChange={(event) => { setCampaignId(event.target.value); setStatus("idle"); }}>
+            <select value={selectedId} onChange={(event) => setCampaignId(event.target.value)}>
               {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
             </select>
           </label>
           <label>{translate(locale, "encounter.save.title")}
-            <input value={title} maxLength={80} required onChange={(event) => { setTitle(event.target.value); setStatus("idle"); }} />
+            <input value={title} maxLength={80} required onChange={(event) => setTitle(event.target.value)} />
           </label>
-          <button type="submit" className="button button-primary" style={{ gridColumn: "1 / -1" }} disabled={status === "saving" || !title.trim()}>
-            {status === "saving" ? translate(locale, "encounter.save.saving") : translate(locale, "encounter.save.submit")}
+          <button type="submit" className="button button-primary" style={{ gridColumn: "1 / -1" }} disabled={saving || !title.trim()}>
+            {saving ? translate(locale, "encounter.save.saving") : translate(locale, "encounter.save.submit")}
           </button>
         </form>
       )}
-      <p className="encounter-footnote" role={status === "error" ? "alert" : "status"} aria-live="polite">
-        {status === "saved" ? translate(locale, "encounter.save.done", { campaign: savedTo }) : status === "error" ? translate(locale, "encounter.save.error") : ""}
-      </p>
     </div>
   );
 }

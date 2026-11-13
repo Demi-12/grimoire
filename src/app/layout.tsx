@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
+import { FeedbackProvider } from "@/components/feedback";
 import "./tokens.css";
 import "./globals.css";
 import "./dnd-theme.css";
@@ -81,7 +82,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={fontVars} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
-      <body>{children}</body>
+      <body><FeedbackProvider>{children}</FeedbackProvider></body>
     </html>
   );
 }

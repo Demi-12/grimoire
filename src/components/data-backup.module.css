@@ -4,11 +4,6 @@
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .actions .action { min-height: 44px; }
 .fileInput { display: none; }
-.confirm { margin-top: 16px; padding: 14px 16px; border: 1px solid var(--line); border-left: 3px solid var(--gilt); background: var(--paper); }
-.confirm h3 { margin: 0 0 6px; font: 500 17px var(--font-display); color: var(--ink); overflow-wrap: anywhere; }
-.confirm p { margin: 0; font-size: var(--text-xs); line-height: 1.6; color: var(--muted); }
-.status { margin: 14px 0 0; font-size: var(--text-xs); line-height: 1.55; color: var(--muted); }
-.statusError { color: var(--crimson); }
 
 @media (max-width: 650px) {
   .panel { padding: 16px; }
