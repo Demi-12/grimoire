@@ -167,7 +167,7 @@ export default function CampaignManager({ me, campaigns, characters, locale, onC
         const heroes = characters.filter((character) => character.campaignId === campaign.id);
         const myLooseCharacters = characters.filter((character) => character.editable && character.campaignId !== campaign.id);
         const canDelete = campaign.isOwner || me.role === "admin";
-        return <article className={styles.campaign} key={campaign.id}>
+        return <article className={styles.campaign} key={campaign.id} id={`campaign-${campaign.id}`}>
           <div className={styles.campaignHead}>
             {editingId === campaign.id ? <form className={styles.renameForm} onSubmit={(event) => void saveCampaign(event, campaign.id)}>
               <input aria-label={t.newCampaign} autoFocus value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={80} />

@@ -12,6 +12,7 @@ import {
   type Facing, type MapHero, type MapOp, type MapWall, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@/lib/battle-map";
 import { useDocumentTitle } from "@/lib/use-document-title";
+import { rememberMap } from "@/lib/last-map";
 import { Spinner } from "./skeleton";
 import { useConfirm, useToast } from "./feedback";
 import styles from "./battle-map.module.css";
@@ -198,6 +199,9 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   /** While our own changes are in flight, ignore server states that predate them (no snapping back). */
   const pending = useRef({ count: 0, ignoreUpTo: -1 });
+  // Remembered so the map picker and the overview's shortcut put this table first next time.
+  const mapLoaded = map !== null;
+  useEffect(() => { if (mapLoaded) rememberMap(campaignId); }, [mapLoaded, campaignId]);
   const audience = tableMode || playersView ? "players" : "auto";
   const audienceRef = useRef(audience);
   useEffect(() => { audienceRef.current = audience; }, [audience]);

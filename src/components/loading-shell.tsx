@@ -1,5 +1,6 @@
 import { Skeleton, SkeletonLine, SkeletonRegion } from "./skeleton";
 import { ArcaneBackdrop, BrandMark } from "./brand";
+import styles from "./sections.module.css";
 
 /**
  * What the Toolkit paints while the session (and then /api/me) loads. It reuses the real layout
@@ -14,9 +15,10 @@ import { ArcaneBackdrop, BrandMark } from "./brand";
 export type LoadingVariant = "gate" | "home" | "section";
 
 const labels = { en: "Opening the Grimoire…", es: "Abriendo el grimorio…" } as const;
-const navWidths = ["58%", "66%", "62%", "64%", "50%"];
+/** The sidebar's two groups (toolkit.tsx): Play (overview, characters, map) and Run the game (campaigns, encounters, bestiary). */
+const navGroups = [["58%", "66%", "70%"], ["62%", "64%", "56%"]];
 
-/** `activeNav`: index of the current view in the sidebar (home, characters, campaigns, encounters, account), so it is already lit. */
+/** `activeNav`: index of the current view among the six sidebar links, in that order, so it is already lit. */
 export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: LoadingVariant; locale: "en" | "es"; activeNav?: number }) {
   const label = labels[locale];
   if (variant === "gate") return <GateSkeleton label={label} />;
@@ -25,17 +27,22 @@ export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: Loa
     <ArcaneBackdrop variant="app" />
     <aside className="sidebar" aria-hidden="true" inert>
       <div className="brand"><BrandMark size={26} /><b>GRIMOIRE</b></div>
-      <div className="sidebar-caption"><SkeletonLine width="9ch" /></div>
-      <div className="side-nav">{navWidths.map((width, index) => <button type="button" tabIndex={-1} key={index} className={index === activeNav ? "active" : undefined}>
-        <span><Skeleton className="skeleton-circle" width={16} height={16} /></span><SkeletonLine width={width} />
-      </button>)}</div>
+      <div className="side-nav">{navGroups.map((widths, group) => <div key={group} style={{ display: "contents" }}>
+        <p className="nav-group"><SkeletonLine width="7ch" /></p>
+        {widths.map((width, index) => {
+          const position = group * 3 + index;
+          // On phones the bar shows the three Play tabs plus one "Run" tab (the first link of the second group).
+          const className = `nav-link${group === 1 && index > 0 ? " nav-run" : ""}${position === activeNav || (group === 1 && index === 0 && activeNav >= 3) ? " active" : ""}`;
+          return <span key={index} className={className}><span className="nav-icon"><Skeleton className="skeleton-circle" width={16} height={16} /></span><SkeletonLine width={width} /></span>;
+        })}
+      </div>)}</div>
       <div className="sidebar-bottom"><SkeletonLine width="13ch" /><p><SkeletonLine width="10ch" /></p><span className="sidebar-signout skeleton-ghost">&nbsp;</span></div>
     </aside>
     <div className="workspace">
       <header className="workspace-header" aria-hidden="true" inert>
         <div className="mobile-brand"><BrandMark size={20} /> <span className="brand-word">GRIMOIRE</span></div>
-        <span className="breadcrumb"><SkeletonLine width="18ch" /></span>
         <HeaderControls />
+        <span className="header-control header-account skeleton-ghost">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
         <span className="header-signout skeleton-ghost skeleton-icon-control">&nbsp;</span>
         <span className="edition-badge skeleton-ghost">5E · 2024</span>
       </header>
@@ -62,27 +69,26 @@ function HeaderControls() {
 }
 
 function HomeSkeleton() {
-  return <>
-    <header className="desk-head">
-      <div><h1><SkeletonLine width="11ch" /></h1><p><SkeletonLine width="11ch" /></p></div>
-      <div className="desk-actions">
-        <span className="button button-quiet skeleton-ghost skeleton-action">&nbsp;</span>
-        <span className="button button-primary skeleton-ghost skeleton-action">&nbsp;</span>
-      </div>
-    </header>
-    <div className="tool-grid">{[0, 1, 2, 3].map((item) => <div key={item} className="tool-tile skeleton-tile">
-      <Skeleton className="tool-glyph skeleton-circle" />
-      <strong><SkeletonLine width="72%" /></strong>
-      <b><SkeletonLine width="1.2ch" /></b>
-      {/* The encounters note runs to two lines in both languages; the row takes the tallest tile. */}
-      <small><SkeletonLine width="80%" />{item === 2 && <SkeletonLine width="55%" />}</small>
+  return <div className={styles.page}>
+    <header className={styles.head}><h1><SkeletonLine width="11ch" /></h1><p><SkeletonLine width="26ch" /></p></header>
+    <div className={styles.quick}>{[0, 1, 2, 3].map((item) => <div key={item} className={`${styles.tile}${item === 0 ? ` ${styles.tilePrimary}` : ""}${item === 2 ? ` ${styles.tileWide}` : ""}`}>
+      <Skeleton className={`${styles.tileGlyph} skeleton-circle`} />
+      <span style={{ flex: 1 }}><b><SkeletonLine width="70%" /></b><small><SkeletonLine width="55%" /></small></span>
     </div>)}</div>
-    <section className="desk-panel">
-      <div className="desk-panel-head"><h2><SkeletonLine width="13ch" /></h2></div>
-      <p className="desk-empty skeleton-inline"><SkeletonLine width="13ch" /><span className="small-action skeleton-ghost skeleton-small-action">&nbsp;</span></p>
-    </section>
-    <p className="local-data-note"><SkeletonLine width="min(64ch, 100%)" /><SkeletonLine width="30%" className="skeleton-narrow-only" /></p>
-  </>;
+    <div className={styles.columns}>
+      <section className={styles.main}>
+        <div className={styles.sectionHead}><h2><SkeletonLine width="12ch" /></h2></div>
+        <div className={styles.grid}>{[0, 1].map((item) => <div key={item} className={styles.card} style={{ minHeight: 200 }}>
+          <div className={styles.cardTop}><Skeleton className={`${styles.initial} skeleton-circle`} /><div className={styles.cardName}><SkeletonLine width="60%" /></div></div>
+          <Skeleton width="100%" height={52} />
+        </div>)}</div>
+      </section>
+      <div className={styles.aside}>
+        <h2><SkeletonLine width="10ch" /></h2>
+        <div className={styles.campaign} style={{ minHeight: 120 }}><SkeletonLine width="50%" /><SkeletonLine width="80%" /></div>
+      </div>
+    </div>
+  </div>;
 }
 
 function SectionSkeleton() {

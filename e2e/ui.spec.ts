@@ -9,6 +9,13 @@ const campaign = {
   myRole: "dm", isOwner: true, canManage: true, members: [{ userId: admin.id, name: admin.name, role: "dm" }],
 };
 
+/** A table the admin plays at (someone else runs it), so the map picker has two campaigns to list. */
+const playerCampaign = {
+  id: "c2", name: "Curse of the Hollow King", description: "", ownerId: "u-bea", ownerName: "Bea Bard",
+  myRole: "player", isOwner: false, canManage: false,
+  members: [{ userId: "u-bea", name: "Bea Bard", role: "dm" }, { userId: admin.id, name: admin.name, role: "player" }],
+};
+
 const character = {
   id: "ch1", ownerId: admin.id, ownerName: admin.name, campaignId: "c1", name: "Thorin Oakenshield", level: 3,
   className: "Fighter", species: "Dwarf", background: "Soldier", notes: "Carries a very long name and an even longer note to stress the layout of the card.",
@@ -63,7 +70,7 @@ async function mockApi(page: Page) {
     if (pathname.startsWith("/api/auth/")) return json({});
     if (pathname === "/api/me") return json({ user: admin });
     if (pathname === "/api/characters") return json({ characters: [character] });
-    if (pathname === "/api/campaigns") return json({ campaigns: [campaign] });
+    if (pathname === "/api/campaigns") return json({ campaigns: [campaign, playerCampaign] });
     if (pathname === "/api/creatures") return json({ creatures: [] });
     if (/^\/api\/campaigns\/[^/]+\/invites$/.test(pathname)) return json({ invites: [] });
     if (/^\/api\/campaigns\/[^/]+\/encounters$/.test(pathname)) return json({ encounters: [] });
@@ -73,7 +80,7 @@ async function mockApi(page: Page) {
   });
 }
 
-const routes = ["/", "/characters", "/characters/ch1", "/campaigns", "/encounters", "/account", "/admin", "/admin/analytics"];
+const routes = ["/", "/characters", "/characters/ch1", "/characters/new", "/map", "/campaigns", "/encounters", "/bestiary", "/dm", "/account", "/admin", "/admin/analytics"];
 const widths = [320, 360, 390, 1280];
 const themes = ["light", "dark"] as const;
 
@@ -102,6 +109,33 @@ for (const theme of themes) {
             await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
             await expect(page.getByRole("heading", { name: "Attacks" })).toBeVisible();
             await expect(page.locator(".character-grid")).toBeHidden();
+          }
+
+          if (route === "/") {
+            // Two groups in the sidebar; a phone's bottom bar keeps four tabs and puts the DM sections behind "Run".
+            const nav = page.getByRole("navigation", { name: "Main navigation" });
+            await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+            if (width <= 650) {
+              await expect(nav.getByRole("link", { name: "Run", exact: true })).toBeVisible();
+              await expect(nav.getByRole("link", { name: "Bestiary" })).toBeHidden();
+            } else {
+              await expect(nav.getByRole("link", { name: "Bestiary" })).toBeVisible();
+              await expect(nav.getByRole("link", { name: "Battle map" })).toHaveAttribute("href", "/map");
+            }
+            await expect(page.getByRole("heading", { name: "Your characters" })).toBeVisible();
+            await expect(page.getByRole("link", { name: "Open Thorin Oakenshield's sheet" })).toBeVisible();
+          }
+
+          if (route === "/characters/new") {
+            // The creator opens straight away and the address goes back to the list, so Back leaves the page.
+            await expect(page).toHaveURL(/\/characters$/);
+            await expect(page.locator("#wizard-title")).toBeVisible();
+          }
+
+          if (route === "/map") {
+            // Both tables, each with a link to its own map.
+            await expect(page.getByRole("link", { name: "Open the map for The Lost Mine" })).toHaveAttribute("href", "/map/c1");
+            await expect(page.getByRole("link", { name: "Open the map for Curse of the Hollow King" })).toHaveAttribute("href", "/map/c2");
           }
 
           if (route === "/admin/analytics") {
