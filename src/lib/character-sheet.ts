@@ -1,8 +1,9 @@
 /** Derived character sheet values for characters built with the 2024 step-by-step creator. */
 import { abilities, abilityModifier, proficiencyBonus, type AbilityKey, type AbilityScores } from "./rules";
 import {
-  armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, STANDARD_ARRAY,
-  type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId, type Text, type WeaponProperty, weaponTable,
+  armorTable, findBackground, findClass, findSpecies, POINT_BUY_BUDGET, pointBuyCost, skills, speciesNeedsSpellAbility, speciesSizeOptions,
+  speciesSpellAbilities, STANDARD_ARRAY, type BackgroundId, type ClassId, type FeatId, type MagicInitiateList, type SkillKey, type SpeciesId,
+  type SpeciesSize, type Text, type WeaponProperty, weaponTable,
 } from "./dnd2024";
 import { effectsOf, type Effect } from "./effects";
 import { classFeatures, featInfo, SUBCLASS_LEVEL, subclassFeatures, type Feature, type FightingStyleId, type LevelFeatId, type Progression } from "./levelup-data";
@@ -51,6 +52,10 @@ export interface CharacterBuild {
   backgroundId: BackgroundId;
   speciesId: SpeciesId;
   lineageId?: string;
+  /** Size picked for a "Medium or Small" species; Medium when unset. */
+  size?: SpeciesSize;
+  /** Intelligence, Wisdom or Charisma: the ability for the spells the species or lineage grants. */
+  speciesSpellAbility?: AbilityKey;
   abilityMethod: AbilityMethod;
   /** Scores before background increases. */
   baseScores: AbilityScores;
@@ -228,9 +233,16 @@ export interface DerivedSheet {
   skills: Record<SkillKey, { proficient: boolean; expertise: boolean; bonus: number }>;
   spellSaveDc?: number;
   spellAttack?: number;
+  /** Size chosen for species that can be Medium or Small. */
+  size?: SpeciesSize;
+  /** Save DC and attack bonus of the spells granted by the species, when it lets you pick their ability. */
+  speciesSpells?: { ability: AbilityKey; saveDc: number; attack: number };
   gold: number;
   feats: LevelFeatId[];
 }
+
+/** The size picked for a species that can be Medium or Small (Medium unless the player chose Small). */
+export const chosenSize = (build: Pick<CharacterBuild, "size">): SpeciesSize => build.size ?? "medium";
 
 export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet | null {
   const cls = findClass(build.classId);
@@ -294,6 +306,7 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
 
   const background = bg.equipment.find((option) => option.id === build.backgroundEquipment) ?? bg.equipment[0];
   const casting = cls.spellcasting;
+  const speciesAbility = speciesNeedsSpellAbility(sp, build.lineageId) ? build.speciesSpellAbility : undefined;
   return {
     level: safeLevel,
     scores,
@@ -311,6 +324,8 @@ export function deriveSheet(build: CharacterBuild, level: number): DerivedSheet 
     skills: skillValues,
     spellSaveDc: casting ? 8 + pb + mod(casting.ability) : undefined,
     spellAttack: casting ? pb + mod(casting.ability) : undefined,
+    ...(speciesSizeOptions(sp).length ? { size: chosenSize(build) } : {}),
+    ...(speciesAbility ? { speciesSpells: { ability: speciesAbility, saveDc: 8 + pb + mod(speciesAbility), attack: pb + mod(speciesAbility) } } : {}),
     gold: equipment.gold + background.gold,
     feats,
   };
@@ -354,6 +369,7 @@ export function stepIssues(build: CharacterBuild, step: number): string[] {
   const cls = findClass(build.classId);
   const sp = findSpecies(build.speciesId);
   if (step === 2 && sp?.lineages?.length && !sp.lineages.some((item) => item.id === build.lineageId)) issues.push("lineage");
+  if (step === 2 && speciesNeedsSpellAbility(sp, build.lineageId) && !speciesSpellAbilities.includes(build.speciesSpellAbility as AbilityKey)) issues.push("spellAbility");
   if (step === 2 && sp?.skillChoice && build.speciesSkills.length !== sp.skillChoice.count) issues.push("speciesSkills");
   const bg = findBackground(build.backgroundId);
   if (step === 2 && sp?.originFeat && !build.speciesFeat) issues.push("speciesFeat");

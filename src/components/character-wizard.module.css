@@ -47,6 +47,13 @@
 .check input, .skill input { accent-color: var(--crimson); }
 .note { margin: 6px 0 0; font-size: var(--text-xs); color: var(--muted); }
 
+.subhead { margin: 14px 0 6px; font: var(--text-xs) var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.traitList { display: grid; margin: 0; }
+.traitList > div { padding: 6px 0; border-bottom: 1px dotted var(--line); }
+.traitList > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.traitList dt { font: 600 14px var(--font-display); color: var(--ink); }
+.traitList dd { margin: 2px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.lineageText { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
 .group { margin: 16px 0 0; padding: 12px 14px 14px; border: 1px solid var(--line); }
 .group legend { padding: 0 6px; font: 600 13px var(--font-display); color: var(--crimson); }
 .pills { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }

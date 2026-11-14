@@ -56,10 +56,22 @@ describe("character view helpers", () => {
     expect(featureList(fighter, 5).every((feature) => feature.tip.en && feature.tip.es)).toBe(true);
   });
 
-  it("puts the chosen lineage first among the species traits", () => {
-    expect(speciesTraits(fighter).map((trait) => trait.name.en)).toEqual(["Resourceful", "Skillful", "Versatile"]);
-    const elf = speciesTraits({ ...fighter, speciesId: "elf", lineageId: "wood" });
-    expect(elf[0]).toMatchObject({ name: { es: "Linaje élfico: Elfo de los bosques" }, tip: { en: "Speed 35 ft." } });
-    expect(elf).toHaveLength(4);
+  it("puts the chosen lineage first among the species traits, then the chosen size and spellcasting ability", () => {
+    expect(speciesTraits(fighter).map((trait) => trait.name.en)).toEqual(["Resourceful", "Skillful", "Versatile", "Size: Medium"]);
+    expect(speciesTraits({ ...fighter, size: "small" }).at(-1)).toMatchObject({ name: { es: "Tamaño: Pequeño" } });
+    // The Elven Lineage trait merges with the chosen lineage instead of being listed twice.
+    const elf = speciesTraits({ ...fighter, speciesId: "elf", lineageId: "wood", speciesSpellAbility: "wis" });
+    expect(elf[0].name.es).toBe("Linaje élfico: Elfo de los bosques");
+    expect(elf[0].tip.en).toContain("Pass without Trace");
+    expect(elf.filter((trait) => trait.name.en.startsWith("Elven Lineage"))).toHaveLength(1);
+    expect(elf.at(-1)).toMatchObject({ name: { en: "Spellcasting ability: Wisdom" } });
+    expect(elf).toHaveLength(5);
+  });
+
+  it("describes every Player's Handbook lineage in full", () => {
+    for (const sp of species.filter((item) => item.source === "phb2024")) {
+      for (const trait of sp.traits) expect(trait.tip.en && trait.tip.es).toBeTruthy();
+      for (const lineage of sp.lineages ?? []) expect((lineage.description ?? lineage.detail)?.es).toBeTruthy();
+    }
   });
 });

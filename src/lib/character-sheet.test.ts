@@ -142,6 +142,25 @@ describe("2024 catalog", () => {
     expect(stepIssues({ ...wizard, speciesId: "kenku", speciesSkills: ["arcana"] }, 2)).toContain("speciesSkills");
   });
 
+  it("asks for the spellcasting ability of species spells and the size of Medium-or-Small species", () => {
+    const wizard: CharacterBuild = { ...fighter, classId: "wizard", classSkills: ["arcana", "history"], speciesSkills: [], speciesFeat: undefined };
+    const tiefling: CharacterBuild = { ...wizard, speciesId: "tiefling", lineageId: "infernal" };
+    expect(stepIssues(tiefling, 2)).toContain("spellAbility");
+    expect(stepIssues({ ...tiefling, speciesSpellAbility: "cha" }, 2)).toEqual([]);
+    expect(stepIssues({ ...wizard, speciesId: "dwarf" }, 2)).not.toContain("spellAbility");
+    // Kobolds only cast with a chosen ability under the Draconic Sorcery legacy.
+    expect(stepIssues({ ...wizard, speciesId: "kobold", lineageId: "defiance" }, 2)).not.toContain("spellAbility");
+    expect(stepIssues({ ...wizard, speciesId: "kobold", lineageId: "sorcery" }, 2)).toContain("spellAbility");
+
+    const sheet = deriveSheet({ ...tiefling, speciesSpellAbility: "int" }, 1)!;
+    const intMod = Math.floor((sheet.scores.int - 10) / 2);
+    expect(sheet.speciesSpells).toEqual({ ability: "int", saveDc: 8 + 2 + intMod, attack: 2 + intMod });
+    expect(deriveSheet({ ...wizard, speciesId: "dwarf" }, 1)!.speciesSpells).toBeUndefined();
+    expect(deriveSheet(tiefling, 1)!.size).toBe("medium");
+    expect(deriveSheet({ ...tiefling, size: "small" }, 1)!.size).toBe("small");
+    expect(deriveSheet({ ...wizard, speciesId: "dwarf" }, 1)!.size).toBeUndefined();
+  });
+
   it("Tough adds 2 Hit Points per level", () => {
     const farmer: CharacterBuild = { ...fighter, backgroundId: "farmer", bonusAbilities: ["str", "con"], speciesFeat: undefined };
     expect(deriveSheet(farmer, 1)!.hitPoints).toBe(12 + 2);
