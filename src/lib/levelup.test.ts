@@ -13,6 +13,26 @@ const fighter: CharacterBuild = {
   classEquipment: "A", backgroundEquipment: "A", alignment: 0, appearance: "",
 };
 
+describe("weapon mastery", () => {
+  it("matches the Weapon Mastery column of each martial class in the 2024 rules", () => {
+    const kindsAt = (classId: string, level: number) => {
+      const start = classes.find((cls) => cls.id === classId)?.weaponMasteries ?? 0;
+      let kinds = start;
+      for (let current = 2; current <= level; current++) {
+        for (const feature of classFeatures[classId as keyof typeof classFeatures][current] ?? []) {
+          const match = /^Weapon Mastery \((\d+) kinds\)$/.exec(feature.name.en);
+          if (match) kinds = Number(match[1]);
+        }
+      }
+      return kinds;
+    };
+    expect([1, 4, 10, 20].map((level) => kindsAt("barbarian", level))).toEqual([2, 3, 4, 4]);
+    expect([1, 4, 10, 16, 20].map((level) => kindsAt("fighter", level))).toEqual([3, 4, 5, 6, 6]);
+    for (const classId of ["paladin", "ranger", "rogue"]) expect(kindsAt(classId, 20)).toBe(2);
+    expect(classes.filter((cls) => cls.weaponMasteries).map((cls) => cls.id).sort()).toEqual(["barbarian", "fighter", "paladin", "ranger", "rogue"]);
+  });
+});
+
 describe("which choices each level offers", () => {
   it("asks for HP every level and adds the specific choices", () => {
     expect(levelUpSteps(fighter, 2)).toEqual(["hp"]);

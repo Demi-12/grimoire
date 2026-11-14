@@ -81,6 +81,8 @@ const expertise = (count: number, from?: SkillKey[]): Effect[] => [{ kind: "choo
 const expertiseFeature = (count: number) => f("Expertise", "Pericia",
   `Double your Proficiency Bonus on ${count === 1 ? "one skill" : `${count} skills`} you're proficient in.`,
   `Duplica tu bonificador por competencia en ${count === 1 ? "una habilidad" : `${count} habilidades`} en las que eres competente.`, expertise(count));
+const moreMasteries = (kinds: number) => f(`Weapon Mastery (${kinds} kinds)`, `Maestría con armas (${kinds} tipos)`,
+  `You can use the mastery properties of ${kinds} kinds of weapons.`, `Puedes usar las propiedades de maestría de ${kinds} tipos de armas.`);
 const fightingStyle = f("Fighting Style", "Estilo de combate", "Pick a Fighting Style, a permanent specialty with your weapons or armor.",
   "Eliges un estilo de combate, una especialidad permanente con tus armas o armadura.", [{ kind: "chooseFightingStyle" }]);
 
@@ -95,11 +97,13 @@ export const classFeatures: Record<ClassId, Progression> = {
       f("Reckless Attack", "Ataque temerario", "Attack with advantage this turn, but enemies get advantage against you until your next turn.", "Atacas con ventaja este turno, pero los enemigos la tienen contra ti hasta tu próximo turno.")],
     3: [f("Primal Knowledge", "Conocimiento primigenio", "Gain another Barbarian skill; while raging you can use Strength for some skill checks.", "Ganas otra habilidad de bárbaro; en furia puedes usar Fuerza en algunas pruebas.",
       [{ kind: "chooseSkills", count: 1, from: findClass("barbarian")?.skillOptions }])],
+    4: [moreMasteries(3)],
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar."),
       f("Fast Movement", "Movimiento rápido", "+10 feet of speed while you aren't wearing heavy armor.", "+10 pies de velocidad si no llevas armadura pesada.")],
     7: [f("Feral Instinct", "Instinto feral", "Advantage on Initiative rolls.", "Ventaja en las tiradas de iniciativa."),
       f("Instinctive Pounce", "Embestida instintiva", "When you start a Rage, you can move up to half your speed.", "Al empezar una furia, puedes moverte hasta la mitad de tu velocidad.")],
     9: [f("Brutal Strike", "Golpe brutal", "Trade your Reckless Attack advantage for extra damage and a nasty side effect.", "Cambia la ventaja del Ataque temerario por daño extra y un efecto adicional.")],
+    10: [moreMasteries(4)],
     11: [f("Relentless Rage", "Furia implacable", "If you drop to 0 HP while raging, a Constitution save can keep you standing.", "Si caes a 0 PG en furia, una salvación de Constitución puede mantenerte en pie.")],
     13: [f("Improved Brutal Strike", "Golpe brutal mejorado", "Brutal Strike gets two new, stronger effects.", "Golpe brutal gana dos efectos nuevos y más potentes.")],
     15: [f("Persistent Rage", "Furia persistente", "Your Rage is much harder to end, and you regain Rages when you roll Initiative.", "Tu furia es mucho más difícil de terminar y recuperas furias al tirar iniciativa.")],
@@ -136,13 +140,16 @@ export const classFeatures: Record<ClassId, Progression> = {
   fighter: {
     2: [f("Action Surge", "Oleada de acción", "Take one extra action on your turn (once per rest).", "Realizas una acción extra en tu turno (una vez por descanso)."),
       f("Tactical Mind", "Mente táctica", "Add a d10 to a failed skill check by spending Second Wind.", "Suma 1d10 a una prueba de habilidad fallida gastando Tomar aliento.")],
+    4: [moreMasteries(4)],
     5: [f("Extra Attack", "Ataque adicional", "Attack twice, instead of once, when you take the Attack action.", "Atacas dos veces, en vez de una, al usar la acción de Atacar."),
       f("Tactical Shift", "Cambio táctico", "Second Wind also lets you move without provoking attacks.", "Tomar aliento también te deja moverte sin provocar ataques.")],
     9: [f("Indomitable", "Indomable", "Reroll a failed saving throw with a bonus.", "Repite una salvación fallida con un bonificador."),
-      f("Tactical Master", "Maestro táctico", "Swap your weapon's mastery property for a different one when you attack.", "Cambia la propiedad de maestría del arma al atacar.")],
+      f("Tactical Master", "Maestro táctico", "When you attack with a weapon whose mastery you use, you can swap its mastery property for Push, Sap or Slow.", "Al atacar con un arma cuya maestría usas, puedes cambiar su propiedad de maestría por Empujar, Debilitar o Ralentizar.")],
+    10: [moreMasteries(5)],
     11: [f("Two Extra Attacks", "Dos ataques adicionales", "Attack three times when you take the Attack action.", "Atacas tres veces al usar la acción de Atacar.")],
     13: [f("Studied Attacks", "Ataques estudiados", "After you miss a creature, you get advantage on your next attack against it.", "Tras fallar a una criatura, tienes ventaja en tu siguiente ataque contra ella."),
       f("Indomitable (two uses)", "Indomable (dos usos)", "You can use Indomitable twice between long rests.", "Puedes usar Indomable dos veces entre descansos largos.")],
+    16: [moreMasteries(6)],
     17: [f("Action Surge (two uses)", "Oleada de acción (dos usos)", "Use Action Surge twice per rest (but only once per turn).", "Usa Oleada de acción dos veces por descanso (una por turno)."),
       f("Indomitable (three uses)", "Indomable (tres usos)", "You can use Indomitable three times between long rests.", "Puedes usar Indomable tres veces entre descansos largos.")],
     20: [f("Three Extra Attacks", "Tres ataques adicionales", "Attack four times when you take the Attack action.", "Atacas cuatro veces al usar la acción de Atacar.")],
