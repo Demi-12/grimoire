@@ -99,6 +99,26 @@ export function parseTelemetry(body: unknown): ClientEvent | ClientErrorReport |
   return null;
 }
 
+const EXTENSION_URL = /^(chrome|moz|safari|safari-web)-extension:|^webkit-masked-url:/;
+const URL_IN_TEXT = /\b(?:https?|webkit-masked-url|(?:chrome|moz|safari|safari-web)-extension):\/\/[^\s)]+/g;
+/** Every script this app ships is served from /_next/ (bundled chunks, in development too). */
+const isAppScript = (url: string) => /^https?:\/\/[^/]+\/_next\//.test(url);
+
+/**
+ * Whether an uncaught browser error came from a script that isn't ours: an extension, or code a browser
+ * injects into every page. Brave on iOS, for one, injects its wallet (`window.ethereum`) into the page
+ * itself, so its errors look like they come from the page's own URL (`global code@https://…/admin`).
+ * Rule: foreign if it was thrown inside an extension, or if it names locations and none is an app chunk.
+ * Errors with no location at all are kept, since they can't be ruled out.
+ */
+export function isForeignScriptError({ filename, stack }: { filename?: string | null; stack?: string | null }): boolean {
+  const urls = [...(stack?.match(URL_IN_TEXT) ?? [])];
+  const thrownAt = filename || urls[0];
+  if (thrownAt && EXTENSION_URL.test(thrownAt)) return true;
+  if (filename) urls.push(filename);
+  return urls.length > 0 && !urls.some(isAppScript);
+}
+
 /** Ids, uuids and tokens in a path segment: anything with a digit, or long enough to be generated. */
 const VARIABLE_SEGMENT = /^(?=.*\d)[\w~.%-]+$|^[\w~.%-]{20,}$/;
 
