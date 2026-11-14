@@ -5,6 +5,10 @@ import CharacterBuilder from "@/components/character-builder";
 import EncounterBuilder from "@/components/encounter-builder";
 import CampaignManager from "@/components/campaign-manager";
 import BestiaryBrowser from "@/components/bestiary-browser";
+import HomeDashboard from "@/components/home-dashboard";
+import MapPicker from "@/components/map-picker";
+import DmHub from "@/components/dm-hub";
+import Link from "next/link";
 import AdminUsers from "@/components/admin-users";
 import AdminAnalytics from "@/components/admin-analytics";
 import DataBackup from "@/components/data-backup";
@@ -17,18 +21,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { detectLocale, translate, type Locale } from "@/lib/i18n";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { track } from "@/lib/telemetry-client";
+import { byLastMap, readLastMaps } from "@/lib/last-map";
 import { Spinner } from "./skeleton";
 import { LoadingShell } from "./loading-shell";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { ArcaneBackdrop, BrandMark } from "./brand";
 import { useToast } from "./feedback";
 
-type View = "home" | "characters" | "campaigns" | "encounters" | "account" | "admin";
+type View = "home" | "characters" | "map" | "campaigns" | "encounters" | "bestiary" | "dm" | "account" | "admin";
 
 /** Each view has its own URL (see src/app/(app)); Toolkit stays mounted in the shared layout. */
-const viewPaths: Record<View, string> = { home: "/", characters: "/characters", campaigns: "/campaigns", encounters: "/encounters", account: "/account", admin: "/admin" };
+const viewPaths: Record<View, string> = {
+  home: "/", characters: "/characters", map: "/map", campaigns: "/campaigns", encounters: "/encounters", bestiary: "/bestiary", dm: "/dm", account: "/account", admin: "/admin",
+};
+/** The menu's two groups: what everyone uses at the table, and what the DM uses to prepare it (open to all). */
+const playViews: View[] = ["home", "characters", "map"];
+const runViews: View[] = ["campaigns", "encounters", "bestiary"];
 /** `/characters/<id>` is the characters view with that character's full sheet open. */
 const characterPath = /^\/characters\/([^/]+)$/;
+/** `/characters/new` opens the step-by-step creator (the overview's "Create a character" links here). */
+const newCharacterPath = "/characters/new";
 /** The admin view has two tabs, each with its own URL. */
 const adminAnalyticsPath = "/admin/analytics";
 function viewFromPath(pathname: string): View {
@@ -38,7 +50,8 @@ function viewFromPath(pathname: string): View {
   return (Object.keys(viewPaths) as View[]).find((candidate) => viewPaths[candidate] === normalized) ?? "home";
 }
 const characterIdFromPath = (pathname: string): string | null => {
-  const id = characterPath.exec(pathname.replace(/\/+$/, ""))?.[1];
+  const normalized = pathname.replace(/\/+$/, "");
+  const id = normalized === newCharacterPath ? undefined : characterPath.exec(normalized)?.[1];
   return id ? decodeURIComponent(id) : null;
 };
 type Theme = "light" | "dark";
@@ -131,6 +144,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const pathname = usePathname();
   const view = viewFromPath(pathname);
   const selectedCharacterId = characterIdFromPath(pathname);
+  const creatingCharacter = pathname.replace(/\/+$/, "") === newCharacterPath;
   const adminTab = view === "admin" && pathname.replace(/\/+$/, "") === adminAnalyticsPath ? "analytics" : "users";
   const setView = (next: View) => { if (next !== view) router.push(viewPaths[next]); };
   const [locale, setLocale] = useState<Locale>("en");
@@ -150,6 +164,8 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
+  // When each campaign's map was last opened here (read again whenever the person comes back from a map page).
+  const [lastMaps] = useState(readLastMaps);
 
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
 
@@ -262,6 +278,12 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   useEffect(() => {
     if (view === "admin" && me && me.role !== "admin") router.replace("/");
   }, [view, me, router]);
+  // `/map` with a single table goes straight to its map (replace, so Back skips the picker).
+  useEffect(() => {
+    if (view !== "map" || !accountId || dataLoadedFor !== accountId) return;
+    const sitting = campaigns.filter((campaign) => campaign.myRole);
+    if (sitting.length === 1) router.replace(`/map/${encodeURIComponent(sitting[0].id)}`);
+  }, [view, campaigns, dataLoadedFor, accountId, router]);
   // One page view per section visited (the open sheet counts apart from the character list).
   const viewedSection = selectedCharacterId ? "character-sheet" : view;
   const approved = me?.status === "approved";
@@ -280,7 +302,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
 
   // Signed-in shell only when a session is known (or, before the first check, the server saw its cookie);
   // otherwise the sign-in page's shape, so a visitor never sees a dashboard flash before the gate.
-  const loading = <LoadingShell locale={locale} activeNav={(["home", "characters", "campaigns", "encounters", "account"] as View[]).indexOf(view)}
+  const loading = <LoadingShell locale={locale} activeNav={[...playViews, ...runViews].indexOf(view)}
     variant={accountId || (!sessionChecked && sessionHint) ? (view === "home" ? "home" : "section") : "gate"} />;
   if (!sessionChecked || (accountId && meLoadedFor !== accountId)) return loading;
 
@@ -331,7 +353,22 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
   const signOut = async () => { await authClient.signOut(); window.location.assign("/"); };
 
   const ownCharacters = characters.filter((character) => character.editable);
-  const title = adminTab === "analytics" ? t("admin.tab.analytics") : t(`nav.${view}`);
+  // Tables the person sits at, the one whose map they opened last first.
+  const tables = byLastMap(campaigns.filter((campaign) => campaign.myRole), lastMaps);
+  const mapHref = (campaign: Campaign) => `/map/${encodeURIComponent(campaign.id)}`;
+  // With a single table the menu skips the picker and opens its map.
+  const mapNavHref = tables.length === 1 ? mapHref(tables[0]) : viewPaths.map;
+
+  const navLink = (target: View, icon: IconName, label: string, options: { href?: string; count?: number; className?: string; short?: string; current?: boolean } = {}) => {
+    const current = options.current ?? view === target;
+    return <Link key={target} href={options.href ?? viewPaths[target]} className={`nav-link${options.className ? ` ${options.className}` : ""}${current ? " active" : ""}`}
+      aria-current={view === target ? "page" : current ? "true" : undefined}>
+      <span className="nav-icon" aria-hidden="true"><Icon name={icon} /></span>
+      {options.short ? <><span className="nav-label-long">{label}</span><span className="nav-label-short">{options.short}</span></> : label}
+      {options.count !== undefined && <small>{options.count}</small>}
+      {target === "admin" && pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}
+    </Link>;
+  };
 
   async function saveCharacter(draft: CharacterDraft, id?: string) {
     await api(id ? `/api/characters/${id}` : "/api/characters", { method: id ? "PUT" : "POST", body: draft });
@@ -430,22 +467,30 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     <ArcaneBackdrop variant="app" />
     <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">
-      <button className="brand" onClick={() => setView("home")}><BrandMark size={26} /><b>GRIMOIRE</b></button>
-      <div className="sidebar-caption">{t("nav.workspace")}</div>
+      <Link className="brand" href="/"><BrandMark size={26} /><b>GRIMOIRE</b></Link>
       <nav className="side-nav" aria-label={t("nav.aria")}>
-        <button className={view === "home" ? "active" : ""} aria-current={view === "home" ? "page" : undefined} onClick={() => setView("home")}><span aria-hidden="true"><Icon name="home" /></span>{t("nav.home")}</button>
-        <button className={view === "characters" ? "active" : ""} aria-current={view === "characters" ? "page" : undefined} onClick={() => setView("characters")}><span aria-hidden="true"><Icon name="characters" /></span>{t("nav.characters")}<small>{ownCharacters.length}</small></button>
-        <button className={view === "campaigns" ? "active" : ""} aria-current={view === "campaigns" ? "page" : undefined} onClick={() => setView("campaigns")}><span aria-hidden="true"><Icon name="campaigns" /></span>{t("nav.campaigns")}<small>{campaigns.length}</small></button>
-        <button className={view === "encounters" ? "active" : ""} aria-current={view === "encounters" ? "page" : undefined} onClick={() => setView("encounters")}><span aria-hidden="true"><Icon name="encounters" /></span>{t("nav.encounters")}</button>
-        <button className={view === "account" ? "active" : ""} aria-current={view === "account" ? "page" : undefined} onClick={() => setView("account")}><span aria-hidden="true"><Icon name="account" /></span>{t("nav.account")}</button>
-        {me.role === "admin" && <button className={`nav-admin${view === "admin" ? " active" : ""}`} aria-current={view === "admin" ? "page" : undefined} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{t("nav.admin")}{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
+        <p className="nav-group">{t("nav.groupPlay")}</p>
+        {navLink("home", "home", t("nav.home"))}
+        {navLink("characters", "characters", t("nav.characters"), { count: ownCharacters.length })}
+        {navLink("map", "map", t("nav.map"), { href: mapNavHref, short: t("nav.mapShort") })}
+        <p className="nav-group">{t("nav.groupRun")}</p>
+        {navLink("campaigns", "campaigns", t("nav.campaigns"), { count: campaigns.length, className: "nav-run" })}
+        {navLink("encounters", "encounters", t("nav.encounters"), { className: "nav-run" })}
+        {navLink("bestiary", "bestiary", t("nav.bestiary"), { className: "nav-run" })}
+        {/* Phones: one "Run" tab stands for the three links above (they are hidden there). */}
+        {navLink("dm", "dm", t("nav.dm"), { className: "nav-dm-hub", current: view === "dm" || runViews.includes(view) })}
+        {me.role === "admin" && navLink("admin", "admin", t("nav.admin"), { className: "nav-admin" })}
       </nav>
       <div className="sidebar-bottom"><span className="edition-dot" />{t("common.rulesLabel")}<p>{t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name })}</p><button type="button" className="sidebar-signout" onClick={() => void signOut()}>{t("gate.signOut")}</button></div>
     </aside>
 
     <div className="workspace">
-      <header className="workspace-header"><div className="mobile-brand"><BrandMark size={20} /> <span className="brand-word">GRIMOIRE</span></div><span className="breadcrumb">{t("header.campaign")} <i>/</i> {title.toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
+      <header className="workspace-header"><div className="mobile-brand"><BrandMark size={20} /> <span className="brand-word">GRIMOIRE</span></div>
         {controls}
+        <Link className={`header-control header-account${view === "account" ? " active" : ""}`} href={viewPaths.account} aria-label={t("header.accountAria", { name: me.name })}
+          aria-current={view === "account" ? "page" : undefined}>
+          {t("header.account")}
+        </Link>
         {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
         <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>
         <span className="edition-badge">{t("common.edition")}</span></header>
@@ -457,35 +502,16 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       {view === "home" && <main className="page-content" id="main" tabIndex={-1}>
         {localImport && <div className="import-banner" role="status"><span aria-hidden="true">✦</span><p><b>{t("import.title")}</b> {t("import.description", { characters: localImport.characters.length, campaigns: localImport.campaigns.length, creatures: localImport.creatures.length })}</p>
           <div><button className="button button-primary" disabled={importBusy} onClick={() => void runImport()}>{importBusy && <Spinner />}{t(importBusy ? "common.saving" : "import.action")}</button><button className="button button-quiet" disabled={importBusy} onClick={finishImport}>{t("import.dismiss")}</button></div></div>}
-        <header className="desk-head">
-          <div><h1>{t("home.title")}</h1><p>{t("home.signedIn", { name: me.name })}</p></div>
-          <div className="desk-actions">
-            <button className="button button-quiet" onClick={() => setView("encounters")}>⚔︎ {t("home.generateEncounter")}</button>
-            <button className="button button-primary" onClick={() => setView("characters")}>✦ {t("home.createCharacter")}</button>
-          </div>
-        </header>
-        <section className="tool-grid" aria-label={t("home.toolbox")}>
-          <button className="tool-tile" onClick={() => setView("characters")}><span className="tool-glyph" aria-hidden="true"><Icon name="characters" /></span><strong>{t("nav.characters")}</strong><b>{ownCharacters.length}</b><small>{t("home.tool.characters")}</small></button>
-          <button className="tool-tile" onClick={() => setView("campaigns")}><span className="tool-glyph" aria-hidden="true"><Icon name="campaigns" /></span><strong>{t("home.campaigns")}</strong><b>{campaigns.length}</b><small>{t("home.tool.campaigns")}</small></button>
-          <button className="tool-tile" onClick={() => setView("encounters")}><span className="tool-glyph" aria-hidden="true"><Icon name="encounters" /></span><strong>{t("nav.encounters")}</strong><b>{ownCreatures.length}</b><small>{t("home.tool.encounters")}</small></button>
-          <button className="tool-tile" onClick={() => setView("account")}><span className="tool-glyph" aria-hidden="true"><Icon name="account" /></span><strong>{t("nav.account")}</strong><b className="tool-status">✓</b><small>{t("home.tool.accountOn")}</small></button>
-        </section>
-        <section className="desk-panel">
-          <div className="desk-panel-head"><h2>{t("home.recent")}</h2>{ownCharacters.length > 4 && <button className="small-action" onClick={() => setView("characters")}>{t("home.seeAll", { count: ownCharacters.length })}</button>}</div>
-          {ownCharacters.length ? <ul className="roster">{ownCharacters.slice(0, 4).map((character) => <li key={character.id}>
-            <button onClick={() => router.push(`/characters/${encodeURIComponent(character.id)}`)}><span className="roster-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span>
-              <span className="roster-name">{character.name}<small>{[character.className, character.species].filter(Boolean).join(" · ") || t("character.adventurer")}</small></span>
-              <span className="roster-level">{t("character.levelPill", { level: character.level })}</span></button>
-          </li>)}</ul> : <p className="desk-empty">{t("home.noCharacters")} <button className="small-action" onClick={() => setView("characters")}>{t("home.createCharacter")}</button></p>}
-        </section>
-        <p className="local-data-note">◈ {t("home.privacyDescription")}</p>
+        <HomeDashboard locale={locale} characters={ownCharacters} campaigns={campaigns.filter((campaign) => campaign.myRole)}
+          mapShortcut={tables[0] ? { href: mapHref(tables[0]), campaignName: tables[0].name } : { href: viewPaths.map }} />
       </main>}
 
       {view === "characters" && <main className="page-content" id="main" tabIndex={-1}>
         {/* With a sheet open the character's name is the visible heading; keep the page title for screen readers only. */}
         <div className={`section-title page-title${selectedCharacterId ? " sr-only" : ""}`}><div><p className="eyebrow">{t("characters.kicker")}</p><h1 id="characters-title">{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
         <CharacterBuilder locale={locale} characters={ownCharacters} allCharacters={characters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter}
-          selectedId={selectedCharacterId} onSelect={(id) => router.push(id ? `/characters/${encodeURIComponent(id)}` : viewPaths.characters)} />
+          selectedId={selectedCharacterId} onSelect={(id) => router.push(id ? `/characters/${encodeURIComponent(id)}` : viewPaths.characters)}
+          startCreating={creatingCharacter} onCreatingStarted={() => router.replace(viewPaths.characters)} />
         <p className="local-data-note">{t("characters.localData")}</p>
       </main>}
 
@@ -496,12 +522,24 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
         <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: ownCreatures.length })}</button></div>
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
-        <BestiaryBrowser locale={locale} homebrew={{ me, campaigns, onAddCreature: (creature) => { void saveCreature(creature); } }} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
         {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
           <form className="creature-form" onSubmit={addCreature}><label>{t("catalog.name")}<input required maxLength={60} value={creatureName} onChange={(event) => setCreatureName(event.target.value)} placeholder={t("catalog.namePlaceholder")} /></label><label>{t("catalog.xp")}<input type="number" min={1} max={100000} value={creatureXp} onChange={(event) => setCreatureXp(Number(event.target.value))} /></label><button className="button button-primary" type="submit">{t("catalog.add")}</button></form>
           <div className="catalog-list">{creatures.map((creature) => <div className="catalog-row" key={creature.id}><span aria-hidden="true">✦</span><b>{creature.source === "Ejemplo editable" ? t(`creature.sample.${creature.xp}.name`) : creature.name}</b><small>{creature.source === "Ejemplo editable" ? t("creature.sample.source") : creature.source === "Catálogo propio" ? t("catalog.customSource") : creature.source}</small><strong>{creature.xp.toLocaleString(locale === "es" ? "es-ES" : "en-US")} XP</strong>{creature.source === "Catálogo propio" && <button className="small-action danger-action" onClick={() => void removeCreature(creature)}>{t("catalog.remove")}</button>}</div>)}</div>
         </section>}
+      </main>}
+
+      {view === "map" && <main className="page-content" id="main" tabIndex={-1}>
+        <MapPicker locale={locale} campaigns={tables} characters={ownCharacters} />
+      </main>}
+
+      {view === "bestiary" && <main className="page-content" id="main" tabIndex={-1}>
+        <div className="section-title page-title"><div><p className="eyebrow">{t("bestiary.kicker")}</p><h1>{t("bestiary.title")}</h1><p className="title-description">{t("bestiary.description")}</p></div></div>
+        <BestiaryBrowser locale={locale} homebrew={{ me, campaigns, onAddCreature: (creature) => { void saveCreature(creature); } }} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
+      </main>}
+
+      {view === "dm" && <main className="page-content" id="main" tabIndex={-1}>
+        <DmHub locale={locale} campaignCount={campaigns.length} />
       </main>}
 
       {view === "account" && <main className="page-content" id="main" tabIndex={-1}>

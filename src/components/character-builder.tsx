@@ -117,7 +117,7 @@ function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
 }
 
 /** CRUD for the signed-in user's characters, stored in PostgreSQL through the API. */
-export default function CharacterBuilder({ locale, characters, campaigns, onSave, onDelete, allCharacters, selectedId, onSelect }: {
+export default function CharacterBuilder({ locale, characters, campaigns, onSave, onDelete, allCharacters, selectedId, onSelect, startCreating, onCreatingStarted }: {
   locale: Locale;
   /** Characters the user owns (editable). */
   characters: Character[];
@@ -130,6 +130,9 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   /** Character whose full sheet is open (from the URL), and how to open or close one. */
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  /** Open the step-by-step creator right away (the `/characters/new` link); `onCreatingStarted` then leaves that URL. */
+  startCreating?: boolean;
+  onCreatingStarted?: () => void;
 }) {
   const [editing, setEditing] = useState<Character | undefined>();
   const [showEditor, setShowEditor] = useState(false);
@@ -148,6 +151,14 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     window.addEventListener("afterprint", resetPrintState);
     return () => window.removeEventListener("afterprint", resetPrintState);
   }, []);
+
+  useEffect(() => {
+    if (!startCreating) return;
+    setShowEditor(false); setLevelingUp(null);
+    startWizard(false);
+    onCreatingStarted?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startCreating]);
 
   /** Open the creator for a new character (counted to measure how many finish it). */
   function startWizard(quick: boolean) {
