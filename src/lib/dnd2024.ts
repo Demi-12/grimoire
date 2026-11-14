@@ -117,7 +117,7 @@ export const classes: ClassData[] = [
       f("Rage", "Furia", "Bonus action: extra damage with Strength attacks, resistance to bludgeoning, piercing and slashing damage, and advantage on Strength checks and saves. No spellcasting while raging.", "Acción adicional: daño extra con ataques de Fuerza, resistencia al daño contundente, perforante y cortante, y ventaja en pruebas y salvaciones de Fuerza. No puedes lanzar conjuros en furia."),
       f("Unarmored Defense", "Defensa sin armadura", "Without armor, your AC is 10 + Dexterity + Constitution modifiers; a shield still adds its bonus.", "Sin armadura, tu CA es 10 + modificadores de Destreza y Constitución; el escudo sigue sumando.",
         [{ kind: "unarmoredDefense", add: ["con"] }]),
-      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few weapon kinds you are trained with; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas que dominas; puedes cambiar una tras un descanso largo."),
+      f("Weapon Mastery", "Maestría con armas", "Use the mastery properties (like Cleave or Topple) of a few kinds of Simple or Martial melee weapons; swap one after a Long Rest.", "Usas las propiedades de maestría (como Hendir o Derribar) de algunos tipos de armas cuerpo a cuerpo sencillas o marciales; puedes cambiar una tras un descanso largo."),
     ],
     subclass: t("Path of the Berserker", "Senda del berserker"),
     summary: t("A fierce warrior fueled by primal rage.", "Un guerrero feroz impulsado por una furia primigenia."),
