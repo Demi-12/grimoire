@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  errorGroupKey, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, summarizeUserAgent,
+  errorGroupKey, isForeignScriptError, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, summarizeUserAgent,
 } from "./analytics";
 
 describe("parseTelemetry", () => {
@@ -86,6 +86,42 @@ describe("summarizeUserAgent", () => {
     expect(summarizeUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")).toBe("Firefox 133 · Windows");
     expect(summarizeUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0")).toBe("Edge 131 · Windows");
     expect(summarizeUserAgent(null)).toBeNull();
+  });
+});
+
+describe("isForeignScriptError", () => {
+  it("ignores scripts a browser injects into the page, like Brave's wallet on iOS", () => {
+    expect(isForeignScriptError({
+      filename: "https://grimoire.demigv.dev/admin",
+      stack: "global code@https://grimoire.demigv.dev/admin:2:34",
+    })).toBe(true);
+    expect(isForeignScriptError({ stack: "global code@https://prometeo.example.ts.net/characters:1:1" })).toBe(true);
+  });
+
+  it("ignores errors thrown inside extensions, including Safari's masked extension URLs", () => {
+    expect(isForeignScriptError({ filename: "chrome-extension://abc/content.js" })).toBe(true);
+    expect(isForeignScriptError({
+      stack: "f@webkit-masked-url://hidden/:1:2\nonClick@https://grimoire.demigv.dev/_next/static/chunks/app.js:1:2",
+    })).toBe(true);
+  });
+
+  it("keeps the app's own errors even when an extension sits lower in the stack", () => {
+    expect(isForeignScriptError({
+      stack: "onClick@https://grimoire.demigv.dev/_next/static/chunks/app.js:1:2\nwrapped@chrome-extension://abc/hook.js:3:4",
+    })).toBe(false);
+  });
+
+  it("keeps errors from the app's own chunks", () => {
+    expect(isForeignScriptError({
+      filename: "https://grimoire.demigv.dev/_next/static/chunks/123.js",
+      stack: "TypeError: x is undefined\n    at render (https://grimoire.demigv.dev/_next/static/chunks/123.js:4:56)",
+    })).toBe(false);
+    expect(isForeignScriptError({ stack: "save@http://localhost:3000/_next/static/chunks/src_abc.js:10:2" })).toBe(false);
+  });
+
+  it("keeps errors with no location, since they can't be ruled out", () => {
+    expect(isForeignScriptError({})).toBe(false);
+    expect(isForeignScriptError({ stack: "Error: boom" })).toBe(false);
   });
 });
 

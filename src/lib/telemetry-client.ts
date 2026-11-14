@@ -1,6 +1,6 @@
 "use client";
 
-import type { ClientEventName, EventProps } from "@/lib/analytics";
+import { isForeignScriptError, type ClientEventName, type EventProps } from "@/lib/analytics";
 
 /**
  * Fire-and-forget reporting to /api/telemetry. Nothing here may throw or block the UI: failures are dropped.
@@ -45,9 +45,14 @@ export function reportClientError(error: unknown, extra: { digest?: string } = {
   });
 }
 
-/** Errors thrown by scripts we don't control (extensions, cross-origin scripts) carry no useful detail. */
+/**
+ * Errors thrown by scripts we don't control (extensions, cross-origin scripts, wallets a browser injects
+ * into the page) are not Grimoire bugs and carry no useful detail.
+ */
 function isNoise(event: ErrorEvent) {
-  return event.message === "Script error." || (!event.error && !event.filename) || /^(chrome|moz|safari)-extension:/.test(event.filename ?? "");
+  if (event.message === "Script error." || (!event.error && !event.filename)) return true;
+  const stack = event.error instanceof Error ? event.error.stack : null;
+  return isForeignScriptError({ filename: event.filename, stack });
 }
 
 /** Listen for uncaught errors and unhandled promise rejections. Returns a cleanup function. */
@@ -59,6 +64,7 @@ export function installErrorReporting(): () => void {
   const onRejection = (event: PromiseRejectionEvent) => {
     // An aborted fetch (navigating away) is not a bug.
     if (event.reason instanceof DOMException && event.reason.name === "AbortError") return;
+    if (event.reason instanceof Error && isForeignScriptError({ stack: event.reason.stack })) return;
     reportClientError(event.reason);
   };
   window.addEventListener("error", onError);
