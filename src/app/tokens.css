@@ -17,6 +17,8 @@
  *   --leather            sidebar and banner base
  *   --danger             destructive actions (text and borders)
  *   --field              background of text fields and selects
+ *   --warn-text          text for a warning state (reconnecting) (>= 4.5:1 on --paper)
+ *   --map-floor / --map-line / --map-coord  the battle map's squares, grid lines and coordinates
  *   --status-critical    errors in charts (fixed in both themes); always paired with an icon or words
  *   --good-text / --bad-text  text for a change that is good or bad news (>= 4.5:1 on --surface)
  */
@@ -37,6 +39,10 @@
   --bad-text: #a3261f;
   --danger: #8a2318;
   --field: #fbfaff;
+  --warn-text: #84490a;
+  --map-floor: #d9d2e9;
+  --map-line: rgba(83, 73, 106, 0.38);
+  --map-coord: #53496a;
   --on-accent: #f1edf8;
   --sunken: color-mix(in srgb, var(--accent) 7%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
@@ -59,6 +65,10 @@
   --bad-text: #ff9a8f;
   --danger: #ff9a8f;
   --field: #120f22;
+  --warn-text: #e6b062;
+  --map-floor: #1e1a28;
+  --map-line: rgba(153, 141, 181, 0.3);
+  --map-coord: #998db5;
   --on-accent: #f3effb;
   --sunken: color-mix(in srgb, var(--accent) 6%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));

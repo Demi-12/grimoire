@@ -18,7 +18,7 @@ import { speciesTraits } from "@/lib/character-view";
 import { chosenSubclassId, subclassLabel, unlockedFeatures } from "@/lib/levelup";
 import { findSubclass, subclassesFor } from "@/lib/subclasses";
 import type { BackgroundData, ClassData } from "@/lib/dnd2024";
-import styles from "./character-wizard.module.css";
+import { wz as styles } from "./wizard-styles";
 
 export interface WizardResult {
   name: string;
@@ -183,7 +183,7 @@ export function newBuild(): CharacterBuild {
 }
 
 function Choice({ selected, onClick, children, disabled, title }: { selected: boolean; onClick: () => void; children: ReactNode; disabled?: boolean; title?: string }) {
-  return <button type="button" className={`choice ${styles.choice}`} aria-pressed={selected} onClick={onClick} disabled={disabled} title={title}>{children}</button>;
+  return <button type="button" className={styles.choice} aria-pressed={selected} onClick={onClick} disabled={disabled} title={title}>{children}</button>;
 }
 
 function SkillPicker({ options, chosen, limit, locked, onChange, locale, lockedLabel }: {
@@ -193,7 +193,7 @@ function SkillPicker({ options, chosen, limit, locked, onChange, locale, lockedL
     const isLocked = locked.has(skill);
     const isChosen = chosen.includes(skill);
     const full = chosen.length >= limit && !isChosen;
-    return <label key={skill} className={`${styles.skill} ${isChosen ? styles.skillOn : ""} ${isLocked ? styles.skillLocked : ""}`}>
+    return <label key={skill} className={styles.skill} data-on={isChosen || undefined} data-locked={isLocked || undefined}>
       <input type="checkbox" checked={isChosen || isLocked} disabled={isLocked || full}
         onChange={(event) => onChange(event.target.checked ? [...chosen, skill] : chosen.filter((item) => item !== skill))} />
       <span>{translate(locale, `skill.${skill}`)}<small>{translate(locale, `ability.${skills[skill]}`).slice(0, 3)}{isLocked ? ` · ${lockedLabel}` : ""}</small></span>
@@ -319,7 +319,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     </header>
 
     {!quick && <nav className={styles.steps} aria-label={c.stepOf(step + 1, c.steps.length)}>
-      {c.steps.map((label, index) => <button type="button" key={label} className={`${styles.step} ${index === step ? styles.current : ""} ${index < step ? styles.done : ""}`}
+      {c.steps.map((label, index) => <button type="button" key={label} className={styles.step} data-state={index === step ? "current" : index < step ? "done" : undefined}
         aria-current={index === step ? "step" : undefined} onClick={() => go(index)}>
         <span>{index < step ? "✓" : ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][index]}</span>{label}
       </button>)}
@@ -442,7 +442,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
           {build.abilityMethod === "rolled" && pool.length === 6 && <ol className={styles.rolls} aria-label={c.methods.rolled}>{pool.map((value, index) =>
             <li key={index} title={build.rolledDice?.[index] ? c.rollDetail(build.rolledDice[index]) : undefined}
               aria-label={`${c.rolledLabel(index)}: ${value}${build.rolledDice?.[index] ? `. ${c.rollDetail(build.rolledDice[index])}` : ""}`}>{value}</li>)}</ol>}
-          {build.abilityMethod === "pointBuy" && <span className={`${styles.pool} ${pointBuySpent(build.baseScores) > POINT_BUY_BUDGET ? styles.bad : ""}`}>{c.points(pointBuySpent(build.baseScores))}</span>}
+          {build.abilityMethod === "pointBuy" && <span className={styles.pool} data-bad={pointBuySpent(build.baseScores) > POINT_BUY_BUDGET || undefined}>{c.points(pointBuySpent(build.baseScores))}</span>}
         </div>
         {build.abilityMethod === "rolled" && <p className={styles.note}>{awaitingRoll ? c.rollOnce : c.rollLocked}</p>}
         <div className={styles.abilityTable}>
@@ -525,7 +525,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         <fieldset className={styles.group}><legend>{c.languages}</legend><p className={styles.note}>{c.languagesHelp}</p><div className={styles.skillGrid}>
           {standardLanguages.map((language, index) => {
             const chosen = build.languages.includes(index);
-            return <label key={language.en} className={`${styles.skill} ${chosen ? styles.skillOn : ""}`}>
+            return <label key={language.en} className={styles.skill} data-on={chosen || undefined}>
               <input type="checkbox" checked={chosen} disabled={!chosen && build.languages.length >= 2}
                 onChange={(event) => update({ languages: event.target.checked ? [...build.languages, index] : build.languages.filter((item) => item !== index) })} />
               <span>{say(language, locale)}</span>
