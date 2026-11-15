@@ -7,11 +7,11 @@ import { attackList } from "@/lib/character-sheet";
 import { featureList, sheetFor, signed, speciesTraits, characterIdentity } from "@/lib/character-view";
 import { say, type Feature } from "@/lib/dnd2024";
 import { translate } from "@/lib/i18n";
-import { fetchMonsterCatalog, type MonsterListEntry } from "@/lib/monster-api";
 import { abilities, abilityModifier } from "@/lib/rules";
-import type { MapOp, MapToken } from "@/lib/battle-map";
+import type { MapToken } from "@/lib/battle-map";
 import MonsterSheet from "./monster-sheet";
 import { Spinner } from "./skeleton";
+import { baseName, useCreatureSearch } from "./battle-map-bestiary";
 import { formatDistance, type Locale } from "./battle-map-combat";
 import { bm as styles } from "./battle-map-styles";
 
@@ -22,6 +22,7 @@ const text = {
     noStatBlock: "This monster isn't linked to a bestiary creature, so there's no stat block to show.",
     link: "Link it to a bestiary creature", search: "Search the bestiary", searching: "Searching…", noResults: "No creature by that name.",
     pick: (name: string) => `Use ${name}`, unlink: "Use another creature",
+    linkHint: "Every unlinked copy with the same name gets it too, with its size and, in a fight, its speed.",
     saves: "Saves", features: "Class features", traits: "Species traits", notes: "Notes", owner: (name: string) => `Player: ${name}`,
   },
   es: {
@@ -30,14 +31,16 @@ const text = {
     noStatBlock: "Este monstruo no está enlazado a una criatura del bestiario, así que no hay ficha que mostrar.",
     link: "Enlazarlo a una criatura del bestiario", search: "Buscar en el bestiario", searching: "Buscando…", noResults: "Ninguna criatura con ese nombre.",
     pick: (name: string) => `Usar ${name}`, unlink: "Usar otra criatura",
+    linkHint: "Se enlazan también las copias sin enlazar con el mismo nombre, con su tamaño y, en combate, su velocidad.",
     saves: "Salvaciones", features: "Rasgos de clase", traits: "Rasgos de especie", notes: "Notas", owner: (name: string) => `Jugador: ${name}`,
   },
 };
 
 /** The sheet of the token picked on the map: a hero's character or a monster's stat block, next to the board. */
-export default function TokenSheet({ token, character, charactersLoaded, isDm, locale, send, onClose }: {
+export default function TokenSheet({ token, character, charactersLoaded, isDm, locale, onLink, onClose }: {
   token: MapToken; character?: Character; charactersLoaded: boolean; isDm: boolean; locale: Locale;
-  send: (ops: MapOp[]) => Promise<void>; onClose: () => void;
+  /** Give the monster (and its unlinked copies) this stat block. */
+  onLink: (slug: string) => void; onClose: () => void;
 }) {
   const t = text[locale];
   const [relinking, setRelinking] = useState(false);
@@ -54,7 +57,7 @@ export default function TokenSheet({ token, character, charactersLoaded, isDm, l
   } else {
     body = <>
       {!token.monsterSlug && <p className={styles.empty}>{t.noStatBlock}</p>}
-      {isDm && <BestiaryLink token={token} locale={locale} onPick={(slug) => { setRelinking(false); void send([{ type: "update", tokenId: token.id, monsterSlug: slug }]); }} />}
+      {isDm && <BestiaryLink token={token} locale={locale} onPick={(slug) => { setRelinking(false); onLink(slug); }} />}
     </>;
   }
   return <section className={styles.sheet} aria-label={`${t.sheet}: ${token.label}`}>
@@ -66,33 +69,20 @@ export default function TokenSheet({ token, character, charactersLoaded, isDm, l
   </section>;
 }
 
-/** Search the bestiary to give a monster typed in by hand its stat block. */
+/** Search the bestiary (and the DM's homebrew) to give a monster typed in by hand its stat block. */
 function BestiaryLink({ token, locale, onPick }: { token: MapToken; locale: Locale; onPick: (slug: string) => void }) {
   const t = text[locale];
-  const [query, setQuery] = useState(() => token.label.replace(/\s*\d+$/, ""));
-  const [results, setResults] = useState<MonsterListEntry[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    const search = query.trim();
-    if (search.length < 2) { setResults(null); return; }
-    const controller = new AbortController();
-    setBusy(true);
-    const timer = setTimeout(() => {
-      fetchMonsterCatalog({ search, limit: 8 }, controller.signal)
-        .then((catalog) => setResults(catalog.results.filter((entry) => /^[a-z0-9-]{1,100}$/.test(entry.index))))
-        .catch(() => { if (!controller.signal.aborted) setResults([]); })
-        .finally(() => { if (!controller.signal.aborted) setBusy(false); });
-    }, 300);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [query]);
+  const [query, setQuery] = useState(() => baseName(token.label));
+  const { results, busy } = useCreatureSearch(query);
   return <div className={styles.sheetLink}>
     <label className={styles.grow}>{t.link}<input type="search" className={styles.field} value={query} placeholder={t.search} onChange={(event) => setQuery(event.target.value)} /></label>
     {busy ? <p className={styles.empty}><Spinner /> {t.searching}</p> : results && (results.length ? <ul className={styles.list}>
-      {results.map((entry) => <li key={entry.index} className={styles.listItem()}>
+      {results.map((entry) => <li key={entry.slug} className={styles.listItem()}>
         <span className={styles.itemName}>{entry.name}{entry.source && <small>{entry.source}</small>}</span>
-        <button type="button" className={styles.smallButton} aria-label={t.pick(entry.name)} onClick={() => onPick(entry.index)}>✓</button>
+        <button type="button" className={styles.smallButton} aria-label={t.pick(entry.name)} onClick={() => onPick(entry.slug)}>✓</button>
       </li>)}
     </ul> : <p className={styles.empty}>{t.noResults}</p>)}
+    <p className={styles.empty}>{t.linkHint}</p>
   </div>;
 }
 

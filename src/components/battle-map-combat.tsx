@@ -8,7 +8,7 @@ import { abilityModifier } from "@/lib/rules";
 import {
   combatantOf, movementBudget, squareName,
   COMBAT_MAX_SPEED, INITIATIVE_MAX, INITIATIVE_MIN,
-  type CombatEntry, type Combatant, type MapOp, type MapState, type MapToken,
+  type CombatEntry, type Combatant, type MapOp, type MapState, type MapToken, type TokenSize,
 } from "@/lib/battle-map";
 import { useConfirm } from "./feedback";
 import { bm as styles } from "./battle-map-styles";
@@ -61,8 +61,15 @@ const d20 = () => 1 + Math.floor(Math.random() * 20);
 const clampInitiative = (value: number) => Math.max(INITIATIVE_MIN, Math.min(INITIATIVE_MAX, Math.round(value)));
 const signedBonus = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
 
-/** What the app knows about a creature before the fight: its initiative bonus and its walking speed in squares. */
-export interface CombatInfo { bonus: number; speed?: number }
+/**
+ * What the app knows about a creature before the fight: its initiative bonus and its walking speed in squares.
+ * For a monster typed in by hand whose stat block was found by its name, `slug` (and the `size` it gives) too.
+ */
+export interface CombatInfo { bonus: number; speed?: number; slug?: string; size?: TokenSize }
+
+/** Link a monster to the stat block its name led to, so its sheet opens and later fights find it at once. */
+const linkOps = (token: MapToken, info: CombatInfo | undefined): MapOp[] => info?.slug && !token.monsterSlug
+  ? [{ type: "update", tokenId: token.id, monsterSlug: info.slug, ...(info.size !== undefined && token.size === 1 && info.size !== 1 ? { size: info.size } : {}) }] : [];
 
 /** Initiative bonus and speed from the character sheet or the stat block, when there is one. */
 export function combatInfo(token: MapToken, character: Character | undefined, monster: MonsterStatBlock | undefined): CombatInfo {
@@ -124,7 +131,7 @@ function ActiveCombat({ state, isDm, locale, colorOf, canControl, selectedId, on
     const info = await infoFor(token);
     const typed = Number(joinInitiative);
     const initiative = joinInitiative.trim() && Number.isFinite(typed) ? clampInitiative(typed) : clampInitiative(d20() + info.bonus);
-    await send([{ type: "combatant", tokenId: token.id, initiative, ...(info.speed !== undefined ? { speed: info.speed } : {}) }]);
+    await send([...linkOps(token, info), { type: "combatant", tokenId: token.id, initiative, ...(info.speed !== undefined ? { speed: info.speed } : {}) }]);
     setJoinId("");
     setJoinInitiative("");
   }
@@ -282,7 +289,7 @@ function CombatSetup({ state, locale, colorOf, send, infoFor, onCancel }: Props 
       const speed = parseDistance(current.speed, locale);
       return [{ tokenId: token.id, initiative: clampInitiative(Number.isFinite(initiative) ? initiative : 0), ...(speed !== null ? { speed } : {}) }];
     });
-    if (entries.length) void send([{ type: "combat-start", entries }]);
+    if (entries.length) void send([...state.tokens.flatMap((token) => filled[token.id]?.include ? linkOps(token, info[token.id]) : []), { type: "combat-start", entries }]);
   }
 
   const included = state.tokens.filter((token) => row(token.id).include).length;
