@@ -34,6 +34,11 @@ const COMBAT_MAX_ROUND = 999;
 
 /** Creature size in grid squares per side: Medium/Small/Tiny 1, Large 2, Huge 3, Gargantuan 4. */
 export type TokenSize = 1 | 2 | 3 | 4;
+/** Squares per side for a stat block's size ("Large", "huge"…); Medium and smaller, or unknown, take one. */
+export function tokenSizeFor(size: string | undefined): TokenSize {
+  const name = (size ?? "").toLowerCase();
+  return name.includes("gargantuan") ? 4 : name.includes("huge") ? 3 : name.includes("large") ? 2 : 1;
+}
 export type TokenKind = "hero" | "monster";
 /** Where a token looks, in eighths of a turn clockwise from the top of the map: 0 north, 2 east, 4 south, 6 west. */
 export type Facing = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -155,8 +160,10 @@ const isTokenId = (value: unknown): value is string => typeof value === "string"
 const isFacing = (value: unknown): value is Facing => isInt(value, 0, 7);
 const backgroundKeyPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const monsterSlugPattern = /^[a-z0-9-]{1,100}$/;
-const isMonsterSlug = (value: unknown): value is string => typeof value === "string" && monsterSlugPattern.test(value);
+/** Bestiary keys as Open5e writes them ("srd_goblin", "srd-2024_goblin") and homebrew monsters ("homebrew:<uuid>"). */
+const monsterSlugPattern = /^(?:[A-Za-z0-9][A-Za-z0-9_-]{0,99}|homebrew:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+/** A stat block the map can link a monster token to. */
+export const isMonsterSlug = (value: unknown): value is string => typeof value === "string" && monsterSlugPattern.test(value);
 const isInitiative = (value: unknown): value is number => isInt(value, INITIATIVE_MIN, INITIATIVE_MAX);
 const isSpeed = (value: unknown): value is number => isInt(value, 0, COMBAT_MAX_SPEED);
 

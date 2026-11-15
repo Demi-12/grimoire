@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map";
 
@@ -449,6 +449,18 @@ describe("combat", () => {
     expect(parseMapOp({ type: "dash", tokenId: "a", dash: "yes" })).toBeNull();
     expect(parseMapOp({ type: "update", tokenId: "a", monsterSlug: "goblin" })).toEqual({ type: "update", tokenId: "a", monsterSlug: "goblin" });
     expect(parseMapOp({ type: "update", tokenId: "a", monsterSlug: "Not a slug" })).toBeNull();
+  });
+
+  it("links monsters to the keys the bestiary really uses", () => {
+    for (const slug of ["srd_goblin", "srd-2024_goblin", "a5e-mm_bandit", "homebrew:3f2b8c1e-9d4a-4b6f-8e2a-1c5d7f9a0b3e"]) {
+      expect(isMonsterSlug(slug)).toBe(true);
+      expect(parseMapOp({ type: "add-monster", label: "X", count: 1, size: 1, hidden: false, monsterSlug: slug })).toMatchObject({ monsterSlug: slug });
+    }
+    for (const slug of ["", "_goblin", "homebrew:nope", "a/b", "x".repeat(101)]) expect(isMonsterSlug(slug)).toBe(false);
+  });
+
+  it("sizes tokens from the stat block", () => {
+    expect([tokenSizeFor("Tiny"), tokenSizeFor("Medium"), tokenSizeFor("Large"), tokenSizeFor("huge"), tokenSizeFor("Gargantuan"), tokenSizeFor(undefined)]).toEqual([1, 1, 2, 3, 4, 1]);
   });
 
   it("sorts by initiative, keeps ties in order and starts with the highest", () => {

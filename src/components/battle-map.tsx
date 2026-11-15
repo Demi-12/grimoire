@@ -7,17 +7,17 @@ import { api, ApiError, type Character, type SavedEncounter } from "@/lib/api-cl
 import type { MapSaveSummary } from "@/lib/battle-map-data";
 import {
   applyMapOps, blockingEdges, canControlToken, columnName, combatantOf, currentSight, exploredCells, facingScreenAngle, movementBudget, movementSteps, nearDoor, pathLength, rowsForImage, squareName,
-  tokenInSight, tokenSight, tokenVision,
+  tokenInSight, tokenSight, tokenSizeFor, tokenVision, isMonsterSlug,
   DEFAULT_HERO_VISION, MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX, VISION_ANGLES,
   type Facing, type MapHero, type MapOp, type MapWall, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@/lib/battle-map";
 import { useDocumentTitle } from "@/lib/use-document-title";
-import { fetchMonster, type MonsterStatBlock } from "@/lib/monster-api";
 import { rememberMap } from "@/lib/last-map";
 import { Spinner } from "./skeleton";
 import { useConfirm, useToast } from "./feedback";
 import CombatTracker, { combatInfo, formatDistance, Movement, type CombatInfo } from "./battle-map-combat";
 import TokenSheet from "./battle-map-sheet";
+import { baseName, findCreature, loadCreature, useCreatureSearch, type CreatureChoice } from "./battle-map-bestiary";
 import { bm as styles } from "./battle-map-styles";
 
 type Locale = "en" | "es";
@@ -46,6 +46,11 @@ const text = {
     sizes: { 1: "Medium or smaller", 2: "Large", 3: "Huge", 4: "Gargantuan" } as Record<TokenSize, string>,
     fromJournal: "From the encounter journal", pickEncounter: "Choose a saved encounter", addEncounter: "Add its monsters",
     noEncounters: "No saved encounters in this campaign.",
+    suggestions: "Creatures with that name", linked: (name: string, source?: string) => `Stat block: ${name}${source ? ` (${source})` : ""}. Speed, initiative and size come from it.`,
+    autoLinkHint: "Pick a creature, or type its exact name, and its speed, initiative and size are filled in for you.",
+    unlinkedTag: "no stat block", linkAll: "Find their stat blocks", linking: "Searching…",
+    linkedCount: (n: number) => n === 1 ? "1 monster linked to its stat block." : `${n} monsters linked to their stat blocks.`,
+    noneLinked: "No creature with those names in the bestiary. Link them from their sheet.",
     onBoard: "On the map", hide: "Hide", reveal: "Reveal", defeat: "Defeated", revive: "Back up", remove: "Remove",
     hiddenTag: "hidden", defeatedTag: "defeated", unseenTag: "out of sight", noMonsters: "No monsters on the map.",
     grid: "Grid", columns: "Columns", rows: "Rows", resize: "Resize", clearMonsters: "Remove all monsters",
@@ -104,6 +109,11 @@ const text = {
     sizes: { 1: "Mediano o menor", 2: "Grande", 3: "Enorme", 4: "Gargantuesco" } as Record<TokenSize, string>,
     fromJournal: "Desde el diario de encuentros", pickEncounter: "Elige un encuentro guardado", addEncounter: "Añadir sus monstruos",
     noEncounters: "No hay encuentros guardados en esta campaña.",
+    suggestions: "Criaturas con ese nombre", linked: (name: string, source?: string) => `Ficha: ${name}${source ? ` (${source})` : ""}. De ella salen la velocidad, la iniciativa y el tamaño.`,
+    autoLinkHint: "Elige una criatura, o escribe su nombre exacto, y se rellenan solas su velocidad, iniciativa y tamaño.",
+    unlinkedTag: "sin ficha", linkAll: "Buscar sus fichas", linking: "Buscando…",
+    linkedCount: (n: number) => n === 1 ? "1 monstruo enlazado a su ficha." : `${n} monstruos enlazados a sus fichas.`,
+    noneLinked: "No hay criaturas con esos nombres en el bestiario. Enlázalas desde su ficha.",
     onBoard: "En el mapa", hide: "Ocultar", reveal: "Revelar", defeat: "Derrotado", revive: "Recuperar", remove: "Quitar",
     hiddenTag: "oculto", defeatedTag: "derrotado", unseenTag: "fuera de la vista", noMonsters: "No hay monstruos en el mapa.",
     grid: "Cuadrícula", columns: "Columnas", rows: "Filas", resize: "Cambiar tamaño", clearMonsters: "Quitar todos los monstruos",
@@ -211,7 +221,6 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [autoSheet, setAutoSheet] = useState(true);
   const [characters, setCharacters] = useState<Map<string, Character> | null>(null);
-  const monsters = useRef(new Map<string, Promise<MonsterStatBlock | undefined>>());
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tableRef = useRef<HTMLDivElement | null>(null);
   /** While our own changes are in flight, ignore server states that predate them (no snapping back). */
@@ -245,17 +254,14 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       .catch(() => { if (live) setCharacters(new Map()); });
     return () => { live = false; };
   }, [heroKey]);
-  const loadMonster = useCallback((slug: string) => {
-    let found = monsters.current.get(slug);
-    if (!found) {
-      found = fetchMonster(slug).catch(() => { monsters.current.delete(slug); return undefined; });
-      monsters.current.set(slug, found);
-    }
-    return found;
-  }, []);
-  const infoFor = useCallback(async (token: MapToken): Promise<CombatInfo> => combatInfo(
-    token, token.characterId ? characters?.get(token.characterId) : undefined, token.monsterSlug ? await loadMonster(token.monsterSlug) : undefined,
-  ), [characters, loadMonster]);
+  // Speed, initiative bonus and size come from the character sheet or the stat block. A monster typed in by hand
+  // is looked up by its name; `slug` then says which stat block was found, so the fight can link it for good.
+  const infoFor = useCallback(async (token: MapToken): Promise<CombatInfo> => {
+    if (token.kind === "hero") return combatInfo(token, token.characterId ? characters?.get(token.characterId) : undefined, undefined);
+    const slug = token.monsterSlug ?? await findCreature(token.label);
+    const monster = slug ? await loadCreature(slug) : undefined;
+    return { ...combatInfo(token, undefined, monster), ...(monster ? { size: tokenSizeFor(monster.size) } : {}), ...(slug && monster && !token.monsterSlug ? { slug } : {}) };
+  }, [characters]);
 
   // Picking a token opens its sheet; so does the start of a turn the viewer runs (the DM's monsters, a player's hero).
   useEffect(() => { if (selectedId && autoSheet) setSheetId(selectedId); }, [selectedId, autoSheet]);
@@ -362,6 +368,29 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       api<{ map: BattleMapView }>(`/api/campaigns/${encodeURIComponent(campaignId)}/map${query}`).then(({ map: fresh }) => receive(fresh, true)).catch(() => undefined);
     }
   }, [map, actor, campaignId, receive]);
+  // Work started before an await goes on with the latest map, not the one it began with.
+  const latest = useRef({ map, send });
+  useEffect(() => { latest.current = { map, send }; }, [map, send]);
+
+  /**
+   * Give a monster a stat block, and with it every unlinked copy of the same name ("Goblin 2", "Goblin 3"…):
+   * their size follows the stat block and, in a fight, so does their speed.
+   */
+  const linkMonsters = useCallback(async (tokenId: string, slug: string) => {
+    const monster = await loadCreature(slug);
+    const state = latest.current.map?.state;
+    const token = state?.tokens.find((item) => item.id === tokenId);
+    if (!state || !token) return;
+    const name = baseName(token.label).toLocaleLowerCase();
+    const size = monster ? tokenSizeFor(monster.size) : undefined;
+    const speed = monster ? combatInfo(token, undefined, monster).speed : undefined;
+    const ops = state.tokens.filter((item) => item.id === tokenId || (item.kind === "monster" && !item.monsterSlug && baseName(item.label).toLocaleLowerCase() === name))
+      .flatMap((item): MapOp[] => [
+        { type: "update", tokenId: item.id, monsterSlug: slug, ...(size !== undefined && size !== item.size ? { size } : {}) },
+        ...(speed !== undefined && combatantOf(state, item.id) ? [{ type: "combatant" as const, tokenId: item.id, speed }] : []),
+      ]);
+    await latest.current.send(ops);
+  }, []);
 
   if (loadError) {
     return <main className={styles.page} id="main">
@@ -690,7 +719,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       <aside className={styles.panel} aria-label={map.isDm ? t.heroes : t.yourHeroes}>
         <CombatTracker state={state} isDm={map.isDm} locale={locale} colorOf={colorOf} canControl={canMove} selectedId={selectedId}
           onSelect={setSelectedId} send={send} infoFor={infoFor} />
-        {sheetToken && canSeeSheet(sheetToken) && <TokenSheet key={sheetToken.id} token={sheetToken} locale={locale} isDm={map.isDm} send={send}
+        {sheetToken && canSeeSheet(sheetToken) && <TokenSheet key={sheetToken.id} token={sheetToken} locale={locale} isDm={map.isDm} onLink={(slug) => void linkMonsters(sheetToken.id, slug)}
           character={sheetToken.characterId ? characters?.get(sheetToken.characterId) : undefined} charactersLoaded={characters !== null}
           onClose={() => setSheetId(null)} />}
         <section>
@@ -758,6 +787,11 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
   const [name, setName] = useState("");
   const [count, setCount] = useState(1);
   const [size, setSize] = useState<TokenSize>(1);
+  const [sizeTouched, setSizeTouched] = useState(false);
+  const [picked, setPicked] = useState<CreatureChoice | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const toast = useToast();
   const [hidden, setHidden] = useState(true);
   const [cols, setCols] = useState(map.state.cols);
   const [rows, setRows] = useState(map.state.rows);
@@ -806,34 +840,87 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
       .then((data) => setEncounters(data.encounters)).catch(() => setEncounters([]));
   }, [map.campaignId]);
 
-  function addMonster(event: FormEvent<HTMLFormElement>) {
+  const chosen = picked && picked.name === name ? picked : null;
+  const { results: suggestions } = useCreatureSearch(chosen ? "" : name);
+  const unlinked = monsters.filter((token) => !token.monsterSlug);
+
+  function pick(choice: CreatureChoice) {
+    setName(choice.name);
+    setPicked(choice);
+    if (!sizeTouched) void loadCreature(choice.slug).then((monster) => { if (monster) setSize(tokenSizeFor(monster.size)); });
+  }
+  /** The stat block for a name (picked from the list or matched exactly) and the size it gives the tokens. */
+  async function creatureFor(label: string, slug?: string): Promise<{ monsterSlug?: string; size?: TokenSize }> {
+    const found = slug && isMonsterSlug(slug) ? slug : await findCreature(label);
+    if (!found) return {};
+    const monster = await loadCreature(found);
+    return { monsterSlug: found, ...(monster ? { size: tokenSizeFor(monster.size) } : {}) };
+  }
+  async function addMonster(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const label = name.trim().slice(0, TOKEN_LABEL_MAX);
-    if (!label) return;
-    void send([{ type: "add-monster", label, count, size, hidden }]);
-    setName("");
-    setCount(1);
+    if (!label || adding) return;
+    setAdding(true);
+    try {
+      const creature = await creatureFor(label, chosen?.slug);
+      await send([{ type: "add-monster", label, count, size: sizeTouched ? size : creature.size ?? size, hidden, ...(creature.monsterSlug ? { monsterSlug: creature.monsterSlug } : {}) }]);
+      setName("");
+      setCount(1);
+      setPicked(null);
+      setSize(1);
+      setSizeTouched(false);
+    } finally {
+      setAdding(false);
+    }
   }
-  function addEncounter() {
+  async function addEncounter() {
     const encounter = encounters?.find((item) => item.id === encounterId);
-    if (!encounter) return;
-    void send(encounter.lines.slice(0, 20).map((line) => ({
-      type: "add-monster" as const, label: line.name.slice(0, TOKEN_LABEL_MAX), count: Math.min(line.count, MAP_MAX_MONSTERS_PER_ADD),
-      size: 1 as TokenSize, hidden, ...(line.monsterSlug && /^[a-z0-9-]{1,100}$/.test(line.monsterSlug) ? { monsterSlug: line.monsterSlug } : {}),
-    })));
+    if (!encounter || adding) return;
+    setAdding(true);
+    try {
+      const lines = encounter.lines.slice(0, 20);
+      const creatures = await Promise.all(lines.map((line) => creatureFor(line.name, line.monsterSlug)));
+      await send(lines.map((line, index) => ({
+        type: "add-monster" as const, label: line.name.slice(0, TOKEN_LABEL_MAX), count: Math.min(line.count, MAP_MAX_MONSTERS_PER_ADD),
+        size: creatures[index].size ?? 1, hidden, ...(creatures[index].monsterSlug ? { monsterSlug: creatures[index].monsterSlug } : {}),
+      })));
+    } finally {
+      setAdding(false);
+    }
+  }
+  /** Monsters typed in by hand (or placed before linking worked) get the stat block whose name they carry. */
+  async function linkAll() {
+    setLinking(true);
+    try {
+      const found = await Promise.all(unlinked.map(async (token) => ({ token, creature: await creatureFor(token.label) })));
+      const linked = found.filter(({ creature }) => creature.monsterSlug);
+      if (!linked.length) { toast.error(t.noneLinked); return; }
+      await send(linked.flatMap(({ token, creature }): MapOp[] => {
+        const info = creature.size !== undefined && creature.size !== token.size ? { size: creature.size } : {};
+        return [{ type: "update", tokenId: token.id, monsterSlug: creature.monsterSlug, ...info }];
+      }));
+      toast.success(t.linkedCount(linked.length));
+    } finally {
+      setLinking(false);
+    }
   }
 
   return <>
     <section>
       <h2>{t.monsters}</h2>
       <form className={styles.form} onSubmit={addMonster}>
-        <label className={styles.grow}>{t.monsterName}<input required className={styles.field} maxLength={TOKEN_LABEL_MAX} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label className={styles.grow}>{t.monsterName}<input required className={styles.field} maxLength={TOKEN_LABEL_MAX} value={name} autoComplete="off" onChange={(event) => setName(event.target.value)} /></label>
         <label>{t.count}<input type="number" className={styles.number} min={1} max={MAP_MAX_MONSTERS_PER_ADD} value={count} onChange={(event) => setCount(Math.max(1, Math.min(MAP_MAX_MONSTERS_PER_ADD, Number(event.target.value) || 1)))} /></label>
-        <label>{t.size}<select className={styles.field} value={size} onChange={(event) => setSize(Number(event.target.value) as TokenSize)}>
+        <label>{t.size}<select className={styles.field} value={size} onChange={(event) => { setSize(Number(event.target.value) as TokenSize); setSizeTouched(true); }}>
           {([1, 2, 3, 4] as TokenSize[]).map((value) => <option key={value} value={value}>{t.sizes[value]}</option>)}
         </select></label>
-        <button type="submit" className="button button-primary">{t.add}</button>
+        <button type="submit" className="button button-primary" disabled={adding}>{t.add}</button>
       </form>
+      {chosen ? <p className={styles.empty}>✓ {t.linked(chosen.name, chosen.source)}</p>
+        : suggestions?.length ? <ul className={styles.list} aria-label={t.suggestions}>{suggestions.map((choice) => <li key={choice.slug} className={styles.listItem()}>
+          <button type="button" className={styles.itemName} onClick={() => pick(choice)}>{choice.name}{choice.source && <small>{choice.source}</small>}</button>
+        </li>)}</ul>
+        : <p className={styles.empty}>{t.autoLinkHint}</p>}
       <label className={styles.check}><input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} />{t.hiddenNew}</label>
       <div className={styles.form}>
         <label className={styles.grow}>{t.fromJournal}
@@ -842,7 +929,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
             {encounters?.map((encounter) => <option key={encounter.id} value={encounter.id}>{encounter.title}</option>)}
           </select>
         </label>
-        <button type="button" className="button button-quiet" disabled={!encounterId} onClick={addEncounter}>{t.addEncounter}</button>
+        <button type="button" className="button button-quiet" disabled={!encounterId || adding} onClick={() => void addEncounter()}>{t.addEncounter}</button>
       </div>
     </section>
 
@@ -851,7 +938,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
       {monsters.length ? <ul className={styles.list}>{monsters.map((token) => <li key={token.id} className={styles.listItem(Boolean(token.hidden))}>
         <span className={styles.legendDot} style={{ background: token.defeated ? defeatedColor : monsterColor }} aria-hidden="true" />
         <button type="button" className={styles.itemName} onClick={() => onSelect(token.id)}>{token.label}
-          <small>{squareName(token.x, token.y)}{token.hidden ? ` · ${t.hiddenTag}` : ""}{token.defeated ? ` · ${t.defeatedTag}` : ""}{sight && !token.hidden && !tokenInSight(token, sight) ? ` · ${t.unseenTag}` : ""}</small></button>
+          <small>{squareName(token.x, token.y)}{token.hidden ? ` · ${t.hiddenTag}` : ""}{token.defeated ? ` · ${t.defeatedTag}` : ""}{token.monsterSlug ? "" : ` · ${t.unlinkedTag}`}{sight && !token.hidden && !tokenInSight(token, sight) ? ` · ${t.unseenTag}` : ""}</small></button>
         <button type="button" className={styles.smallButton} onClick={() => void send([{ type: "update", tokenId: token.id, hidden: !token.hidden }])}>{token.hidden ? t.reveal : t.hide}</button>
         <button type="button" className={styles.smallButton} onClick={() => void send([{ type: "update", tokenId: token.id, defeated: !token.defeated }])}>{token.defeated ? t.revive : t.defeat}</button>
         <select className={styles.sizeSelect} aria-label={`${t.size}: ${token.label}`} value={token.size} onChange={(event) => void send([{ type: "update", tokenId: token.id, size: Number(event.target.value) as TokenSize }])}>
@@ -859,6 +946,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
         </select>
         <button type="button" className={styles.smallButton} aria-label={`${t.remove}: ${token.label}`} onClick={() => void send([{ type: "remove", tokenId: token.id }])}>×</button>
       </li>)}</ul> : <p className={styles.empty}>{t.noMonsters}</p>}
+      {unlinked.length > 0 && <button type="button" className="button button-quiet" disabled={linking} onClick={() => void linkAll()}>{linking ? t.linking : t.linkAll}</button>}
       {monsters.length > 0 && <button type="button" className="button button-quiet" onClick={() => void confirm({ title: t.clearConfirm, confirmLabel: t.clearMonsters, tone: "danger" }).then((ok) => { if (ok) void send([{ type: "clear-monsters" }]); })}>{t.clearMonsters}</button>}
     </section>
 
