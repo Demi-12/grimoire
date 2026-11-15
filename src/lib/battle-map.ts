@@ -687,9 +687,10 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
       }
       case "door": {
         const door = state.walls?.find((wall) => wall.door && sameSpan(wall, op));
+        // Players open and close doors next to one of their own heroes. They get "forbidden" for a missing door
+        // too, so probing coordinates can't reveal doors hidden in the fog.
+        if (!actor.isDm && !(door && state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door)))) return fail("forbidden");
         if (!door) return fail("invalid");
-        // Players open and close doors next to one of their own heroes.
-        if (!actor.isDm && !state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door))) return fail("forbidden");
         state = { ...state, walls: state.walls!.map((wall) => wall === door ? { ...wall, door: op.open ? "open" as const : "closed" as const } : wall) };
         break;
       }

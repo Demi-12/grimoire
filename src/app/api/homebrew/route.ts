@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const limited = rateLimit(user, WRITE_LIMIT);
   if (limited) return limited;
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return jsonError(413, "That monster is too large.");
-  const parsed = parseHomebrewInput(await readJson(request));
+  const parsed = parseHomebrewInput(await readJson(request, MAX_BODY_BYTES));
   if (!parsed.ok) return jsonError(400, parsed.error);
   const result = await createHomebrew(user, parsed.value, parsed.summary);
   if (result.ok) await recordEvent(user.id, "homebrew.created");

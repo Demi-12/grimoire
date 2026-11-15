@@ -15,6 +15,11 @@ describe("readJsonLimited", () => {
     expect(await readJsonLimited(new Request("http://localhost/api/x", { method: "DELETE" }))).toBeNull();
   });
 
+  it("returns null unless the body is sent as JSON (a cross-site form can only send text/plain)", async () => {
+    expect(await readJsonLimited(post('{"name":"x"}', { "content-type": "text/plain" }))).toBeNull();
+    expect(await readJsonLimited(post('{"name":"x"}', { "content-type": "application/json; charset=utf-8" }))).toEqual({ name: "x" });
+  });
+
   it("rejects bodies over the limit, by declared length and while streaming", async () => {
     const big = JSON.stringify({ notes: "a".repeat(MAX_JSON_BYTES) });
     expect(await readJsonLimited(post(big))).toBeNull();

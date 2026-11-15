@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { dataErrorResponse, jsonError, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
-import { readBattleMapBackground, setBattleMapBackground, type MapAudience } from "@/lib/battle-map-data";
+import { audienceOf, readBattleMapBackground, setBattleMapBackground } from "@/lib/battle-map-data";
 import { sniffImageType } from "@/lib/battle-map";
 import { MAX_IMAGE_BYTES, readBytesLimited } from "@/lib/request-body";
 import { isUuid } from "@/lib/permissions";
@@ -9,8 +9,6 @@ import { isUuid } from "@/lib/permissions";
 export const dynamic = "force-dynamic";
 
 type Context = { params: Promise<{ id: string }> };
-
-const audienceOf = (request: Request): MapAudience => new URL(request.url).searchParams.get("audience") === "players" ? "players" : "auto";
 
 /** The map's background picture (any member). The page asks for it with `?k=<key>`, so a new upload gets a new URL. */
 export async function GET(_request: Request, { params }: Context) {

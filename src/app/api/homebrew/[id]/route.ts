@@ -27,7 +27,7 @@ export async function PUT(request: Request, { params }: Context) {
   const { id } = await params;
   if (!isHomebrewId(id)) return jsonError(404, "Not found.");
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return jsonError(413, "That monster is too large.");
-  const parsed = parseHomebrewInput(await readJson(request));
+  const parsed = parseHomebrewInput(await readJson(request, MAX_BODY_BYTES));
   if (!parsed.ok) return jsonError(400, parsed.error);
   const result = await updateHomebrew(user, id, parsed.value, parsed.summary);
   return result.ok ? NextResponse.json({ monster: result.value }) : dataErrorResponse(result.error);

@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { dataErrorResponse, jsonError, readJson, requireUser, rateLimit } from "@/lib/access";
 import { MAP_LIMIT } from "@/lib/rate-limit";
-import { changeBattleMap, readBattleMap, type MapAudience } from "@/lib/battle-map-data";
+import { audienceOf, changeBattleMap, readBattleMap } from "@/lib/battle-map-data";
 import { parseMapOps } from "@/lib/battle-map";
 import { isUuid } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 type Context = { params: Promise<{ id: string }> };
-
-const audienceOf = (request: Request): MapAudience => new URL(request.url).searchParams.get("audience") === "players" ? "players" : "auto";
 
 /** The campaign's battle map as the caller may see it (any member). */
 export async function GET(request: Request, { params }: Context) {

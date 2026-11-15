@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth-session";
+import { countApprovedAdmins } from "@/lib/data";
 import { pool } from "@/lib/db";
 import { readJsonLimited } from "@/lib/request-body";
 import { rateLimiter, type RateLimitPolicy } from "@/lib/rate-limit";
@@ -25,9 +26,11 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   if (!isSiteRole(role) || !isAccountStatus(status)) return null;
   const user: AppUser = { id: row.id, name: row.name, email: row.email, role, status };
 
-  // Accounts that existed before the email was listed get promoted on their next request.
+  // Accounts that existed before the email was listed get promoted on their next request. Sign-up doesn't verify
+  // emails, so the list only bootstraps the first admin; after that, admins are named from the admin panel.
   if (user.status !== "blocked" && (user.role !== "admin" || user.status !== "approved")
-    && parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())) {
+    && parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())
+    && await countApprovedAdmins() === 0) {
     await pool.query('UPDATE "user" SET "role" = \'admin\', "status" = \'approved\', "updatedAt" = now() WHERE "id" = $1', [user.id]);
     return { ...user, role: "admin", status: "approved" };
   }
