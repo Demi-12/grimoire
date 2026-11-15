@@ -358,6 +358,8 @@ describe("walls and doors", () => {
     const bob = { userId: "bob", isDm: false };
     expect(applyMapOps(placed.state, [open], bob, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(applyMapOps(placed.state, [{ ...open, y1: 0, y2: 2 }], dm, heroes, ids())).toEqual({ ok: false, error: "invalid" }); // a wall, not a door
+    // A player gets the same answer for no door as for a door out of reach, so the fog can't be probed.
+    expect(applyMapOps(placed.state, [{ ...open, x1: 9, x2: 9 }], bob, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(applyMapOps(placed.state, [{ type: "add-walls", walls: [{ x1: 0, y1: 0, x2: 1, y2: 0 }] }], alice, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(nearDoor({ x: 6, y: 1, size: 1 }, { x1: 5, y1: 2, x2: 5, y2: 3 })).toBe(true);
     expect(nearDoor({ x: 5, y: 2, size: 1 }, { x1: 5, y1: 2, x2: 5, y2: 3 })).toBe(true); // right next to it

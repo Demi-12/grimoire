@@ -373,3 +373,26 @@ databaseChangeLog:
             sql: |
               DROP TABLE IF EXISTS "app_error";
               DROP TABLE IF EXISTS "usage_event";
+
+  - changeSet:
+      id: data-010-encounter-author-set-null
+      author: grimoire
+      comment: >-
+        Deleting an account used to delete every encounter it had saved, even in campaigns owned by someone else
+        (a co-DM's work vanished from the owner's journal). Now the encounter stays and only loses its author.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "encounter" ALTER COLUMN "createdBy" DROP NOT NULL;
+              ALTER TABLE "encounter" DROP CONSTRAINT "encounter_createdBy_fkey";
+              ALTER TABLE "encounter" ADD CONSTRAINT "encounter_createdBy_fkey"
+                FOREIGN KEY ("createdBy") REFERENCES "user" ("id") ON DELETE SET NULL;
+      rollback:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE "encounter" DROP CONSTRAINT "encounter_createdBy_fkey";
+              ALTER TABLE "encounter" ADD CONSTRAINT "encounter_createdBy_fkey"
+                FOREIGN KEY ("createdBy") REFERENCES "user" ("id") ON DELETE CASCADE;
+              ALTER TABLE "encounter" ALTER COLUMN "createdBy" SET NOT NULL;

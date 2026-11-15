@@ -469,17 +469,22 @@ export async function listCreatures(user: AppUser): Promise<CreatureView[]> {
 }
 
 /** Adds a creature; re-adding the same SRD monster returns the existing row. */
-export async function createCreature(user: AppUser, input: CreatureInput, db: Queryable = pool): Promise<DataResult<CreatureView>> {
-  const count = await db.query<{ n: string }>('SELECT count(*) AS n FROM "creature" WHERE "ownerId" = $1', [user.id]);
-  if (Number(count.rows[0].n) >= MAX_CREATURES_PER_USER) return fail("invalid");
-  const result = await db.query<CreatureRow>(
-    `INSERT INTO "creature" ("ownerId", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT ("ownerId", "monsterSlug") WHERE "monsterSlug" IS NOT NULL DO UPDATE SET "name" = EXCLUDED."name"
-     RETURNING ${creatureColumns}`,
-    [user.id, input.name, input.xp, input.source, input.monsterSlug, input.cr, input.type, JSON.stringify(input.roleTags)],
-  );
-  return { ok: true, value: toCreatureView(result.rows[0]) };
+export async function createCreature(user: AppUser, input: CreatureInput, db?: Queryable): Promise<DataResult<CreatureView>> {
+  const run = async (client: Queryable): Promise<DataResult<CreatureView>> => {
+    // Count and insert under one lock per account, so parallel requests can't slip past the limit.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`creature-limit:${user.id}`]);
+    const count = await client.query<{ n: string }>('SELECT count(*) AS n FROM "creature" WHERE "ownerId" = $1', [user.id]);
+    if (Number(count.rows[0].n) >= MAX_CREATURES_PER_USER) return fail("invalid");
+    const result = await client.query<CreatureRow>(
+      `INSERT INTO "creature" ("ownerId", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT ("ownerId", "monsterSlug") WHERE "monsterSlug" IS NOT NULL DO UPDATE SET "name" = EXCLUDED."name"
+       RETURNING ${creatureColumns}`,
+      [user.id, input.name, input.xp, input.source, input.monsterSlug, input.cr, input.type, JSON.stringify(input.roleTags)],
+    );
+    return { ok: true, value: toCreatureView(result.rows[0]) };
+  };
+  return db ? run(db) : transaction(run);
 }
 
 export async function deleteCreature(user: AppUser, id: string): Promise<DataResult<null>> {
@@ -631,13 +636,14 @@ export async function setHomebrewLocked(user: AppUser, id: string, locked: boole
 // ---- Encounter journal (per campaign, DMs only) ----
 
 export interface EncounterView {
-  id: string; campaignId: string; createdByName: string; title: string; notes: string; status: EncounterStatus;
+  // createdByName is null once the author's account is deleted (the encounter stays with the campaign).
+  id: string; campaignId: string; createdByName: string | null; title: string; notes: string; status: EncounterStatus;
   difficulty: "low" | "moderate" | "high"; budget: number; totalXp: number; partyLevels: number[];
   lines: EncounterLineInput[]; playedAt: string | null; createdAt: string; updatedAt: string;
 }
 
 type EncounterRow = Omit<EncounterView, "createdByName" | "playedAt" | "createdAt" | "updatedAt"> & {
-  createdByName: string; playedAt: Date | null; createdAt: Date; updatedAt: Date;
+  createdByName: string | null; playedAt: Date | null; createdAt: Date; updatedAt: Date;
 };
 
 const toEncounterView = (row: EncounterRow): EncounterView => ({
@@ -658,7 +664,7 @@ export async function listEncounters(user: AppUser, campaignId: string): Promise
   const gate = await requireCampaignManager(pool, user, campaignId);
   if (!gate.ok) return gate;
   const result = await pool.query<EncounterRow>(
-    `SELECT ${encounterColumns} FROM "encounter" e JOIN "user" u ON u."id" = e."createdBy"
+    `SELECT ${encounterColumns} FROM "encounter" e LEFT JOIN "user" u ON u."id" = e."createdBy"
       WHERE e."campaignId" = $1 ORDER BY (e."status" = 'planned') DESC, COALESCE(e."playedAt", e."createdAt") DESC`,
     [campaignId],
   );
@@ -670,15 +676,19 @@ const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
 export async function createEncounter(user: AppUser, campaignId: string, input: EncounterInput): Promise<DataResult<EncounterView>> {
   const gate = await requireCampaignManager(pool, user, campaignId);
   if (!gate.ok) return gate;
-  const count = await pool.query<{ n: string }>('SELECT count(*) AS n FROM "encounter" WHERE "campaignId" = $1', [campaignId]);
-  if (Number(count.rows[0].n) >= MAX_ENCOUNTERS_PER_CAMPAIGN) return fail("invalid");
-  const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO "encounter" ("campaignId", "createdBy", "title", "notes", "status", "difficulty", "budget", "totalXp", "partyLevels", "lines", "playedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $5 = 'played' THEN now() END) RETURNING "id"`,
-    [campaignId, user.id, input.title, input.notes, input.status, input.difficulty, input.budget, input.totalXp, JSON.stringify(input.partyLevels), JSON.stringify(input.lines)],
-  );
-  const created = await pool.query<EncounterRow>(`SELECT ${encounterColumns} FROM "encounter" e JOIN "user" u ON u."id" = e."createdBy" WHERE e."id" = $1`, [inserted.rows[0].id]);
-  return { ok: true, value: toEncounterView(created.rows[0]) };
+  return transaction(async (client) => {
+    // Count and insert under one lock per campaign, so parallel saves can't slip past the limit.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`encounter-limit:${campaignId}`]);
+    const count = await client.query<{ n: string }>('SELECT count(*) AS n FROM "encounter" WHERE "campaignId" = $1', [campaignId]);
+    if (Number(count.rows[0].n) >= MAX_ENCOUNTERS_PER_CAMPAIGN) return fail<EncounterView>("invalid");
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO "encounter" ("campaignId", "createdBy", "title", "notes", "status", "difficulty", "budget", "totalXp", "partyLevels", "lines", "playedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $5 = 'played' THEN now() END) RETURNING "id"`,
+      [campaignId, user.id, input.title, input.notes, input.status, input.difficulty, input.budget, input.totalXp, JSON.stringify(input.partyLevels), JSON.stringify(input.lines)],
+    );
+    const created = await client.query<EncounterRow>(`SELECT ${encounterColumns} FROM "encounter" e LEFT JOIN "user" u ON u."id" = e."createdBy" WHERE e."id" = $1`, [inserted.rows[0].id]);
+    return { ok: true as const, value: toEncounterView(created.rows[0]) };
+  });
 }
 
 /** Title, notes and status can change after saving; the generated creature list stays as saved. */
@@ -697,7 +707,7 @@ export async function updateEncounter(
      WHERE "id" = $1`,
     [id, change.title ?? null, change.notes ?? null, change.status ?? null],
   );
-  const updated = await pool.query<EncounterRow>(`SELECT ${encounterColumns} FROM "encounter" e JOIN "user" u ON u."id" = e."createdBy" WHERE e."id" = $1`, [id]);
+  const updated = await pool.query<EncounterRow>(`SELECT ${encounterColumns} FROM "encounter" e LEFT JOIN "user" u ON u."id" = e."createdBy" WHERE e."id" = $1`, [id]);
   return { ok: true, value: toEncounterView(updated.rows[0]) };
 }
 
