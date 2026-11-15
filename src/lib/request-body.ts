@@ -34,8 +34,12 @@ export async function readBytesLimited(request: Request, maxBytes: number): Prom
   }
 }
 
-/** Parse a JSON body, returning null when it is malformed or larger than `maxBytes`. */
+/**
+ * Parse a JSON body, returning null when it is malformed, larger than `maxBytes` or not sent as JSON.
+ * Requiring the JSON content type means a cross-site form (text/plain) can't post here, whatever the cookie allows.
+ */
 export async function readJsonLimited(request: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return null;
   const bytes = await readBytesLimited(request, maxBytes);
   if (!bytes) return null;
   try {

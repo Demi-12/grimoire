@@ -16,6 +16,9 @@ export const BATTLE_MAP_CHANNEL = "grimoire_battle_map";
 /** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
 export type MapAudience = "auto" | "players";
 
+/** The audience a map request asks for: `?audience=players`, otherwise "auto". */
+export const audienceOf = (request: Request): MapAudience => new URL(request.url).searchParams.get("audience") === "players" ? "players" : "auto";
+
 export interface BattleMapView {
   campaignId: string;
   campaignName: string;

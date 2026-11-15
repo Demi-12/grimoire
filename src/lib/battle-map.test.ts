@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState,
-  type MapHero, type MapState, type MapToken,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength,
+  type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map";
 
 const aliceHero = "11111111-1111-4111-8111-111111111111";
@@ -358,6 +358,8 @@ describe("walls and doors", () => {
     const bob = { userId: "bob", isDm: false };
     expect(applyMapOps(placed.state, [open], bob, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(applyMapOps(placed.state, [{ ...open, y1: 0, y2: 2 }], dm, heroes, ids())).toEqual({ ok: false, error: "invalid" }); // a wall, not a door
+    // A player gets the same answer for no door as for a door out of reach, so the fog can't be probed.
+    expect(applyMapOps(placed.state, [{ ...open, x1: 9, x2: 9 }], bob, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(applyMapOps(placed.state, [{ type: "add-walls", walls: [{ x1: 0, y1: 0, x2: 1, y2: 0 }] }], alice, heroes, ids())).toEqual({ ok: false, error: "forbidden" });
     expect(nearDoor({ x: 6, y: 1, size: 1 }, { x1: 5, y1: 2, x2: 5, y2: 3 })).toBe(true);
     expect(nearDoor({ x: 5, y: 2, size: 1 }, { x1: 5, y1: 2, x2: 5, y2: 3 })).toBe(true); // right next to it
@@ -418,5 +420,111 @@ describe("walls and doors", () => {
     expect(state.walls).toEqual([{ x1: 1, y1: 0, x2: 1, y2: 4 }]);
     expect([...exploredCells(state)]).toEqual(["0,0", "1,0", "2,0", "3,0"]);
     expect(normalizeMapState({ cols: 4, rows: 4, explored: "zz" }).explored).toBeUndefined();
+  });
+});
+
+describe("combat", () => {
+  /** Lia t1 at B2, Brom t2, Goblin 1 t3, Goblin 2 t4, the hidden Ogre t5; Lia walks 6 squares a turn. */
+  function inCombat(): MapState {
+    const result = applyMapOps(withParty(), [{ type: "combat-start", entries: [
+      { tokenId: "t3", initiative: 12, speed: 6 }, { tokenId: "t1", initiative: 18, speed: 6 }, { tokenId: "t2", initiative: 7 },
+      { tokenId: "t5", initiative: 12, speed: 8 }, { tokenId: "t4", initiative: 12, speed: 6 },
+    ] }], dm, heroes, ids());
+    if (!result.ok) throw new Error(result.error);
+    return result.state;
+  }
+  const apply = (state: MapState, ops: MapOp[], actor = dm) => applyMapOps(state, ops, actor, heroes, ids());
+  const ok = (result: ReturnType<typeof applyMapOps>) => { if (!result.ok) throw new Error(result.error); return result.state; };
+
+  it("validates combat changes", () => {
+    expect(parseMapOp({ type: "combat-start", entries: [{ tokenId: "a", initiative: 15, speed: 6 }] })).toEqual({ type: "combat-start", entries: [{ tokenId: "a", initiative: 15, speed: 6 }] });
+    expect(parseMapOp({ type: "combat-start", entries: [{ tokenId: "a", initiative: 15 }, { tokenId: "a", initiative: 3 }] })).toBeNull();
+    expect(parseMapOp({ type: "combat-start", entries: [{ tokenId: "a", initiative: 100 }] })).toBeNull();
+    expect(parseMapOp({ type: "combat-start", entries: [{ tokenId: "a", initiative: 1, speed: 41 }] })).toBeNull();
+    expect(parseMapOp({ type: "combatant", tokenId: "a", speed: null })).toEqual({ type: "combatant", tokenId: "a", speed: null });
+    expect(parseMapOp({ type: "combatant", tokenId: "a" })).toBeNull();
+    expect(parseMapOp({ type: "turn", step: 1 })).toEqual({ type: "turn", step: 1 });
+    expect(parseMapOp({ type: "turn", step: 2 })).toBeNull();
+    expect(parseMapOp({ type: "turn", step: 1, tokenId: "a" })).toBeNull();
+    expect(parseMapOp({ type: "dash", tokenId: "a", dash: "yes" })).toBeNull();
+    expect(parseMapOp({ type: "update", tokenId: "a", monsterSlug: "goblin" })).toEqual({ type: "update", tokenId: "a", monsterSlug: "goblin" });
+    expect(parseMapOp({ type: "update", tokenId: "a", monsterSlug: "Not a slug" })).toBeNull();
+  });
+
+  it("sorts by initiative, keeps ties in order and starts with the highest", () => {
+    const state = inCombat();
+    expect(state.combat).toMatchObject({ round: 1, active: "t1" });
+    expect(state.combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t3", "t5", "t4", "t2"]);
+    expect(apply(withParty(), [{ type: "combat-start", entries: [{ tokenId: "nope", initiative: 3 }] }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(withParty(), [{ type: "combat-start", entries: [] }], alice)).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("counts movement round walls and stops players past their speed or out of turn", () => {
+    const state = inCombat();
+    const walked = ok(apply(state, [{ type: "move", tokenId: "t1", x: 4, y: 3 }], alice)); // 3 squares, diagonals count as one
+    expect(combatantOf(walked, "t1")).toMatchObject({ moved: 3 });
+    expect(apply(walked, [{ type: "move", tokenId: "t1", x: 8, y: 3 }], alice)).toEqual({ ok: false, error: "movement" });
+    const dashed = ok(apply(walked, [{ type: "dash", tokenId: "t1", dash: true }], alice));
+    expect(combatantOf(ok(apply(dashed, [{ type: "move", tokenId: "t1", x: 8, y: 3 }], alice)), "t1")).toMatchObject({ moved: 7, dash: true });
+    // Bob's Brom isn't up yet; the DM moves anyone, and it still counts.
+    const bob = { userId: "bob", isDm: false };
+    expect(apply(state, [{ type: "move", tokenId: "t2", x: 2, y: 2 }], bob)).toEqual({ ok: false, error: "turn" });
+    expect(combatantOf(ok(apply(walked, [{ type: "move", tokenId: "t1", x: 12, y: 3 }])), "t1")).toMatchObject({ moved: 11 });
+    // A wall from x = 3 down to y = 4: going round it (without cutting its end) takes 7 squares, not 3.
+    const walled = { ...state, walls: [{ x1: 3, y1: 0, x2: 3, y2: 4 }] };
+    expect(pathLength(walled, state.tokens[0], 4, 1)).toBe(7);
+    expect(apply(walled, [{ type: "move", tokenId: "t1", x: 4, y: 1 }], alice)).toEqual({ ok: false, error: "movement" });
+    expect(combatantOf(ok(apply(walled, [{ type: "move", tokenId: "t1", x: 4, y: 1 }])), "t1")).toMatchObject({ moved: 7 });
+  });
+
+  it("passes turns, skips defeated monsters, wraps rounds and resets movement", () => {
+    let state = ok(apply(inCombat(), [{ type: "move", tokenId: "t1", x: 3, y: 1 }], alice));
+    state = ok(apply(state, [{ type: "update", tokenId: "t3", defeated: true }]));
+    // Alice ends Lia's turn; the defeated goblin is skipped.
+    state = ok(apply(state, [{ type: "turn", step: 1 }], alice));
+    expect(state.combat!.active).toBe("t5");
+    expect(apply(state, [{ type: "turn", step: 1 }], alice)).toEqual({ ok: false, error: "forbidden" });
+    state = ok(apply(state, [{ type: "turn", step: 1 }, { type: "turn", step: 1 }]));
+    expect(state.combat).toMatchObject({ round: 1, active: "t2" });
+    state = ok(apply(state, [{ type: "turn", step: 1 }]));
+    expect(state.combat).toMatchObject({ round: 2, active: "t1" });
+    expect(combatantOf(state, "t1")?.moved).toBeUndefined();
+    state = ok(apply(state, [{ type: "turn", step: -1 }]));
+    expect(state.combat).toMatchObject({ round: 1, active: "t2" });
+    expect(apply(state, [{ type: "turn", step: -1 }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(state, [{ type: "turn", tokenId: "t4" }])).combat).toMatchObject({ round: 1, active: "t4" });
+  });
+
+  it("adds, changes and drops combatants, and hands the turn on when the active one leaves", () => {
+    let state = ok(apply(inCombat(), [{ type: "combatant", tokenId: "t2", initiative: 20, speed: 5 }]));
+    expect(state.combat!.order.map((entry) => entry.tokenId)).toEqual(["t2", "t1", "t3", "t5", "t4"]);
+    expect(combatantOf(state, "t2")).toEqual({ tokenId: "t2", initiative: 20, speed: 5 });
+    state = ok(apply(state, [{ type: "combatant", tokenId: "t2", speed: null, moved: 4 }]));
+    expect(combatantOf(state, "t2")).toEqual({ tokenId: "t2", initiative: 20, moved: 4 });
+    state = ok(apply(state, [{ type: "remove", tokenId: "t1" }]));
+    expect(state.combat).toMatchObject({ active: "t3" });
+    state = ok(apply(state, [{ type: "combat-leave", tokenId: "t3" }, { type: "clear-monsters" }]));
+    expect(state.combat).toMatchObject({ round: 2, active: "t2", order: [{ tokenId: "t2" }] });
+    expect(apply(state, [{ type: "combatant", tokenId: "t2", initiative: 3 }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(state, [{ type: "combat-end" }])).combat).toBeUndefined();
+  });
+
+  it("shows players only the creatures they can see, without monster speeds", () => {
+    let state = inCombat();
+    state = ok(apply(state, [{ type: "turn", tokenId: "t5" }]));
+    const players = visibleMapState(state, false);
+    expect(players.combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t3", "t4", "t2"]);
+    expect(players.combat!.order[1]).toEqual({ tokenId: "t3", initiative: 12 });
+    expect(players.combat!.order[0]).toMatchObject({ speed: 6 });
+    expect(players.combat!.active).toBeUndefined(); // the hidden ogre's turn
+    expect(visibleMapState(state, true).combat).toEqual(state.combat);
+  });
+
+  it("stores a fight defensively", () => {
+    const state = normalizeMapState({ ...inCombat(), combat: { round: 0, active: "gone", order: [
+      { tokenId: "t1", initiative: 18, moved: 2, dash: true }, { tokenId: "t1", initiative: 3 }, { tokenId: "gone", initiative: 9 }, { tokenId: "t2", initiative: "x" }, { tokenId: "t3", initiative: 20 },
+    ] } });
+    expect(state.combat).toEqual({ round: 1, order: [{ tokenId: "t3", initiative: 20 }, { tokenId: "t1", initiative: 18, moved: 2, dash: true }] });
+    expect(syncHeroes(inCombat(), [heroes[1]]).combat).toMatchObject({ active: "t3" });
   });
 });

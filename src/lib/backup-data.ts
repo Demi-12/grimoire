@@ -99,6 +99,8 @@ function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
 
     creatures: {
       async existing() {
+        // Same lock as createCreature in data.ts, so a creature added meanwhile can't push the account past the limit.
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`creature-limit:${user.id}`]);
         const rows = await db.query<{ id: string; name: string; xp: number; source: string; monsterSlug: string | null }>(
           'SELECT "id", "name", "xp", "source", "monsterSlug" FROM "creature" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
         creatureTotal = rows.rows.length;

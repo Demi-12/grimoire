@@ -66,8 +66,15 @@
   --shadow-card: 0 1px 2px rgb(31 23 49 / 0.06), 0 4px 14px rgb(31 23 49 / 0.06);
   --shadow-card-dark: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
 
-  /* The battle map's "reconnecting" dot. */
+  /* The battle map's "reconnecting" dot and turn ring. */
   --animate-blink: blink 1.2s ease-in-out infinite;
+  /* The ring round the creature whose turn it is. */
+  --animate-orbit: orbit 6s linear infinite;
+  @keyframes orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   @keyframes blink {
     50% {
       opacity: 0.25;

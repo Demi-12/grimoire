@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { dataErrorResponse, jsonError, requireUser, rateLimit } from "@/lib/access";
 import { WRITE_LIMIT } from "@/lib/rate-limit";
-import { deleteMapSave, loadMapSave, type MapAudience } from "@/lib/battle-map-data";
+import { audienceOf, deleteMapSave, loadMapSave } from "@/lib/battle-map-data";
 import { isUuid } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 type Context = { params: Promise<{ id: string; saveId: string }> };
-
-const audienceOf = (request: Request): MapAudience => new URL(request.url).searchParams.get("audience") === "players" ? "players" : "auto";
 
 /** Put this saved map on the table, replacing the current one (DMs). */
 export async function POST(request: Request, { params }: Context) {

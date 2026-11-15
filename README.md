@@ -23,7 +23,7 @@ GRIMOIRE_ADMIN_EMAILS=tu@correo.com
 - La contraseña de `POSTGRES_PASSWORD` tiene que ser la misma que la de `DATABASE_URL`. Usa solo letras y números: en la URL, los símbolos habría que codificarlos.
 - `BETTER_AUTH_SECRET`: en Linux, macOS o Git Bash, `openssl rand -base64 32`; en PowerShell, `[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))`.
 - `BETTER_AUTH_URL` debe ser exactamente la dirección con la que abres la app: las cookies de sesión y las passkeys dependen de ella.
-- `GRIMOIRE_ADMIN_EMAILS` es tu correo: al registrarte con él, tu cuenta es admin del sitio y no necesita aprobación.
+- `GRIMOIRE_ADMIN_EMAILS` es tu correo: al registrarte con él, tu cuenta es admin del sitio y no necesita aprobación. Solo funciona mientras el sitio no tenga ningún admin aprobado (el registro no verifica el correo, así que si no cualquiera podría registrarse con esa dirección); a partir de ahí, los admins se nombran desde el panel de admin.
 
 ### 2. Base de datos
 
@@ -167,7 +167,7 @@ Cambiar el valor no basta en dos casos:
 
 Grimoire es privado: hay que iniciar sesión para usarlo. Cualquiera puede registrarse, pero la cuenta queda **pendiente** hasta que un admin la apruebe en **Usuarios**. Mientras tanto, esa persona solo ve un aviso de espera. Se puede entrar con correo y contraseña o passkey.
 
-- **Admin del sitio:** pon tu correo en `GRIMOIRE_ADMIN_EMAILS` (como variable de Actions o en el `.env` del servidor; admite varios separados por comas). Esa cuenta se aprueba y es admin al registrarse o en su próximo acceso, también si ya existía. El admin aprueba las cuentas nuevas y puede bloquear (cierra sus sesiones y le impide entrar), cerrar sesiones o borrar cuentas, y asignar otros admins. No puede modificarse a sí mismo y siempre queda al menos un admin aprobado.
+- **Admin del sitio:** pon tu correo en `GRIMOIRE_ADMIN_EMAILS` (como variable de Actions o en el `.env` del servidor; admite varios separados por comas). Esa cuenta se aprueba y es admin al registrarse o en su próximo acceso, también si ya existía, pero solo mientras no haya ningún admin aprobado: sirve para crear el primer admin. Los siguientes se nombran desde el panel. El admin aprueba las cuentas nuevas y puede bloquear (cierra sus sesiones y le impide entrar), cerrar sesiones o borrar cuentas, y asignar otros admins. No puede modificarse a sí mismo y siempre queda al menos un admin aprobado.
 - **DM y jugador son por campaña:** quien crea una campaña es su DM; quien se une por enlace de invitación es jugador, y el DM puede ascender a co-DM. El rol es independiente en cada campaña: la misma cuenta puede ser DM en una y jugador en otra. Todas las herramientas (personajes, generador de encuentros, bestiario) están disponibles para todas las cuentas; el diario de encuentros de una campaña solo lo ven sus DMs.
 - **Campañas compartidas:** el DM crea la campaña y suma gente con enlaces de invitación o escribiendo el correo o nombre exacto de la cuenta desde su campaña (no hay lista de cuentas: solo el admin del sitio las ve, en **Usuarios**; si un nombre se repite, hay que usar el correo). Cada jugador pone sus personajes en la campaña; todos los miembros ven el grupo y el generador de encuentros puede cargar el grupo de una campaña de un clic. Solo el dueño edita su personaje; el DM puede sacarlo de la campaña. Al borrar una campaña los personajes vuelven a sus dueños.
 - **Datos anteriores:** si el navegador tenía personajes o campañas de la versión local, el resumen ofrece importarlos a la cuenta una vez.

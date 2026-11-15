@@ -5,6 +5,7 @@ import { passkey } from "@better-auth/passkey";
 import { twoFactor } from "better-auth/plugins";
 import { sendAuthEmail } from "@/lib/auth-email";
 import { resetPasswordEmail } from "@/lib/auth-email-templates";
+import { countApprovedAdmins } from "@/lib/data";
 import { pool } from "@/lib/db";
 import { parseAdminEmails } from "@/lib/permissions";
 
@@ -25,7 +26,7 @@ export const auth = betterAuth({
   user: {
     // Managed only by the server (sign-up hook and admin panel); clients can't set them.
     additionalFields: {
-      role: { type: "string", required: false, defaultValue: "player", input: false },
+      role: { type: "string", required: false, defaultValue: "user", input: false },
       status: { type: "string", required: false, defaultValue: "pending", input: false },
     },
   },
@@ -33,8 +34,10 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          // New accounts wait for an admin, except the owners listed in GRIMOIRE_ADMIN_EMAILS.
-          const isOwner = parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase());
+          // New accounts wait for an admin, except an owner listed in GRIMOIRE_ADMIN_EMAILS while the site has no
+          // admin yet: sign-up doesn't verify emails, so anyone could otherwise claim a listed address.
+          const isOwner = parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())
+            && await countApprovedAdmins() === 0;
           return { data: { ...user, role: isOwner ? "admin" : "user", status: isOwner ? "approved" : "pending" } };
         },
       },
@@ -64,7 +67,7 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
-    cookieCache: { enabled: true, maxAge: 5 * 60 },
+    // No cookieCache: with it, a revoked session (admin panel, password reset) kept working for its whole maxAge.
   },
   rateLimit: {
     enabled: true,

@@ -99,7 +99,7 @@ export default function EncounterJournal({ campaign, locale }: { campaign: Campa
           <div className={styles.top}>
             <div>
               <h5 className={styles.title}>{item.title}</h5>
-              <p className={styles.meta}>{t.difficulty[item.difficulty]} · {item.totalXp.toLocaleString(numberLocale)} / {item.budget.toLocaleString(numberLocale)} {t.xp} · {t.party(item.partyLevels)} · {t.by(item.createdByName)}</p>
+              <p className={styles.meta}>{t.difficulty[item.difficulty]} · {item.totalXp.toLocaleString(numberLocale)} / {item.budget.toLocaleString(numberLocale)} {t.xp} · {t.party(item.partyLevels)}{item.createdByName && <> · {t.by(item.createdByName)}</>}</p>
             </div>
           </div>
           <ul className={styles.lines}>{item.lines.map((line, index) => <li key={`${line.name}-${index}`}>

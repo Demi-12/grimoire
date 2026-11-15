@@ -62,7 +62,7 @@ export type EncounterStatus = "planned" | "played";
 export interface EncounterLine { name: string; xp: number; count: number; monsterSlug?: string; cr?: number; type?: string; source?: string }
 /** A saved encounter in a campaign's journal (DM-only). */
 export interface SavedEncounter {
-  id: string; campaignId: string; createdByName: string; title: string; notes: string; status: EncounterStatus;
+  id: string; campaignId: string; createdByName: string | null; title: string; notes: string; status: EncounterStatus;
   difficulty: "low" | "moderate" | "high"; budget: number; totalXp: number; partyLevels: number[];
   lines: EncounterLine[]; playedAt: string | null; createdAt: string; updatedAt: string;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { dataErrorResponse, jsonError, requireUser, rateLimit } from "@/lib/access";
 import { MAP_STREAM_LIMIT } from "@/lib/rate-limit";
-import { readBattleMap, type MapAudience } from "@/lib/battle-map-data";
+import { audienceOf, readBattleMap } from "@/lib/battle-map-data";
 import { subscribeToMap } from "@/lib/battle-map-hub";
 import { isUuid } from "@/lib/permissions";
 
@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: Context) {
   if (limited) return limited;
   const { id } = await params;
   if (!isUuid(id)) return jsonError(404, "Not found.");
-  const audience: MapAudience = new URL(request.url).searchParams.get("audience") === "players" ? "players" : "auto";
+  const audience = audienceOf(request);
   const first = await readBattleMap(user, id, audience);
   if (!first.ok) return dataErrorResponse(first.error);
 

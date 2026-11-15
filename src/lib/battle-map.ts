@@ -24,6 +24,13 @@ export const VISION_ANGLES = [60, 90, 120, 180, 360] as const;
 export type VisionAngle = (typeof VISION_ANGLES)[number];
 /** Heroes see 60 ft in a 90° cone unless the DM says otherwise. */
 export const DEFAULT_HERO_VISION: TokenVision = { range: 12, angle: 90 };
+/** Initiative values a combatant may have (a d20 plus modifiers, with room for homebrew). */
+export const INITIATIVE_MIN = -20;
+export const INITIATIVE_MAX = 99;
+/** Fastest speed tracked, in squares (200 ft). */
+export const COMBAT_MAX_SPEED = 40;
+const COMBAT_MAX_MOVED = 999;
+const COMBAT_MAX_ROUND = 999;
 
 /** Creature size in grid squares per side: Medium/Small/Tiny 1, Large 2, Huge 3, Gargantuan 4. */
 export type TokenSize = 1 | 2 | 3 | 4;
@@ -63,6 +70,26 @@ export interface MapWall { x1: number; y1: number; x2: number; y2: number; door?
 /** Background picture stretched over the grid; `key` changes on every upload, so its URL does too. */
 export interface MapBackground { key: string }
 
+/** One creature in the initiative order. Speeds and movement are counted in squares (5 ft, 1.5 m each). */
+export interface Combatant {
+  tokenId: string;
+  initiative: number;
+  /** Squares it may move in a turn; when unknown its movement isn't limited, only counted. */
+  speed?: number;
+  /** Squares moved since its turn began. */
+  moved?: number;
+  /** Took the Dash action this turn: twice the speed. */
+  dash?: boolean;
+}
+
+/** A fight in progress: whose turn it is, in what round, and everyone in initiative order (highest first). */
+export interface MapCombat {
+  round: number;
+  /** The token whose turn it is (missing in the players' view while it's a creature they can't see). */
+  active?: string;
+  order: Combatant[];
+}
+
 export interface MapState {
   cols: number;
   rows: number;
@@ -80,13 +107,18 @@ export interface MapState {
    * wall (players only receive the walls they have seen, too few to work it out themselves). Same bitmap format.
    */
   sight?: string;
+  /** Initiative order, turns and movement while a fight is on. */
+  combat?: MapCombat;
 }
+
+/** Initiative and speed of one creature when the fight starts or when it joins later. */
+export interface CombatEntry { tokenId: string; initiative: number; speed?: number }
 
 export type MapOp =
   | { type: "move"; tokenId: string; x: number; y: number }
   | { type: "place-hero"; characterId: string; x?: number; y?: number }
   | { type: "add-monster"; label: string; count: number; size: TokenSize; hidden: boolean; monsterSlug?: string }
-  | { type: "update"; tokenId: string; label?: string; hidden?: boolean; defeated?: boolean; size?: TokenSize; vision?: TokenVision }
+  | { type: "update"; tokenId: string; label?: string; hidden?: boolean; defeated?: boolean; size?: TokenSize; vision?: TokenVision; monsterSlug?: string }
   | { type: "face"; tokenId: string; facing: Facing }
   | { type: "settings"; fog?: boolean; gridHidden?: boolean; resetExplored?: true }
   | { type: "add-walls"; walls: MapWall[] }
@@ -95,7 +127,15 @@ export type MapOp =
   | { type: "clear-walls" }
   | { type: "remove"; tokenId: string }
   | { type: "clear-monsters" }
-  | { type: "resize"; cols: number; rows: number };
+  | { type: "resize"; cols: number; rows: number }
+  | { type: "combat-start"; entries: CombatEntry[] }
+  /** Add a creature to the fight, or change its initiative, speed (null: unknown) or the movement it has used. */
+  | { type: "combatant"; tokenId: string; initiative?: number; speed?: number | null; moved?: number }
+  | { type: "combat-leave"; tokenId: string }
+  /** Pass the turn on (step 1), back (step -1), or straight to one creature. */
+  | { type: "turn"; step: 1 | -1 } | { type: "turn"; tokenId: string }
+  | { type: "dash"; tokenId: string; dash: boolean }
+  | { type: "combat-end" };
 
 /** A character currently in the campaign (only these can have hero tokens). */
 export interface MapHero { id: string; name: string; ownerId: string }
@@ -115,6 +155,17 @@ const isTokenId = (value: unknown): value is string => typeof value === "string"
 const isFacing = (value: unknown): value is Facing => isInt(value, 0, 7);
 const backgroundKeyPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const monsterSlugPattern = /^[a-z0-9-]{1,100}$/;
+const isMonsterSlug = (value: unknown): value is string => typeof value === "string" && monsterSlugPattern.test(value);
+const isInitiative = (value: unknown): value is number => isInt(value, INITIATIVE_MIN, INITIATIVE_MAX);
+const isSpeed = (value: unknown): value is number => isInt(value, 0, COMBAT_MAX_SPEED);
+
+function parseCombatEntry(value: unknown): CombatEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const { tokenId, initiative, speed } = value as Record<string, unknown>;
+  if (!isTokenId(tokenId) || !isInitiative(initiative) || (speed !== undefined && !isSpeed(speed))) return null;
+  return { tokenId, initiative, ...(speed !== undefined ? { speed: speed as number } : {}) };
+}
 
 function parseVision(value: unknown): TokenVision | null {
   if (!value || typeof value !== "object") return null;
@@ -168,7 +219,7 @@ export function parseMapOp(raw: unknown): MapOp | null {
       const size = op.size === undefined ? 1 : op.size;
       if (!name || !isInt(op.count, 1, MAP_MAX_MONSTERS_PER_ADD) || !isSize(size)) return null;
       if (op.hidden !== undefined && typeof op.hidden !== "boolean") return null;
-      if (op.monsterSlug !== undefined && (typeof op.monsterSlug !== "string" || !/^[a-z0-9-]{1,100}$/.test(op.monsterSlug))) return null;
+      if (op.monsterSlug !== undefined && !isMonsterSlug(op.monsterSlug)) return null;
       return { type: "add-monster", label: name, count: op.count, size, hidden: op.hidden === true, ...(op.monsterSlug ? { monsterSlug: op.monsterSlug as string } : {}) };
     }
     case "update": {
@@ -179,6 +230,7 @@ export function parseMapOp(raw: unknown): MapOp | null {
       if (op.defeated !== undefined) { if (typeof op.defeated !== "boolean") return null; result.defeated = op.defeated; }
       if (op.size !== undefined) { if (!isSize(op.size)) return null; result.size = op.size; }
       if (op.vision !== undefined) { const vision = parseVision(op.vision); if (!vision) return null; result.vision = vision; }
+      if (op.monsterSlug !== undefined) { if (!isMonsterSlug(op.monsterSlug)) return null; result.monsterSlug = op.monsterSlug; }
       return Object.keys(result).length > 2 ? result : null;
     }
     case "face":
@@ -210,6 +262,29 @@ export function parseMapOp(raw: unknown): MapOp | null {
       return { type: "clear-monsters" };
     case "resize":
       return isInt(op.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) && isInt(op.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? { type: "resize", cols: op.cols, rows: op.rows } : null;
+    case "combat-start": {
+      if (!Array.isArray(op.entries) || op.entries.length > MAP_MAX_TOKENS) return null;
+      const entries = op.entries.map(parseCombatEntry);
+      if (!entries.every((entry): entry is CombatEntry => entry !== null)) return null;
+      return new Set(entries.map((entry) => entry.tokenId)).size === entries.length ? { type: "combat-start", entries } : null;
+    }
+    case "combatant": {
+      if (!isTokenId(op.tokenId)) return null;
+      const result: Extract<MapOp, { type: "combatant" }> = { type: "combatant", tokenId: op.tokenId };
+      if (op.initiative !== undefined) { if (!isInitiative(op.initiative)) return null; result.initiative = op.initiative; }
+      if (op.speed !== undefined) { if (op.speed !== null && !isSpeed(op.speed)) return null; result.speed = op.speed; }
+      if (op.moved !== undefined) { if (!isInt(op.moved, 0, COMBAT_MAX_MOVED)) return null; result.moved = op.moved; }
+      return Object.keys(result).length > 2 ? result : null;
+    }
+    case "combat-leave":
+      return isTokenId(op.tokenId) ? { type: "combat-leave", tokenId: op.tokenId } : null;
+    case "turn":
+      if (op.step !== undefined) return op.tokenId === undefined && (op.step === 1 || op.step === -1) ? { type: "turn", step: op.step } : null;
+      return isTokenId(op.tokenId) ? { type: "turn", tokenId: op.tokenId } : null;
+    case "dash":
+      return isTokenId(op.tokenId) && typeof op.dash === "boolean" ? { type: "dash", tokenId: op.tokenId, dash: op.dash } : null;
+    case "combat-end":
+      return { type: "combat-end" };
     default:
       return null;
   }
@@ -254,8 +329,11 @@ export function normalizeMapState(raw: unknown): MapState {
   const walls = (Array.isArray(value.walls) ? value.walls : []).map(parseWall)
     .map((wall) => wall && clipWall(wall, cols, rows)).filter((wall): wall is MapWall => wall !== null).slice(0, MAP_MAX_WALLS);
   const explored = typeof value.explored === "string" && value.explored.length === Math.ceil(cols * rows / 4) && /^[0-9a-f]*$/.test(value.explored) ? value.explored : null;
+  const kept = tokens.slice(0, MAP_MAX_TOKENS);
+  const combat = normalizeCombat(value.combat, new Set(kept.map((token) => token.id)));
   return {
-    cols, rows, tokens: tokens.slice(0, MAP_MAX_TOKENS),
+    cols, rows, tokens: kept,
+    ...(combat ? { combat } : {}),
     ...(walls.length ? { walls } : {}),
     ...(explored ? { explored } : {}),
     ...(typeof background === "string" && backgroundKeyPattern.test(background) ? { background: { key: background } } : {}),
@@ -263,6 +341,27 @@ export function normalizeMapState(raw: unknown): MapState {
     ...(value.gridHidden === true ? { gridHidden: true } : {}),
   };
 }
+
+/** A stored fight: only creatures still on the map, each once, in initiative order. */
+function normalizeCombat(raw: unknown, tokenIds: Set<string>): MapCombat | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  const order: Combatant[] = [];
+  for (const item of Array.isArray(value.order) ? value.order : []) {
+    const entry = parseCombatEntry(item);
+    if (!entry || !tokenIds.has(entry.tokenId) || order.some((other) => other.tokenId === entry.tokenId)) continue;
+    const { moved, dash } = item as Record<string, unknown>;
+    order.push({ ...entry, ...(isInt(moved, 1, COMBAT_MAX_MOVED) ? { moved } : {}), ...(dash === true ? { dash: true } : {}) });
+  }
+  return {
+    round: isInt(value.round, 1, COMBAT_MAX_ROUND) ? value.round : 1,
+    order: sortOrder(order),
+    ...(typeof value.active === "string" && order.some((entry) => entry.tokenId === value.active) ? { active: value.active } : {}),
+  };
+}
+
+/** Highest initiative first; ties keep the order they had. */
+const sortOrder = (order: Combatant[]) => [...order].sort((a, b) => b.initiative - a.initiative);
 
 function clampToken(token: MapToken, cols: number, rows: number): MapToken {
   const size = Math.min(token.size, cols, rows) as TokenSize;
@@ -275,14 +374,14 @@ function clampToken(token: MapToken, cols: number, rows: number): MapToken {
  */
 export function syncHeroes(state: MapState, heroes: MapHero[]): MapState {
   const byId = new Map(heroes.map((hero) => [hero.id, hero]));
-  return {
+  return pruneCombat({
     ...state,
     tokens: state.tokens.flatMap((token) => {
       if (token.kind !== "hero") return [token];
       const hero = token.characterId ? byId.get(token.characterId) : undefined;
       return hero ? [{ ...token, label: label(hero.name) ?? token.label }] : [];
     }),
-  };
+  });
 }
 
 /** The cone a token sees with, or null when it has none. */
@@ -477,6 +576,14 @@ export function visibleMapState(state: MapState, showHidden: boolean): MapState 
     if (walls.length) visible.walls = walls; else delete visible.walls;
   }
   if (sight) visible.sight = encodeExplored(state.cols, state.rows, sight);
+  if (state.combat) {
+    // Only the creatures they can see, and no monster speeds: those come from the DM's stat blocks.
+    const shown = new Map(visible.tokens.map((token) => [token.id, token]));
+    const order = state.combat.order.filter((entry) => shown.has(entry.tokenId))
+      .map((entry) => shown.get(entry.tokenId)!.kind === "monster" ? { tokenId: entry.tokenId, initiative: entry.initiative } : entry);
+    const active = state.combat.active && shown.has(state.combat.active) ? state.combat.active : undefined;
+    visible.combat = { round: state.combat.round, order, ...(active ? { active } : {}) };
+  }
   return visible;
 }
 
@@ -498,27 +605,98 @@ function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: 
   return true;
 }
 
-/** Can the token walk to (x, y) without crossing a wall or a closed door, by any path? */
-export function canReach(state: MapState, token: MapToken, x: number, y: number): boolean {
+/**
+ * Fewest steps the token needs to reach each spot it can get to without crossing a wall or a closed door, keyed
+ * "x,y" by its top-left square. Every step costs one square, diagonals too (the 2024 grid rules). Stops looking
+ * past `limit` steps, or as soon as it gets to `target`.
+ */
+export function movementSteps(state: MapState, token: Pick<MapToken, "x" | "y" | "size">, limit = Infinity, target?: { x: number; y: number }): Map<string, number> {
   const blocked = blockingEdges(state.walls);
-  if (!blocked.size || (token.x === x && token.y === y)) return true;
   const maxX = state.cols - token.size;
   const maxY = state.rows - token.size;
-  const seen = new Set([`${token.x},${token.y}`]);
+  const steps = new Map([[`${token.x},${token.y}`, 0]]);
   const queue: [number, number][] = [[token.x, token.y]];
   for (let head = 0; head < queue.length; head++) {
     const [px, py] = queue[head];
+    const here = steps.get(`${px},${py}`)!;
+    if (here >= limit) continue;
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
       const nx = px + dx;
       const ny = py + dy;
-      if ((!dx && !dy) || nx < 0 || ny < 0 || nx > maxX || ny > maxY || seen.has(`${nx},${ny}`)) continue;
+      const key = `${nx},${ny}`;
+      if ((!dx && !dy) || nx < 0 || ny < 0 || nx > maxX || ny > maxY || steps.has(key)) continue;
       if (!stepIsClear({ x: px, y: py, size: token.size }, dx, dy, blocked)) continue;
-      if (nx === x && ny === y) return true;
-      seen.add(`${nx},${ny}`);
+      steps.set(key, here + 1);
+      if (target && nx === target.x && ny === target.y) return steps;
       queue.push([nx, ny]);
     }
   }
-  return false;
+  return steps;
+}
+
+/** Squares the token walks to get to (x, y) the shortest way round walls; null when no path gets there. */
+export function pathLength(state: MapState, token: MapToken, x: number, y: number): number | null {
+  if (token.x === x && token.y === y) return 0;
+  if (!state.walls?.some((wall) => wall.door !== "open")) return Math.max(Math.abs(x - token.x), Math.abs(y - token.y));
+  return movementSteps(state, token, Infinity, { x, y }).get(`${x},${y}`) ?? null;
+}
+
+/** Can the token walk to (x, y) without crossing a wall or a closed door, by any path? */
+export const canReach = (state: MapState, token: MapToken, x: number, y: number) => pathLength(state, token, x, y) !== null;
+
+/** Squares a combatant may move this turn (twice its speed after a Dash); null when its speed isn't known. */
+export const movementBudget = (entry: Combatant) => entry.speed === undefined ? null : entry.speed * (entry.dash ? 2 : 1);
+
+/** The token's place in the fight, if it's in one. */
+export const combatantOf = (state: MapState, tokenId: string) => state.combat?.order.find((entry) => entry.tokenId === tokenId);
+
+/** A new turn begins for the active creature: its movement and Dash start over. */
+function startTurn(combat: MapCombat): MapCombat {
+  return { ...combat, order: combat.order.map((entry) => {
+    if (entry.tokenId !== combat.active) return entry;
+    const fresh = { ...entry };
+    delete fresh.moved;
+    delete fresh.dash;
+    return fresh;
+  }) };
+}
+
+/**
+ * Pass the turn `step` places along the order from position `from`, wrapping into the next (or previous) round.
+ * Defeated monsters are skipped; defeated heroes still get their turn, for death saving throws.
+ */
+function passTurn(combat: MapCombat, tokens: MapToken[], step: 1 | -1, from = combat.order.findIndex((entry) => entry.tokenId === combat.active)): MapCombat {
+  const { order } = combat;
+  if (!order.length) return { round: combat.round, order };
+  const byId = new Map(tokens.map((token) => [token.id, token]));
+  const skip = (entry: Combatant) => { const token = byId.get(entry.tokenId); return token?.kind === "monster" && token.defeated === true; };
+  let index = from;
+  let round = combat.round;
+  for (let tries = 0; tries < order.length; tries++) {
+    index += step;
+    if (index >= order.length) { index = 0; round += 1; }
+    else if (index < 0) { index = order.length - 1; round -= 1; }
+    if (!skip(order[index])) break;
+  }
+  return startTurn({ round: Math.max(1, Math.min(COMBAT_MAX_ROUND, round)), order, active: order[index].tokenId });
+}
+
+/** Take creatures out of the fight; when the one whose turn it is leaves, the turn goes to whoever came next. */
+function dropCombatants(combat: MapCombat, tokens: MapToken[], keep: (tokenId: string) => boolean): MapCombat {
+  const order = combat.order.filter((entry) => keep(entry.tokenId));
+  if (order.length === combat.order.length) return combat;
+  if (!combat.active || keep(combat.active)) return { ...combat, order };
+  const index = combat.order.findIndex((entry) => entry.tokenId === combat.active);
+  const before = combat.order.slice(0, Math.max(0, index)).filter((entry) => keep(entry.tokenId)).length;
+  return passTurn({ round: combat.round, order }, tokens, 1, before - 1);
+}
+
+/** Drop from the fight the creatures no longer on the map. */
+function pruneCombat(state: MapState): MapState {
+  if (!state.combat) return state;
+  const ids = new Set(state.tokens.map((token) => token.id));
+  const combat = dropCombatants(state.combat, state.tokens, (id) => ids.has(id));
+  return combat === state.combat ? state : { ...state, combat };
 }
 
 /** Is the token close enough to the door to open it? Measured between the token's squares and the door, in squares. */
@@ -562,8 +740,11 @@ function nextNumber(state: MapState, base: string): number {
   }, 0) + 1;
 }
 
-/** "blocked": a player tried to walk through a wall or a closed door. */
-export type MapOpError = "forbidden" | "invalid" | "blocked";
+/**
+ * "blocked": a player tried to walk through a wall or a closed door. "turn": a player moved a hero in the fight
+ * outside its turn. "movement": that move needs more than the hero has left this turn.
+ */
+export type MapOpError = "forbidden" | "invalid" | "blocked" | "turn" | "movement";
 export type MapApplyResult = { ok: true; state: MapState } | { ok: false; error: MapOpError };
 
 /** May this actor move or remove the token? DMs: any. Players: only heroes of their own characters. */
@@ -583,6 +764,30 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
   const replace = (id: string, change: (token: MapToken) => MapToken) => {
     state = { ...state, tokens: state.tokens.map((token) => token.id === id ? change(token) : token) };
   };
+  const changeCombatant = (id: string, change: (entry: Combatant) => Combatant) => {
+    if (state.combat) state = { ...state, combat: { ...state.combat, order: state.combat.order.map((entry) => entry.tokenId === id ? change(entry) : entry) } };
+  };
+  const setCombat = (combat: MapCombat) => { state = { ...state, combat }; };
+  /**
+   * Walk a token to (x, y). Walls hold players back and, in a fight, so do whose turn it is and the movement
+   * left; the DM can still put anything anywhere. Movement in a fight is counted for everyone.
+   */
+  const walk = (token: MapToken, x: number, y: number): MapOpError | null => {
+    const moved = clampToken({ ...token, x, y }, state.cols, state.rows);
+    if (moved.x === token.x && moved.y === token.y) return null;
+    const entry = combatantOf(state, token.id);
+    if (entry && !actor.isDm && state.combat?.active !== token.id) return "turn";
+    const path = entry || !actor.isDm ? pathLength(state, token, moved.x, moved.y) : 0;
+    if (path === null && !actor.isDm) return "blocked";
+    if (entry) {
+      const cost = path ?? Math.max(Math.abs(moved.x - token.x), Math.abs(moved.y - token.y));
+      const budget = movementBudget(entry);
+      if (!actor.isDm && budget !== null && (entry.moved ?? 0) + cost > budget) return "movement";
+      changeCombatant(token.id, (item) => ({ ...item, moved: Math.min(COMBAT_MAX_MOVED, (item.moved ?? 0) + cost) }));
+    }
+    replace(token.id, () => moved);
+    return null;
+  };
 
   for (const op of ops) {
     switch (op.type) {
@@ -590,10 +795,8 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         const token = state.tokens.find((item) => item.id === op.tokenId);
         if (!token) return fail("invalid");
         if (!canControlToken(actor, token, heroes)) return fail("forbidden");
-        const moved = clampToken({ ...token, x: op.x, y: op.y }, state.cols, state.rows);
-        // Walls hold players back; the DM can still put anything anywhere.
-        if (!actor.isDm && !canReach(state, token, moved.x, moved.y)) return fail("blocked");
-        replace(token.id, () => moved);
+        const error = walk(token, op.x, op.y);
+        if (error) return fail(error);
         break;
       }
       case "place-hero": {
@@ -603,9 +806,8 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         const existing = state.tokens.find((item) => item.kind === "hero" && item.characterId === hero.id);
         const spot = op.x !== undefined && op.y !== undefined ? { x: op.x, y: op.y } : existing ?? findFreeSpot(state, 1, "left");
         if (existing) {
-          const moved = clampToken({ ...existing, x: spot.x, y: spot.y }, state.cols, state.rows);
-          if (!actor.isDm && !canReach(state, existing, moved.x, moved.y)) return fail("blocked");
-          replace(existing.id, () => moved);
+          const error = walk(existing, spot.x, spot.y);
+          if (error) return fail(error);
         }
         else {
           if (state.tokens.length >= MAP_MAX_TOKENS) return fail("invalid");
@@ -631,11 +833,11 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         if (!actor.isDm) return fail("forbidden");
         const token = state.tokens.find((item) => item.id === op.tokenId);
         if (!token) return fail("invalid");
-        if (token.kind === "hero" && (op.label !== undefined || op.hidden !== undefined)) return fail("invalid");
+        if (token.kind === "hero" && (op.label !== undefined || op.hidden !== undefined || op.monsterSlug !== undefined)) return fail("invalid");
         replace(token.id, (item) => {
           const next: MapToken = {
             ...item, ...(op.label !== undefined ? { label: op.label } : {}), ...(op.size !== undefined ? { size: op.size } : {}),
-            ...(op.vision !== undefined ? { vision: op.vision } : {}),
+            ...(op.vision !== undefined ? { vision: op.vision } : {}), ...(op.monsterSlug !== undefined ? { monsterSlug: op.monsterSlug } : {}),
           };
           if (op.hidden !== undefined) { if (op.hidden) next.hidden = true; else delete next.hidden; }
           if (op.defeated !== undefined) { if (op.defeated) next.defeated = true; else delete next.defeated; }
@@ -687,9 +889,10 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
       }
       case "door": {
         const door = state.walls?.find((wall) => wall.door && sameSpan(wall, op));
+        // Players open and close doors next to one of their own heroes. They get "forbidden" for a missing door
+        // too, so probing coordinates can't reveal doors hidden in the fog.
+        if (!actor.isDm && !(door && state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door)))) return fail("forbidden");
         if (!door) return fail("invalid");
-        // Players open and close doors next to one of their own heroes.
-        if (!actor.isDm && !state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door))) return fail("forbidden");
         state = { ...state, walls: state.walls!.map((wall) => wall === door ? { ...wall, door: op.open ? "open" as const : "closed" as const } : wall) };
         break;
       }
@@ -720,9 +923,70 @@ export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, hero
         state = next;
         break;
       }
+      case "combat-start": {
+        if (!actor.isDm) return fail("forbidden");
+        const ids = new Set(state.tokens.map((token) => token.id));
+        if (!op.entries.every((entry) => ids.has(entry.tokenId))) return fail("invalid");
+        setCombat(passTurn({ round: 1, order: sortOrder(op.entries.map((entry) => ({ ...entry }))) }, state.tokens, 1, -1));
+        break;
+      }
+      case "combatant": {
+        if (!actor.isDm) return fail("forbidden");
+        if (!state.combat || !state.tokens.some((token) => token.id === op.tokenId)) return fail("invalid");
+        const existing = combatantOf(state, op.tokenId);
+        if (!existing && op.initiative === undefined) return fail("invalid");
+        const entry: Combatant = { ...existing ?? { tokenId: op.tokenId, initiative: op.initiative! } };
+        if (op.initiative !== undefined) entry.initiative = op.initiative;
+        if (op.speed === null) delete entry.speed; else if (op.speed !== undefined) entry.speed = op.speed;
+        if (op.moved === 0) delete entry.moved; else if (op.moved !== undefined) entry.moved = op.moved;
+        const others = state.combat.order.filter((item) => item.tokenId !== op.tokenId);
+        // Keep its place among equal initiatives when only its speed or movement changed.
+        const order = existing && op.initiative === undefined ? state.combat.order.map((item) => item.tokenId === op.tokenId ? entry : item) : sortOrder([...others, entry]);
+        const combat = { ...state.combat, order };
+        setCombat(combat.active ? combat : passTurn(combat, state.tokens, 1, -1));
+        break;
+      }
+      case "combat-leave": {
+        if (!actor.isDm) return fail("forbidden");
+        if (state.combat) setCombat(dropCombatants(state.combat, state.tokens, (id) => id !== op.tokenId));
+        break;
+      }
+      case "turn": {
+        const combat = state.combat;
+        if (!combat?.order.length) return fail("invalid");
+        if ("tokenId" in op) {
+          if (!actor.isDm) return fail("forbidden");
+          if (!combatantOf(state, op.tokenId)) return fail("invalid");
+          setCombat(startTurn({ ...combat, active: op.tokenId }));
+          break;
+        }
+        // Players end their own hero's turn; only the DM goes back.
+        const active = state.tokens.find((token) => token.id === combat.active);
+        if (!actor.isDm && (op.step === -1 || !active || !canControlToken(actor, active, heroes))) return fail("forbidden");
+        setCombat(passTurn(combat, state.tokens, op.step));
+        break;
+      }
+      case "dash": {
+        const token = state.tokens.find((item) => item.id === op.tokenId);
+        if (!token || !combatantOf(state, token.id)) return fail("invalid");
+        if (!actor.isDm && (!canControlToken(actor, token, heroes) || state.combat?.active !== token.id)) return fail("forbidden");
+        changeCombatant(token.id, (entry) => {
+          const next = { ...entry };
+          if (op.dash) next.dash = true; else delete next.dash;
+          return next;
+        });
+        break;
+      }
+      case "combat-end": {
+        if (!actor.isDm) return fail("forbidden");
+        const next: MapState = { ...state };
+        delete next.combat;
+        state = next;
+        break;
+      }
     }
   }
-  return { ok: true, state: remember(state) };
+  return { ok: true, state: remember(pruneCombat(state)) };
 }
 
 /** Spreadsheet-style column name for a 0-based index: A…Z, then AA, AB… */
