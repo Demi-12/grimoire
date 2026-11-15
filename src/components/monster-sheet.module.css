@@ -1,21 +1,22 @@
 /* 5e-style stat block: gilded edge bars, crimson small-caps name and tapered crimson rules. */
+/* The stat block's colours follow the theme tokens, so light and dark need no overrides of their own. */
 .frame {
-  --sb-ink: #1c1827;
-  --sb-paper: #e9e5f2;
-  --sb-red: #592898;
-  --sb-edge: #c9952e;
-  --sb-faint: #504669;
+  --sb-ink: var(--ink);
+  --sb-paper: var(--sunken);
+  --sb-red: var(--accent);
+  --sb-edge: var(--gilt);
+  --sb-faint: var(--muted);
   position: relative;
   max-width: 760px;
   margin: 0 auto;
   padding: 18px clamp(16px, 3.5vw, 30px) 20px;
   color: var(--sb-ink);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(255, 255, 255, .55), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, rgba(170, 120, 60, .12), transparent 60%),
+    radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--surface) 55%, transparent), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--gilt) 12%, transparent), transparent 60%),
     var(--sb-paper);
   border-block: 5px solid var(--sb-edge);
-  box-shadow: 0 0 0 1px rgba(89, 40, 152, .18), 0 12px 28px rgba(23, 17, 36, .2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 12px 28px rgb(0 0 0 / .2);
   font-family: var(--font-statblock);
 }
 .frame::before, .frame::after {
@@ -77,30 +78,17 @@
 .legal { margin: 5px auto 0; max-width: 620px; color: var(--sb-faint); font: var(--text-xs)/1.45 var(--font-body); text-align: center; }
 .legal a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
-.loading, .error, .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--sb-edge, #c9952e); color: #4b3a2b; background: #fbf1dc; font: italic 14px var(--font-body); border-radius: var(--radius-card); }
+.loading, .error, .empty { padding: 28px 20px; text-align: center; border: 1px dashed var(--gilt); color: var(--muted); background: var(--sunken); font: italic 14px var(--font-body); border-radius: var(--radius-card); }
 .loading { text-align: left; }
 @keyframes pulse { 50% { opacity: .6; } }
 @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
-.error { color: #7c2014; }
-.error button { margin-top: 10px; border: 1px solid #922610; background: transparent; color: #922610; padding: 6px 12px; cursor: pointer; font: inherit; }
+.error { color: var(--danger); }
+.error button { margin-top: 10px; border: 1px solid var(--danger); background: transparent; color: var(--danger); padding: 6px 12px; cursor: pointer; font: inherit; }
 
 @media (max-width: 480px) {
   .abilities { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; }
 }
 
-/* Dungeon by torchlight. */
-:global(:root[data-theme="dark"]) .frame {
-  --sb-ink: #d1c9e3;
-  --sb-paper: #1d1927;
-  --sb-red: #bc9ae7;
-  --sb-edge: #a8782a;
-  --sb-faint: #9d91b9;
-  background: radial-gradient(ellipse at 20% 0%, rgba(216, 170, 85, .1), transparent 55%), var(--sb-paper);
-  box-shadow: 0 0 0 1px rgba(188, 154, 231, .2), 0 12px 28px rgba(0, 0, 0, .45);
-}
-:global(:root[data-theme="dark"]) .loading, :global(:root[data-theme="dark"]) .empty, :global(:root[data-theme="dark"]) .error {
-  color: #ecdcc0; background: #2a1e16; border-color: #a8782a;
-}
 
 .portrait { margin: 0 0 12px; display: flex; justify-content: center; }
 .portrait img, .portraitFallback { width: 100%; max-width: 280px; aspect-ratio: 1; object-fit: contain; border-radius: var(--radius-control); }

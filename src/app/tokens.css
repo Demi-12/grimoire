@@ -15,6 +15,7 @@
  *   --gilt               secondary accent: rules, highlights, ornaments
  *   --gilt-text          gilt that is dark enough to carry text
  *   --leather            sidebar and banner base
+ *   --leather-from / --leather-to  the sidebar's leather gradient (top to bottom)
  *   --danger             destructive actions (text and borders)
  *   --field              background of text fields and selects
  *   --warn-text          text for a warning state (reconnecting) (>= 4.5:1 on --paper)
@@ -34,6 +35,8 @@
   --gilt-text: #6b5313;
   --control-line: #7a7396;
   --leather: #241a45;
+  --leather-from: #36224f;
+  --leather-to: #271939;
   --status-critical: #d03b3b;
   --good-text: #1f6b2a;
   --bad-text: #a3261f;
@@ -61,6 +64,8 @@
   --gilt-text: #e0c36a;
   --control-line: #7f77a6;
   --leather: #0c0916;
+  --leather-from: #13101b;
+  --leather-to: #1a1226;
   --good-text: #6fd38a;
   --bad-text: #ff9a8f;
   --danger: #ff9a8f;
