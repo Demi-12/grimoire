@@ -1,6 +1,7 @@
 import { Skeleton, SkeletonLine, SkeletonRegion } from "./skeleton";
 import { ArcaneBackdrop, BrandMark } from "./brand";
-import styles from "./sections.module.css";
+import { pageDescriptionClass, pageHeaderClass, pageTitleClass } from "./page-header";
+import { sectionStack, sectionTitle } from "./section-styles";
 
 /**
  * What the Toolkit paints while the session (and then /api/me) loads. It reuses the real layout
@@ -23,7 +24,7 @@ export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: Loa
   const label = labels[locale];
   if (variant === "gate") return <GateSkeleton label={label} />;
 
-  return <div className="app-shell min-h-screen bg-paper text-ink skeleton-shell" aria-busy="true">
+  return <div className="app-shell text-ink skeleton-shell" aria-busy="true">
     <ArcaneBackdrop variant="app" />
     <aside className="sidebar" aria-hidden="true" inert>
       <div className="brand"><BrandMark size={26} /><b>GRIMOIRE</b></div>
@@ -44,7 +45,6 @@ export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: Loa
         <HeaderControls />
         <span className="header-control header-account skeleton-ghost">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
         <span className="header-signout skeleton-ghost skeleton-icon-control">&nbsp;</span>
-        <span className="edition-badge skeleton-ghost">5E · 2024</span>
       </header>
       <main className="page-content" aria-busy="true">
         <SkeletonRegion label={label}>
@@ -69,23 +69,23 @@ function HeaderControls() {
 }
 
 function HomeSkeleton() {
-  return <div className={styles.page}>
-    <header className={styles.head}><h1><SkeletonLine width="11ch" /></h1><p><SkeletonLine width="26ch" /></p></header>
-    <div className={styles.quick}>{[0, 1, 2, 3].map((item) => <div key={item} className={`${styles.tile}${item === 0 ? ` ${styles.tilePrimary}` : ""}${item === 2 ? ` ${styles.tileWide}` : ""}`}>
-      <Skeleton className={`${styles.tileGlyph} skeleton-circle`} />
-      <span style={{ flex: 1 }}><b><SkeletonLine width="70%" /></b><small><SkeletonLine width="55%" /></small></span>
+  return <div className={sectionStack}>
+    <div className={pageHeaderClass}><div className="min-w-0 flex-1"><h1 className={pageTitleClass}><SkeletonLine width="11ch" /></h1><p className={pageDescriptionClass}><SkeletonLine width="26ch" /></p></div></div>
+    <div className="grid grid-cols-2 gap-3 max-[650px]:gap-2 min-[901px]:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className={`panel flex min-h-28 flex-col items-start gap-2.5 px-4 py-3.5 max-[650px]:min-h-21 max-[650px]:p-3${item === 0 ? " col-span-2 min-[901px]:col-span-1 max-[650px]:min-h-14" : ""}${item === 2 ? " max-[650px]:hidden" : ""}`}>
+      <Skeleton className="skeleton-circle size-9" />
+      <span className="w-full flex-1"><b className="block"><SkeletonLine width="70%" /></b><small className="block"><SkeletonLine width="55%" /></small></span>
     </div>)}</div>
-    <div className={styles.columns}>
-      <section className={styles.main}>
-        <div className={styles.sectionHead}><h2><SkeletonLine width="12ch" /></h2></div>
-        <div className={styles.grid}>{[0, 1].map((item) => <div key={item} className={styles.card} style={{ minHeight: 200 }}>
-          <div className={styles.cardTop}><Skeleton className={`${styles.initial} skeleton-circle`} /><div className={styles.cardName}><SkeletonLine width="60%" /></div></div>
+    <div className="flex flex-wrap items-start gap-6">
+      <section className="flex min-w-0 flex-[3_1_440px] flex-col gap-3.5">
+        <h2 className={sectionTitle}><SkeletonLine width="12ch" /></h2>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">{[0, 1].map((item) => <div key={item} className="panel flex min-h-50 flex-col gap-3.5 p-4.5">
+          <div className="flex items-start gap-3"><Skeleton className="skeleton-circle size-11" /><div className="min-w-0 flex-1"><SkeletonLine width="60%" /></div></div>
           <Skeleton width="100%" height={52} />
         </div>)}</div>
       </section>
-      <div className={styles.aside}>
-        <h2><SkeletonLine width="10ch" /></h2>
-        <div className={styles.campaign} style={{ minHeight: 120 }}><SkeletonLine width="50%" /><SkeletonLine width="80%" /></div>
+      <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-3.5">
+        <h2 className={sectionTitle}><SkeletonLine width="10ch" /></h2>
+        <div className="panel flex min-h-30 flex-col gap-2.5 p-4"><SkeletonLine width="50%" /><SkeletonLine width="80%" /></div>
       </div>
     </div>
   </div>;
@@ -93,8 +93,8 @@ function HomeSkeleton() {
 
 function SectionSkeleton() {
   return <>
-    <div className="section-title page-title">
-      <div><p className="eyebrow"><span /><SkeletonLine width="14ch" /></p><h1><SkeletonLine width="11ch" /></h1><p className="title-description"><SkeletonLine width="min(64ch, 100%)" /></p></div>
+    <div className={pageHeaderClass}>
+      <div className="min-w-0 flex-1"><p className="eyebrow"><SkeletonLine width="14ch" /></p><h1 className={pageTitleClass}><SkeletonLine width="11ch" /></h1><p className={pageDescriptionClass}><SkeletonLine width="min(64ch, 100%)" /></p></div>
     </div>
     <div className="skeleton-grid">
       {[0, 1, 2].map((item) => <div key={item} className="skeleton-row"><Skeleton width={36} height={36} className="skeleton-circle" /><div className="skeleton-grow"><Skeleton width="45%" height={14} /></div></div>)}

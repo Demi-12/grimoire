@@ -20,12 +20,12 @@ export type RenderedEmail = { subject: string; text: string; html: string };
 const light = {
   page: "#e6e3ef", // --paper
   card: "#f4f2fa", // --surface
-  header: "#241a45", // --leather-deep
+  header: "#241a45", // --leather
   ink: "#1e1a33", // --ink
   muted: "#5b5675", // --muted
   line: "#beb8d6", // --line
-  button: "#5a2d9c", // --crimson-fill
-  link: "#5a2d9c", // --crimson
+  button: "#5a2d9c", // --accent-fill
+  link: "#5a2d9c", // --accent
   gilt: "#b8962e", // --gilt
   star: "#e0c36a",
   brand: "#eeebf4",

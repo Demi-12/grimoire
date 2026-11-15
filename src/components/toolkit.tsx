@@ -27,6 +27,7 @@ import { LoadingShell } from "./loading-shell";
 import { Icon, type IconName } from "./icons";
 import { ArcaneBackdrop, BrandMark } from "./brand";
 import { useToast } from "./feedback";
+import { PageHeader } from "./page-header";
 
 type View = "home" | "characters" | "map" | "campaigns" | "encounters" | "bestiary" | "dm" | "account" | "admin";
 
@@ -463,7 +464,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     if (await saveCreature({ name: creatureName.trim(), xp: creatureXp, source: "Catálogo propio" })) setCreatureName("");
   }
 
-  return <div className="app-shell min-h-screen bg-paper text-ink">
+  return <div className="app-shell text-ink">
     <ArcaneBackdrop variant="app" />
     <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">
@@ -493,7 +494,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
         </Link>
         {me.role === "admin" && <button type="button" className={`header-admin${view === "admin" ? " active" : ""}`} aria-label={t("nav.admin")} onClick={() => setView("admin")}><span aria-hidden="true"><Icon name="admin" /></span>{pendingCount > 0 && <small className="nav-alert" aria-label={t("admin.pendingAria", { count: pendingCount })}>{pendingCount}</small>}</button>}
         <button type="button" className="header-signout" aria-label={t("gate.signOut")} title={t("gate.signOut")} onClick={() => void signOut()}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9" /></svg></button>
-        <span className="edition-badge">{t("common.edition")}</span></header>
+      </header>
       {(invite || inviteError) && <div className="import-banner" role="status"><span aria-hidden="true"><Icon name="campaigns" /></span>
         {invite ? <p><b>{t("invite.title", { campaign: invite.campaignName })}</b> {invite.alreadyMember ? t("invite.already", { owner: invite.ownerName }) : t("invite.description", { owner: invite.ownerName })}</p>
           : <p>{inviteError}</p>}
@@ -508,7 +509,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
 
       {view === "characters" && <main className="page-content" id="main" tabIndex={-1}>
         {/* With a sheet open the character's name is the visible heading; keep the page title for screen readers only. */}
-        <div className={`section-title page-title${selectedCharacterId ? " sr-only" : ""}`}><div><p className="eyebrow">{t("characters.kicker")}</p><h1 id="characters-title">{t("characters.title")}</h1><p className="title-description">{t("characters.description")}</p></div></div>
+        <PageHeader hidden={Boolean(selectedCharacterId)} kicker={t("characters.kicker")} title={t("characters.title")} titleId="characters-title" description={t("characters.description")} />
         <CharacterBuilder locale={locale} characters={ownCharacters} allCharacters={characters} campaigns={campaigns.filter((campaign) => campaign.myRole)} onSave={saveCharacter} onDelete={deleteCharacter}
           selectedId={selectedCharacterId} onSelect={(id) => router.push(id ? `/characters/${encodeURIComponent(id)}` : viewPaths.characters)}
           startCreating={creatingCharacter} onCreatingStarted={() => router.replace(viewPaths.characters)} />
@@ -520,7 +521,8 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       </main>}
 
       {view === "encounters" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("encounters.kicker")}</p><h1>{t("encounters.title")}</h1><p className="title-description">{t("encounters.description")}</p></div><button className="button button-quiet" onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: ownCreatures.length })}</button></div>
+        <PageHeader kicker={t("encounters.kicker")} title={t("encounters.title")} description={t("encounters.description")}
+          actions={<button type="button" className="button button-quiet" aria-expanded={showCatalog} onClick={() => setShowCatalog((open) => !open)}>{showCatalog ? t("encounters.closeCatalog") : t("encounters.catalog", { count: ownCreatures.length })}</button>} />
         <EncounterBuilder locale={locale} creatures={creatures} characters={characters} campaigns={campaigns} />
         {catalogError && <p className="import-message" role="alert">{t(`catalog.error.${catalogError}`)}</p>}
         {showCatalog && <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">{t("catalog.kicker")}</p><h2>{t("catalog.title")}</h2><p>{t("catalog.description")}</p></div></div>
@@ -534,7 +536,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       </main>}
 
       {view === "bestiary" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("bestiary.kicker")}</p><h1>{t("bestiary.title")}</h1><p className="title-description">{t("bestiary.description")}</p></div></div>
+        <PageHeader kicker={t("bestiary.kicker")} title={t("bestiary.title")} description={t("bestiary.description")} />
         <BestiaryBrowser locale={locale} homebrew={{ me, campaigns, onAddCreature: (creature) => { void saveCreature(creature); } }} onAddCreature={(creature) => { void saveCreature({ name: creature.name, xp: creature.xp, source: creature.source, monsterSlug: creature.monsterSlug, roleTags: creature.roleTags }); }} />
       </main>}
 
@@ -543,14 +545,19 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
       </main>}
 
       {view === "account" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{locale === "es" ? "SELLO DE IDENTIDAD" : "IDENTITY SEAL"}</p><h1>{t("nav.account")}</h1><p className="title-description">{locale === "es" ? "Protege tu acceso al grimorio." : "Secure your access to the Grimoire."}</p></div></div>
+        <PageHeader kicker={t("account.kicker")} title={t("nav.account")} description={t("account.description")} />
+        <section className="panel mb-6 flex flex-wrap items-center justify-between gap-3 p-5" aria-labelledby="account-preferences">
+          <div><h2 id="account-preferences" className="m-0 font-display text-xl font-medium text-ink">{t("account.preferences")}</h2><p className="mt-1 mb-0 text-sm text-muted">{t("account.preferencesNote")}</p></div>
+          <label className="flex items-center gap-2 text-sm text-muted">{t("common.language")}
+            <select className="field" value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}><option value="en">{t("common.english")}</option><option value="es">{t("common.spanish")}</option></select></label>
+        </section>
         <AuthPanel locale={locale} />
         <DataBackup locale={locale} onRestored={reloadAfterRestore} />
       </main>}
 
       {view === "admin" && me.role === "admin" && <main className="page-content" id="main" tabIndex={-1}>
-        <div className="section-title page-title"><div><p className="eyebrow">{t("admin.kicker")}</p><h1>{t(adminTab === "analytics" ? "admin.analyticsTitle" : "nav.admin")}</h1><p className="title-description">{t(adminTab === "analytics" ? "admin.analyticsDescription" : "admin.description")}</p></div></div>
-        <nav className="admin-tabs" aria-label={t("admin.tabsAria")}>
+        <PageHeader kicker={t("admin.kicker")} title={t(adminTab === "analytics" ? "admin.analyticsTitle" : "admin.usersTitle")} description={t(adminTab === "analytics" ? "admin.analyticsDescription" : "admin.description")} />
+        <nav className="tabs -mt-3" aria-label={t("admin.tabsAria")}>
           {(["users", "analytics"] as const).map((tab) => <a key={tab} href={tab === "analytics" ? adminAnalyticsPath : viewPaths.admin} aria-current={adminTab === tab ? "page" : undefined}
             onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); router.push(tab === "analytics" ? adminAnalyticsPath : viewPaths.admin); }}>
             <span aria-hidden="true"><Icon name={tab === "analytics" ? "analytics" : "users"} /></span>{t(`admin.tab.${tab}`)}

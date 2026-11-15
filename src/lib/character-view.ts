@@ -1,7 +1,7 @@
 /** Helpers shared by the character cards, the print sheet and the on-screen sheet view. */
 import type { Character } from "./api-client";
 import { allFeats, chosenSize, deriveSheet, type CharacterBuild, type DerivedSheet } from "./character-sheet";
-import { findBackground, findClass, findSpecies, say, speciesNeedsSpellAbility, speciesSizeNames, speciesSizeOptions, type Feature, type Text } from "./dnd2024";
+import { backgrounds, classes, findBackground, findClass, findSpecies, say, species, speciesNeedsSpellAbility, speciesSizeNames, speciesSizeOptions, type Feature, type Text } from "./dnd2024";
 import type { AbilityKey } from "./rules";
 import type { Locale } from "./i18n";
 import { unlockedFeatures } from "./levelup";
@@ -11,6 +11,26 @@ const abilityNames: Record<AbilityKey, Text> = {
   str: { en: "Strength", es: "Fuerza" }, dex: { en: "Dexterity", es: "Destreza" }, con: { en: "Constitution", es: "Constitución" },
   int: { en: "Intelligence", es: "Inteligencia" }, wis: { en: "Wisdom", es: "Sabiduría" }, cha: { en: "Charisma", es: "Carisma" },
 };
+
+const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+const catalogName = (value: string | undefined, names: Text[], locale: Locale): string => {
+  if (!value) return "";
+  const key = fold(value);
+  const match = names.find((name) => fold(name.en) === key || fold(name.es) === key);
+  return match ? match[locale] : value;
+};
+
+/**
+ * Class, species and background as saved (in the language the character was made in, or typed by hand),
+ * shown in the current language when they name a catalog entry; anything else is shown as typed.
+ */
+export function characterIdentity(character: Pick<Character, "className" | "species" | "background">, locale: Locale) {
+  return {
+    className: catalogName(character.className, classes.map((item) => item.name), locale),
+    species: catalogName(character.species, species.map((item) => item.name), locale),
+    background: catalogName(character.background, backgrounds.map((item) => item.name), locale),
+  };
+}
 
 export const signed = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
 

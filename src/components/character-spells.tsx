@@ -11,8 +11,14 @@ import {
 } from "@/lib/spells";
 import { useToast } from "./feedback";
 import SpellManager, { SpellDetails } from "./spell-manager";
-import sheetStyles from "./character-sheet-view.module.css";
 import styles from "./character-spells.module.css";
+
+/* The same panel and stat tiles as the rest of the sheet (character-sheet-view.tsx). */
+const panel = "panel min-w-0 px-4 pt-3.5 pb-4";
+const panelTitle = "m-0 font-display text-[16px] font-semibold text-accent";
+const statBox = "grid justify-items-center gap-0.5 rounded-control border border-line bg-paper px-1.5 py-2.5 text-center";
+const statLabel = "font-label text-xs font-semibold tracking-[.06em] text-muted uppercase";
+const statValue = "font-display text-2xl font-bold text-ink";
 
 const copy = {
   en: {
@@ -108,16 +114,16 @@ export default function CharacterSpells({ character, locale, scores, onSave }: {
     setDraft(null);
   }
 
-  return <section className={sheetStyles.panel} aria-labelledby="sheet-spells">
+  return <section className={panel} aria-labelledby="sheet-spells">
     <div className={styles.head}>
-      <h3 id="sheet-spells">{c.title}</h3>
+      <h3 id="sheet-spells" className={panelTitle}>{c.title}</h3>
       {onSave && <button type="button" className="button button-quiet" onClick={() => setDraft({ spells: choices })}>{groups.length ? c.manage : c.add}</button>}
     </div>
 
-    {casting && numbers && <div className={sheetStyles.vitals}>
-      <div className={sheetStyles.vital}><span>{c.ability}</span><b className={styles.word}>{translate(locale, `ability.${casting.ability}`)}</b></div>
-      <div className={sheetStyles.vital}><span>{c.dc}</span><b>{numbers.dc}</b></div>
-      <div className={sheetStyles.vital}><span>{c.attack}</span><b>{signed(numbers.attack)}</b></div>
+    {casting && numbers && <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
+      <div className={statBox}><span className={statLabel}>{c.ability}</span><b className="font-display text-[17px] leading-8 font-bold text-ink">{translate(locale, `ability.${casting.ability}`)}</b></div>
+      <div className={statBox}><span className={statLabel}>{c.dc}</span><b className={statValue}>{numbers.dc}</b></div>
+      <div className={statBox}><span className={statLabel}>{c.attack}</span><b className={statValue}>{signed(numbers.attack)}</b></div>
     </div>}
 
     {slots.length > 0 && <div className={styles.slots}>

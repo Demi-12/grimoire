@@ -12,9 +12,8 @@ import {
 import { epicBoons, featInfo, type Feature, type LevelFeatId, type FightingStyleId } from "@/lib/levelup-data";
 import { castingFor, cleanSpells, sheetSpells, spellLevelName, spellsLeft, type SpellChoices } from "@/lib/spells";
 import SpellManager from "./spell-manager";
-import styles from "./character-wizard.module.css";
+import { lu as own, wz as styles } from "./wizard-styles";
 import { subclassesFor, subclassTracked } from "@/lib/subclasses";
-import own from "./level-up.module.css";
 
 export interface LevelUpResult { level: number; build: CharacterBuild }
 
@@ -108,7 +107,7 @@ const copy = {
 const signed = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
 
 function Choice({ selected, onClick, children, disabled }: { selected: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
-  return <button type="button" className={`${styles.choice} ${selected ? styles.selected : ""}`} aria-pressed={selected} onClick={onClick} disabled={disabled}>{children}</button>;
+  return <button type="button" className={styles.choice} aria-pressed={selected} onClick={onClick} disabled={disabled}>{children}</button>;
 }
 
 function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
@@ -219,7 +218,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
       <button type="button" className={styles.close} onClick={onCancel} aria-label={c.close}>×</button>
     </header>
     <ol className={own.progress} aria-label={c.stepOf(position + 1, flow.length)}>{flow.map((step, index) =>
-      <li key={step} className={`${index === position ? own.current : ""} ${index < position ? own.done : ""}`} aria-current={index === position ? "step" : undefined}><span>{index < position ? "✓" : index + 1}</span>{c.steps[step]}</li>)}</ol>
+      <li key={step} data-state={index === position ? "current" : index < position ? "done" : undefined} aria-current={index === position ? "step" : undefined}><span>{index < position ? "✓" : index + 1}</span>{c.steps[step]}</li>)}</ol>
 
     <div className={styles.body}>
       {current === "overview" && <>
@@ -364,7 +363,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
 function SkillChecks({ options, chosen, limit, onChange, locale }: { options: SkillKey[]; chosen: SkillKey[]; limit: number; onChange: (next: SkillKey[]) => void; locale: Locale }) {
   return <div className={styles.skillGrid}>{options.map((skill) => {
     const isChosen = chosen.includes(skill);
-    return <label key={skill} className={`${styles.skill} ${isChosen ? styles.skillOn : ""}`}>
+    return <label key={skill} className={styles.skill} data-on={isChosen || undefined}>
       <input type="checkbox" checked={isChosen} disabled={!isChosen && chosen.length >= limit}
         onChange={(event) => onChange(event.target.checked ? [...chosen, skill] : chosen.filter((item) => item !== skill))} />
       <span>{translate(locale, `skill.${skill}`)}</span>

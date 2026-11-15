@@ -143,8 +143,8 @@ export default function AdminAnalytics({ locale }: { locale: Locale }) {
 
   return <div className={styles.dashboard} aria-busy={busy}>
     <div className={styles.filters}>
-      <div className={styles.segmented} role="group" aria-label={t.period}>
-        {ANALYTICS_RANGES.map((range) => <button key={range} type="button" aria-pressed={days === range} onClick={() => setDays(range)}>{t.days(range)}</button>)}
+      <div className="chips" role="group" aria-label={t.period}>
+        {ANALYTICS_RANGES.map((range) => <button key={range} type="button" className="chip" aria-pressed={days === range} onClick={() => setDays(range)}>{t.days(range)}</button>)}
       </div>
       <button type="button" className="button button-quiet" disabled={busy} onClick={() => void load(days)}>{busy && <Spinner />}{t.refresh}</button>
       <p className={styles.updated} role="status">{error ? t.loadError : t.updated(time.format(new Date(report.range.generatedAt)))}</p>

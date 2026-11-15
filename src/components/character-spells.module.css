@@ -1,8 +1,6 @@
 .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 10px; }
-.head h3 { margin: 0 !important; }
-.word { font-size: 17px !important; line-height: 30px; }
 .help { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.link { border: 0; background: none; padding: 0; color: var(--crimson); font: 600 13px var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link { border: 0; background: none; padding: 0; color: var(--accent); font: 600 13px var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 .slots { margin-top: 14px; }
 .slotsHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
@@ -15,9 +13,9 @@
 /* 28px targets with a smaller drawn circle, so slots are easy to hit on a phone. */
 .pip { position: relative; display: inline-block; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; }
 button.pip { cursor: pointer; }
-.pip::before { content: ""; position: absolute; inset: 5px; border: 2px solid var(--crimson); border-radius: 50%; background: var(--crimson); }
+.pip::before { content: ""; position: absolute; inset: 5px; border: 2px solid var(--accent); border-radius: 50%; background: var(--accent); }
 .spent::before { background: transparent; border-color: var(--control-line, var(--muted)); }
-button.pip:hover::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--crimson) 30%, transparent); }
+button.pip:hover::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
 
 .group { margin-top: 14px; }
 .group ul { display: grid; margin: 0; padding: 0; list-style: none; }
@@ -26,8 +24,8 @@ button.pip:hover::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--crimso
 .spell { display: flex; align-items: baseline; gap: 4px 10px; width: 100%; padding: 8px 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .spell span { flex: 1; min-width: 0; font: 600 15px var(--font-display); overflow-wrap: anywhere; }
 .spell small { font-size: var(--text-xs); color: var(--muted); text-align: right; }
-.spell i { flex: none; width: 18px; text-align: center; font: 700 15px var(--font-display); font-style: normal; color: var(--crimson); }
-.spell:hover span { color: var(--crimson); }
+.spell i { flex: none; width: 18px; text-align: center; font: 700 15px var(--font-display); font-style: normal; color: var(--accent); }
+.spell:hover span { color: var(--accent); }
 .group li > div { padding-inline: 0; border-top: 0; padding-top: 0; }
 
 /* The desktop layout zooms <html> (--ui-zoom), so viewport units are divided by it to stay inside the window. */

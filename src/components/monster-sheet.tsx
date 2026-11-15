@@ -14,8 +14,8 @@ type Props = {
 };
 
 const labels = {
-  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", bonusActions: "Bonus Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
-  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", retry: "Reintentar", noImage: "Sin ilustración disponible", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", bonusActions: "Acciones adicionales", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
+  en: { source: "D&D 5e", loading: "Consulting the bestiary…", empty: "Choose a creature to reveal its stat block.", error: "The bestiary could not be opened.", errorHint: "Open5e may not be answering right now.", retry: "Try again", noImage: "No illustration available", hp: "Hit Points", ac: "Armor Class", cr: "Challenge", abilities: "Ability Scores", traits: "Traits", actions: "Actions", bonusActions: "Bonus Actions", reactions: "Reactions", legendary: "Legendary Actions", defenses: "Defenses", saves: "Saving Throws", senses: "Senses", languages: "Languages", prof: "Proficiency" },
+  es: { source: "D&D 5e", loading: "Consultando el bestiario…", empty: "Elige una criatura para revelar su ficha.", error: "No se ha podido abrir el bestiario.", errorHint: "Puede que Open5e no responda ahora mismo.", retry: "Reintentar", noImage: "Sin ilustración disponible", hp: "Puntos de golpe", ac: "Clase de armadura", cr: "Desafío", abilities: "Características", traits: "Rasgos", actions: "Acciones", bonusActions: "Acciones adicionales", reactions: "Reacciones", legendary: "Acciones legendarias", defenses: "Defensas", saves: "Tiradas de salvación", senses: "Sentidos", languages: "Idiomas", prof: "Competencia" },
 } satisfies Record<Locale, Record<string, string>>;
 
 const abilityNames = { en: ["STR", "DEX", "CON", "INT", "WIS", "CHA"], es: ["FUE", "DES", "CON", "INT", "SAB", "CAR"] };
@@ -77,7 +77,7 @@ export default function MonsterSheet({ monsterSlug, locale = "en", monster: give
   }, [monsterSlug, given, attempt, t.error]);
 
   if (!given && !monsterSlug) return <div className={styles.empty}>{t.empty}</div>;
-  if (error && !given) return <div className={styles.error} role="alert">{t.error}<p>{error}</p><button type="button" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>;
+  if (error && !given) return <div className={styles.error} role="alert">{t.error}<p>{t.errorHint}</p><button type="button" onClick={() => setAttempt((n) => n + 1)}>{t.retry}</button></div>;
   if (!monster) return <SkeletonRegion label={t.loading} className={styles.loading}><Skeleton width="55%" height={30} /><SkeletonText lines={2} /><div className="skeleton-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", margin: "14px 0" }}>{[0, 1, 2, 3, 4, 5].map((item) => <Skeleton key={item} height={44} />)}</div><SkeletonText lines={4} /></SkeletonRegion>;
 
   const speed = Object.entries(monster.speed ?? {}).filter(([, value]) => value).map(([kind, value]) => `${translateTerms("speed", kind, locale)} ${translateTerms("speed", String(value), locale)}`).join(", ");

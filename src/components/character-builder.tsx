@@ -12,7 +12,7 @@ import CharacterSheetView from "@/components/character-sheet-view";
 import { attackList } from "@/lib/character-sheet";
 import { alignments, backgrounds, classes, findClass, say, skillKeys, species as speciesList, standardLanguages, type Feature, type Text } from "@/lib/dnd2024";
 import { MAX_LEVEL } from "@/lib/levelup";
-import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
+import { characterIdentity, featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
 import { castingFor, sheetSpells, slotRows, spellFacts, spellLevelName, type SpellChoices } from "@/lib/spells";
 import { castingNumbers } from "./character-spells";
 import { track } from "@/lib/telemetry-client";
@@ -110,9 +110,9 @@ function CharacterEditor({ character, campaigns, onSave, onCancel, locale }: {
       <button className="text-button" type="button" onClick={() => setScores(standardArray)}>{translate(locale, "character.standardArray")}</button></div>
     <p className="field-help mt-2 text-xs leading-relaxed text-muted">{translate(locale, "character.scoresHint")}</p>
     <ScoreFields scores={scores} locale={locale} onChange={(key, value) => setScores((current) => ({ ...current, [key]: value }))} />
-    {!validScores && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{translate(locale, "character.scoresValidation")}</p>}
+    {!validScores && <p className="validation-message mt-2 text-sm font-medium text-bad" role="alert">{translate(locale, "character.scoresValidation")}</p>}
     <label className="full-label">{translate(locale, "character.notes")}<textarea rows={3} maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={translate(locale, "character.notesPlaceholder")} /></label>
-    {error && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
+    {error && <p className="validation-message mt-2 text-sm font-medium text-bad" role="alert">{error}</p>}
     <div className="form-actions"><button className="button button-quiet" type="button" onClick={onCancel}>{translate(locale, "character.cancel")}</button>
       <button className="button button-primary" type="submit" disabled={saving || !name.trim() || !validLevel || !validScores}>{saving && <Spinner />}{translate(locale, saving ? "common.saving" : "character.save")}</button></div>
   </form>;
@@ -271,20 +271,20 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     {levelingUp?.build && <LevelUp key={levelingUp.id} locale={locale} name={levelingUp.name} level={levelingUp.level} build={levelingUp.build}
       onCancel={() => setLevelingUp(null)} onSave={(result) => void saveLevelUp(levelingUp, result)} />}
     {showEditor && <CharacterEditor key={editing?.id ?? "new"} character={editing} campaigns={campaigns} locale={locale} onSave={save} onCancel={() => { setShowEditor(false); setEditing(undefined); }} />}
-    {error && <p className="validation-message mt-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
+    {error && <p className="validation-message mt-2 text-sm font-medium text-bad" role="alert">{error}</p>}
     {characters.length === 0 && !showEditor && !wizard && !levelingUp && !selectedId ? <div className="empty-state"><span aria-hidden="true">✦</span><h3>{translate(locale, "character.emptyTitle")}</h3><p>{translate(locale, "character.emptyDescription")}</p>
       <button className="button button-primary" onClick={() => startWizard(false)}>{translate(locale, "character.createFirst")}</button></div> :
-      <div className={`character-grid${listClass}`}>{characters.map((character) => { const sheet = sheetFor(character); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
+      <div className={`character-grid${listClass}`}>{characters.map((character) => { const sheet = sheetFor(character); const identity = characterIdentity(character, locale); return <article className="character-card" key={character.id} data-print-target={printingId === character.id ? "true" : undefined}>
         <div className="character-card-top"><span className="avatar-mark">{character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><span className="level-pill">{translate(locale, "character.levelPill", { level: character.level })}</span></div>
-        <h3>{onSelect ? <Link className="character-name-link" href={`/characters/${encodeURIComponent(character.id)}`}>{character.name}</Link> : character.name}</h3><p className="character-subtitle">{[character.species, character.className, character.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
+        <h3>{onSelect ? <Link className="character-name-link" href={`/characters/${encodeURIComponent(character.id)}`}>{character.name}</Link> : character.name}</h3><p className="character-subtitle">{[identity.species, identity.className, identity.background].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</p>
         {campaignName(character.campaignId) && <p className="character-subtitle">⚑ {campaignName(character.campaignId)}</p>}
         <div className="export-only export-sheet-content">
           <section className="sheet-page sheet-page-main">
-            <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{character.name}</h2><small>{[character.className, character.species].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</small></header>
+            <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{character.name}</h2><small>{[identity.className, identity.species].filter(Boolean).join(" · ") || translate(locale, "character.adventurer")}</small></header>
             <div className="export-details">
-              <div><small>{translate(locale, "character.speciesLabel")}</small><b>{character.species || "—"}</b></div>
-              <div><small>{translate(locale, "character.classLabel")}</small><b>{character.className || "—"} · {character.level}</b></div>
-              <div><small>{translate(locale, "character.backgroundLabel")}</small><b>{character.background || "—"}</b></div>
+              <div><small>{translate(locale, "character.speciesLabel")}</small><b>{identity.species || "—"}</b></div>
+              <div><small>{translate(locale, "character.classLabel")}</small><b>{identity.className || "—"} · {character.level}</b></div>
+              <div><small>{translate(locale, "character.backgroundLabel")}</small><b>{identity.background || "—"}</b></div>
               <div><small>{translate(locale, "character.proficiencyLabel")}</small><b>+{proficiencyBonus(character.level)}</b></div>
               <div><small>{translate(locale, "character.sheetAlignment")}</small><b>{character.build ? say(alignments[character.build.alignment] ?? alignments[4], locale) : "—"}</b></div>
               <div><small>{translate(locale, "character.sheetPassivePerception")}</small><b>{sheet?.passivePerception ?? "—"}</b></div>
@@ -348,13 +348,17 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
         <div className="mini-stats">{abilities.map(({ key }) => { const modifier = abilityModifier(character.scores[key]); return <div key={key}>
           <span>{translate(locale, `ability.${key}`).slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><b>{character.scores[key]}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
         {character.notes && <p className="character-notes">{character.notes}</p>}
-        <div className="character-card-footer"><span>{translate(locale, "character.proficiencyShort")} <b>+{proficiencyBonus(character.level)}</b></span><div>
-          {onSelect && <button className="small-action" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
-          <button className="small-action export-action" type="button" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
-          {character.build && character.level < MAX_LEVEL && <button className="small-action" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
-          <button className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
-          <button className="small-action danger-action" onClick={() => void remove(character)}>{translate(locale, "character.delete")}</button>
-        </div></div>
+        {/* Opening the sheet and levelling up come first; editing, exporting and deleting are a quieter second row, deleting set apart in red. */}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5">
+          {onSelect && <button className="button button-primary button-sm" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
+          {character.build && character.level < MAX_LEVEL && <button type="button" className="button button-quiet button-sm" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0">
+          <button type="button" className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
+          <button type="button" className="small-action export-action" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
+          <span className="flex-1" aria-hidden="true" />
+          <button type="button" className="small-action danger-action" onClick={() => void remove(character)}>{translate(locale, "character.delete")}</button>
+        </div>
       </article>; })}</div>}
   </section>;
 }

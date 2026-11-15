@@ -127,8 +127,8 @@ export default function HomebrewPanel({ locale, me, campaigns, onAddCreature }: 
 
     <div className={styles.toolbar}>
       <label className={styles.search}>{t.search}<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      <div className={styles.scopes} role="group" aria-label={t.scopesLabel}>
-        {(Object.keys(t.scopes) as Scope[]).map((key) => <button type="button" key={key} aria-pressed={scope === key} onClick={() => setScope(key)}>{t.scopes[key]}</button>)}
+      <div className="chips" role="group" aria-label={t.scopesLabel}>
+        {(Object.keys(t.scopes) as Scope[]).map((key) => <button type="button" className="chip" key={key} aria-pressed={scope === key} onClick={() => setScope(key)}>{t.scopes[key]}</button>)}
       </div>
     </div>
 
