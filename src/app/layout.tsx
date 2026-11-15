@@ -3,9 +3,7 @@ import localFont from "next/font/local";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init";
 import ErrorReporting from "@/components/error-reporting";
 import { FeedbackProvider } from "@/components/feedback";
-import "./tokens.css";
 import "./globals.css";
-import "./dnd-theme.css";
 
 /**
  * Self-hosted Alegreya faces (Latin + Latin Extended subsets, OFL: see fonts/OFL.txt). Kept in the repo rather than

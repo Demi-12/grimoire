@@ -23,7 +23,7 @@ export function LoadingShell({ variant, locale, activeNav = -1 }: { variant: Loa
   const label = labels[locale];
   if (variant === "gate") return <GateSkeleton label={label} />;
 
-  return <div className="app-shell min-h-screen bg-paper text-ink skeleton-shell" aria-busy="true">
+  return <div className="app-shell text-ink skeleton-shell" aria-busy="true">
     <ArcaneBackdrop variant="app" />
     <aside className="sidebar" aria-hidden="true" inert>
       <div className="brand"><BrandMark size={26} /><b>GRIMOIRE</b></div>

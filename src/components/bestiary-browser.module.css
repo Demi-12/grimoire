@@ -29,7 +29,7 @@
 .sheet { margin-top: 24px; scroll-margin-top: 20px; }
 :global(:root[data-theme="dark"]) .explorer { --b-ink: #dcd6e9; --b-paper: #221f28; color: #dcd6e9; }
 :global(:root[data-theme="dark"]) .header h2 { color: #d4cce6; }
-:global(:root[data-theme="dark"]) .kicker { color: var(--crimson); }
+:global(:root[data-theme="dark"]) .kicker { color: var(--accent); }
 :global(:root[data-theme="dark"]) .header>p:last-child, :global(:root[data-theme="dark"]) .controls label span, :global(:root[data-theme="dark"]) .resultsHeader { color: #a095ba; }
 :global(:root[data-theme="dark"]) .controls { border-color: #483e60; background: rgba(34,31,40,.82); }
 :global(:root[data-theme="dark"]) .controls input, :global(:root[data-theme="dark"]) .controls select { color: #dcd6e9; border-color: #483e60; background: #1c1a21; }

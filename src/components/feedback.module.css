@@ -74,7 +74,7 @@
   animation: fb-slide .22s ease-out;
 }
 .success { --fb-accent: var(--gilt); }
-.info { --fb-accent: var(--crimson); }
+.info { --fb-accent: var(--accent); }
 .error { --fb-accent: #a83a26; }
 .toastIcon {
   display: grid;
@@ -101,7 +101,7 @@
   cursor: pointer;
 }
 .toastClose:hover { color: var(--ink); }
-.toastClose:focus-visible { outline: 2px solid var(--crimson); outline-offset: 1px; }
+.toastClose:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 :global(:root[data-theme="dark"]) .toast { box-shadow: 0 14px 36px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .3); }
 :global(:root[data-theme="dark"]) .error { --fb-accent: #e07a62; }

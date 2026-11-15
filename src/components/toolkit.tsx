@@ -463,7 +463,7 @@ export default function Toolkit({ sessionHint = false }: { sessionHint?: boolean
     if (await saveCreature({ name: creatureName.trim(), xp: creatureXp, source: "Catálogo propio" })) setCreatureName("");
   }
 
-  return <div className="app-shell min-h-screen bg-paper text-ink">
+  return <div className="app-shell text-ink">
     <ArcaneBackdrop variant="app" />
     <a className="skip-link" href="#main">{t("nav.skip")}</a>
     <aside className="sidebar">

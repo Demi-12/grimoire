@@ -41,7 +41,7 @@
 .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 .quietButton, .deleteButton, .removeHero { min-height: 28px; min-width: 28px; padding: 6px 8px; color: var(--campaign-rust); background: transparent; border: 1px solid #c9b58d; border-radius: 2px; font: 700 var(--text-xs) var(--font-label); cursor: pointer; }
 .deleteButton { color: #762b23; border-color: #c99b83; }
-.mapLink { display: inline-flex; align-items: center; min-height: 28px; padding: 6px 10px; color: #ede9f5; background: var(--crimson-fill); border-radius: 2px; font: 700 var(--text-xs) var(--font-label); text-decoration: none; }
+.mapLink { display: inline-flex; align-items: center; min-height: 28px; padding: 6px 10px; color: #ede9f5; background: var(--accent-fill); border-radius: 2px; font: 700 var(--text-xs) var(--font-label); text-decoration: none; }
 .mapLink:hover { text-decoration: underline; }
 .renameForm { width: 100%; display: flex; gap: 7px; flex-wrap: wrap; }
 .renameForm input { flex: 1; }
@@ -51,8 +51,8 @@
 .sigle { color: #a27a39; font-size: 17px; }
 .heroName { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
 .heroLink { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 28%, transparent); text-underline-offset: 3px; transition: text-decoration-color .15s, color .15s; }
-.heroLink:hover { color: var(--crimson); text-decoration-color: currentColor; }
-.heroLink:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; border-radius: 2px; }
+.heroLink:hover { color: var(--accent); text-decoration-color: currentColor; }
+.heroLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .heroName small { display: block; margin-top: 3px; color: var(--campaign-muted); font: var(--text-xs) var(--font-label); }
 .removeHero { padding: 2px 7px; font-size: 16px; }
 .assign { display: block; max-width: 440px; margin-top: 14px; }

@@ -1,6 +1,6 @@
 /* Overview ("Mesa de juego"), battle map picker and the "Run the game" hub. Colours come from tokens.css. */
 .page {
-  --sunken: color-mix(in srgb, var(--crimson) 7%, var(--surface));
+  --sunken: color-mix(in srgb, var(--accent) 7%, var(--surface));
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -18,12 +18,12 @@
   border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); text-decoration: none;
   transition: border-color .15s, transform .15s;
 }
-.tile:hover { border-color: var(--crimson); transform: translateY(-1px); }
-.tileGlyph { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: var(--sunken); color: var(--crimson); font-size: 19px; }
+.tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tileGlyph { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: var(--sunken); color: var(--accent); font-size: 19px; }
 .tile b { display: block; font: 500 18px/1.15 var(--font-display); }
 .tile small { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
-.tilePrimary { background: var(--crimson-fill); border-color: var(--crimson-fill); color: #fff; }
-.tilePrimary:hover { border-color: var(--crimson-fill); }
+.tilePrimary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.tilePrimary:hover { border-color: var(--accent-fill); }
 .tilePrimary .tileGlyph { background: rgba(255, 255, 255, .16); color: #fff; }
 .tilePrimary small { color: #fff; opacity: .88; }
 
@@ -38,12 +38,12 @@
   min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 22px; background: transparent;
   color: var(--muted); font: 700 13px var(--font-statblock); cursor: pointer;
 }
-.filters button[aria-pressed="true"] { border-color: var(--crimson-fill); background: var(--crimson-fill); color: #fff; }
+.filters button[aria-pressed="true"] { border-color: var(--accent-fill); background: var(--accent-fill); color: #fff; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .card { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .cardTop { display: flex; align-items: flex-start; gap: 12px; }
-.initial { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--sunken); color: var(--crimson); font: 500 19px var(--font-display); }
+.initial { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--sunken); color: var(--accent); font: 500 19px var(--font-display); }
 .cardName { flex: 1; min-width: 0; }
 .cardName h3 { margin: 0; font: 500 19px/1.15 var(--font-display); color: var(--ink); overflow-wrap: break-word; }
 .cardName p { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 0; color: var(--muted); font-size: 13px; }
@@ -56,19 +56,19 @@
 .scores div { display: flex; flex-direction: column; gap: 1px; }
 .scores dt { color: var(--muted); font: var(--text-xs) var(--font-label); }
 .scores dd { margin: 0; color: var(--ink); font-weight: 700; font-size: 14px; }
-.scores dd + dd { color: var(--crimson); font-weight: 400; font-size: var(--text-xs); }
+.scores dd + dd { color: var(--accent); font-weight: 400; font-size: var(--text-xs); }
 .cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); font: 13px var(--font-statblock); }
 .cardFoot > span { min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cardFoot a { flex: none; display: inline-flex; align-items: center; min-height: 44px; color: var(--crimson); font-weight: 700; }
+.cardFoot a { flex: none; display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 700; }
 .newCard {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; min-height: 200px; padding: 18px;
   border: 1px dashed var(--control-line); border-radius: 10px; color: var(--ink); text-decoration: none;
 }
-.newCard:hover { border-color: var(--crimson); }
-.newCard > span { width: 44px; height: 44px; display: grid; place-items: center; border: 1px dashed var(--crimson); border-radius: 50%; color: var(--crimson); font-size: 20px; }
+.newCard:hover { border-color: var(--accent); }
+.newCard > span { width: 44px; height: 44px; display: grid; place-items: center; border: 1px dashed var(--accent); border-radius: 50%; color: var(--accent); font-size: 20px; }
 .newCard b { font: 500 20px var(--font-display); }
 .newCard small { color: var(--muted); font-size: 13px; line-height: 1.5; }
-.more { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; color: var(--crimson); font: 700 13px var(--font-statblock); }
+.more { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font: 700 13px var(--font-statblock); }
 .empty { margin: 0; color: var(--muted); font-style: italic; }
 
 .firstRun { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 24px; border: 1px dashed var(--control-line); border-radius: 12px; }
@@ -85,18 +85,18 @@
 .actions { display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--font-statblock); }
 .action {
   flex: 1 1 auto; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px;
-  border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--crimson); font: 700 13px var(--font-statblock); text-decoration: none; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--accent); font: 700 13px var(--font-statblock); text-decoration: none; cursor: pointer;
 }
-.action:hover { border-color: var(--crimson); }
-.actionPrimary { background: var(--crimson-fill); border-color: var(--crimson-fill); color: #fff; }
-.actionPrimary:hover { border-color: var(--crimson-fill); }
+.action:hover { border-color: var(--accent); }
+.actionPrimary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.actionPrimary:hover { border-color: var(--accent-fill); }
 
 /* Battle map picker. */
 .maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
 .mapCard { overflow: hidden; padding: 0; }
 .mapThumb {
   position: relative; height: 150px; border-bottom: 1px solid var(--line); background-color: var(--sunken);
-  background-image: linear-gradient(color-mix(in srgb, var(--crimson) 14%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--crimson) 14%, transparent) 1px, transparent 1px);
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 .mapThumb span { position: absolute; left: 12px; top: 12px; padding: 4px 8px; border-radius: 4px; background: var(--surface); color: var(--muted); font: 700 var(--text-xs) var(--font-label); letter-spacing: .1em; }
@@ -109,7 +109,7 @@
   display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 16px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); text-decoration: none;
 }
-.hubLink:hover { border-color: var(--crimson); }
+.hubLink:hover { border-color: var(--accent); }
 .hubLink > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .hubLink b { font: 500 19px var(--font-display); }
 .hubLink small { color: var(--muted); font-size: 13px; line-height: 1.4; }

@@ -1,17 +1,22 @@
 /*
- * Grimoire design tokens: the single source of truth for colour and type.
- * Imported first in layout.tsx. Arcane palette: indigo ink, violet accent and pale gilt on lavender vellum.
- * Alegreya stands in for the manuals' small caps and stat-block sans; the faces are
- * self-hosted by next/font in layout.tsx, which sets the --f-* variables used below.
+ * Grimoire colour tokens: the single source of truth for colour, as CSS variables that switch with the theme.
+ * globals.css maps them into Tailwind's theme (bg-surface, text-accent, border-line…), so components use the
+ * utilities and never a raw hex. Arcane palette: indigo ink, violet accent and pale gilt on lavender vellum.
  *
- *   --crimson        accent (violet; the name is historical): primary actions, active states, links
- *   --crimson-fill   solid fills behind light text (darker than --crimson in dark mode)
- *   --gilt           secondary accent: rules, highlights, ornaments
- *   --leather-deep   sidebar and banner base
- *   --surface        panels and cards, one step above --paper
- *   --gilt-text      gilt that is dark enough to carry text (--gilt itself is for rules and ornaments)
- *   --control-line   border of form fields, at least 3:1 against the panels they sit on (WCAG 1.4.11)
- *   --status-critical  errors in charts (fixed in both themes); always paired with an icon or words
+ *   --ink / --muted      body text and secondary text
+ *   --paper / --surface  page background and the panels on it (one step lighter)
+ *   --sunken             wells inside a panel: stat boxes, selected rows (one step darker than --surface)
+ *   --line               hairlines and panel borders
+ *   --control-line       border of form fields, at least 3:1 against the panels they sit on (WCAG 1.4.11)
+ *   --accent             violet: primary actions, active and selected states, links
+ *   --accent-fill        solid fills behind light text (darker than --accent in dark mode)
+ *   --accent-soft        tinted background of a selected option
+ *   --on-accent          text on --accent-fill
+ *   --gilt               secondary accent: rules, highlights, ornaments
+ *   --gilt-text          gilt that is dark enough to carry text
+ *   --leather            sidebar and banner base
+ *   --danger             destructive actions (text and borders)
+ *   --status-critical    errors in charts (fixed in both themes); always paired with an icon or words
  *   --good-text / --bad-text  text for a change that is good or bad news (>= 4.5:1 on --surface)
  */
 :root {
@@ -20,23 +25,19 @@
   --surface: #f4f2fa;
   --muted: #5b5675;
   --line: #beb8d6;
-  --crimson: #5a2d9c;
-  --crimson-fill: #5a2d9c;
+  --accent: #5a2d9c;
+  --accent-fill: #5a2d9c;
   --gilt: #b8962e;
   --gilt-text: #6b5313;
   --control-line: #7a7396;
-  --leather-deep: #241a45;
+  --leather: #241a45;
   --status-critical: #d03b3b;
   --good-text: #1f6b2a;
   --bad-text: #a3261f;
-
-  --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
-  --font-body: var(--f-alegreya), Georgia, serif;
-  --font-label: var(--f-alegreya-sans-sc), var(--f-alegreya-sans), sans-serif;
-  --font-statblock: var(--f-alegreya-sans), "Trebuchet MS", sans-serif;
-
-  /* Floor for on-screen text: Alegreya runs small, so nothing renders below this. */
-  --text-xs: 12px;
+  --danger: #8a2318;
+  --on-accent: #f1edf8;
+  --sunken: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 
 /* Wizard's tower at night. */
@@ -46,13 +47,17 @@
   --surface: #1a1630;
   --muted: #b0a8d0;
   --line: #3a3260;
-  --crimson: #b79cf2;
-  --crimson-fill: #6a3bb8;
+  --accent: #b79cf2;
+  --accent-fill: #6a3bb8;
   --gilt: #e0c36a;
   --gilt-text: #e0c36a;
   --control-line: #7f77a6;
-  --leather-deep: #0c0916;
+  --leather: #0c0916;
   --good-text: #6fd38a;
   --bad-text: #ff9a8f;
+  --danger: #ff9a8f;
+  --on-accent: #f3effb;
+  --sunken: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
   color-scheme: dark;
 }
