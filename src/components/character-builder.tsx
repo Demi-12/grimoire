@@ -327,13 +327,17 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
         <div className="mini-stats">{abilities.map(({ key }) => { const modifier = abilityModifier(character.scores[key]); return <div key={key}>
           <span>{translate(locale, `ability.${key}`).slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><b>{character.scores[key]}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
         {character.notes && <p className="character-notes">{character.notes}</p>}
-        <div className="character-card-footer"><span>{translate(locale, "character.proficiencyShort")} <b>+{proficiencyBonus(character.level)}</b></span><div>
-          {onSelect && <button className="small-action" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
-          <button className="small-action export-action" type="button" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
-          {character.build && character.level < MAX_LEVEL && <button className="small-action" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
-          <button className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
-          <button className="small-action danger-action" onClick={() => void remove(character)}>{translate(locale, "character.delete")}</button>
-        </div></div>
+        {/* Opening the sheet and levelling up come first; editing, exporting and deleting are a quieter second row, deleting set apart in red. */}
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5">
+          {onSelect && <button className="button button-primary button-sm" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
+          {character.build && character.level < MAX_LEVEL && <button type="button" className="button button-quiet button-sm" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0">
+          <button type="button" className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
+          <button type="button" className="small-action export-action" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
+          <span className="flex-1" aria-hidden="true" />
+          <button type="button" className="small-action danger-action" onClick={() => void remove(character)}>{translate(locale, "character.delete")}</button>
+        </div>
       </article>; })}</div>}
   </section>;
 }
