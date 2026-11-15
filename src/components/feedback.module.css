@@ -25,6 +25,7 @@
   box-shadow: 0 22px 60px rgba(17, 14, 31, .35), 0 2px 6px rgba(17, 14, 31, .18);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
+  border-radius: var(--radius-card);
 }
 .cardDanger { border-top-color: var(--fb-danger); }
 .sigil { display: block; margin-bottom: 8px; font-size: 20px; line-height: 1; color: var(--gilt-text); }
@@ -72,9 +73,10 @@
   color: var(--ink);
   box-shadow: 0 12px 32px rgba(17, 14, 31, .22), 0 1px 3px rgba(17, 14, 31, .12);
   animation: fb-slide .22s ease-out;
+  border-radius: var(--radius-card);
 }
 .success { --fb-accent: var(--gilt); }
-.info { --fb-accent: var(--crimson); }
+.info { --fb-accent: var(--accent); }
 .error { --fb-accent: #a83a26; }
 .toastIcon {
   display: grid;
@@ -101,7 +103,7 @@
   cursor: pointer;
 }
 .toastClose:hover { color: var(--ink); }
-.toastClose:focus-visible { outline: 2px solid var(--crimson); outline-offset: 1px; }
+.toastClose:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 :global(:root[data-theme="dark"]) .toast { box-shadow: 0 14px 36px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .3); }
 :global(:root[data-theme="dark"]) .error { --fb-accent: #e07a62; }

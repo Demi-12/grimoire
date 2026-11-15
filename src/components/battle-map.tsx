@@ -18,7 +18,7 @@ import { Spinner } from "./skeleton";
 import { useConfirm, useToast } from "./feedback";
 import CombatTracker, { combatInfo, formatDistance, Movement, type CombatInfo } from "./battle-map-combat";
 import TokenSheet from "./battle-map-sheet";
-import styles from "./battle-map.module.css";
+import { bm as styles } from "./battle-map-styles";
 
 type Locale = "en" | "es";
 
@@ -540,7 +540,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   }
 
   const boardStyle = { "--ratio": width / height, "--min-width": `${state.cols * 30 + 20}px` } as CSSProperties;
-  const board = <svg ref={svgRef} className={styles.board} style={boardStyle} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={t.boardLabel(map.campaignName)}
+  const board = <svg ref={svgRef} className={styles.board(tableMode)} style={boardStyle} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={t.boardLabel(map.campaignName)}
     onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setDrag(null)}>
     <defs><clipPath id={`grid-${map.campaignId}`}><rect x={GUTTER} y={GUTTER} width={state.cols * CELL} height={state.rows * CELL} /></clipPath></defs>
     <rect className={styles.floor} x={GUTTER} y={GUTTER} width={state.cols * CELL} height={state.rows * CELL} onClick={onFloorClick} />
@@ -552,7 +552,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
     ].join("")} />}
     {cones.length > 0 && <g clipPath={`url(#grid-${map.campaignId})`} aria-hidden="true">{cones}</g>}
     {reachPath && <path className={styles.reach} d={reachPath} aria-hidden="true" />}
-    {walls.length > 0 && <g className={wallTool === "erase" ? styles.wallsErasing : styles.walls}>
+    {walls.length > 0 && <g className={styles.walls}>
       {walls.map((wall) => {
         const line = wallLine(wall);
         const key = `${wall.x1},${wall.y1},${wall.x2},${wall.y2}`;
@@ -564,7 +564,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
             onKeyDown: (event: KeyboardEvent<SVGGElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onWallPick(wall); } },
           } : { "aria-hidden": true })}>
           <line {...line} className={styles.wallHit} />
-          <line {...line} className={wall.door === "open" ? styles.doorOpen : wall.door ? styles.doorClosed : styles.wall} />
+          <line {...line} className={styles.wallLine(wall.door === "open" ? "doorOpen" : wall.door ? "doorClosed" : "wall", wallTool === "erase")} />
         </g>;
       })}
     </g>}
@@ -581,14 +581,14 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       const fill = colorOf(token);
       const acting = token.id === combat?.active;
       const mine = token.kind === "hero" && map.heroes.some((hero) => hero.id === token.characterId && hero.mine);
-      const classes = [styles.token, wallTool ? styles.passThrough : "", dragging ? styles.dragging : "", token.hidden ? styles.hidden : "", token.id === selectedId ? styles.selected : "", canMove(token) ? styles.movable : ""].filter(Boolean).join(" ");
+      const classes = styles.token({ pass: Boolean(wallTool), dragging, hidden: Boolean(token.hidden), movable: canMove(token) });
       return <g key={token.id} className={classes} style={{ transform: `translate(${left}px, ${top}px)` }}
         tabIndex={0} role="button" aria-label={tokenName(token)} aria-pressed={token.id === selectedId}
         onPointerDown={(event) => onTokenPointerDown(event, token)} onKeyDown={(event) => onTokenKey(event, token)}>
         <title>{tokenName(token)}</title>
         {acting && <circle className={styles.activeRing} cx={span / 2} cy={span / 2} r={radius + 3} />}
         {token.id === selectedId && <circle className={styles.selectRing} cx={span / 2} cy={span / 2} r={radius + 3} />}
-        <circle cx={span / 2} cy={span / 2} r={radius} fill={fill} className={mine ? styles.mineDisc : styles.disc} />
+        <circle cx={span / 2} cy={span / 2} r={radius} fill={fill} className={styles.disc(mine, Boolean(token.hidden))} />
         <text className={styles.tokenText} x={span / 2} y={span / 2 + 1} style={{ fontSize: Math.max(15, Math.min(30, radius * 0.75)) }}>{initials(token)}</text>
         {token.defeated && <path className={styles.cross} d={`M${span * 0.28} ${span * 0.28}L${span * 0.72} ${span * 0.72}M${span * 0.72} ${span * 0.28}L${span * 0.28} ${span * 0.72}`} />}
         {tokenVision(token) && !token.defeated && <path className={styles.facing}
@@ -597,32 +597,32 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       </g>;
     })}
     {/* Above the tokens: players never get monsters out there, and the DM sees which ones are unseen. */}
-    {memoryPath && <path className={map.showsHidden ? styles.memoryDm : styles.memory} d={memoryPath} aria-hidden="true" />}
-    {fogPath && <path className={map.showsHidden ? styles.fogDm : styles.fog} d={fogPath} aria-hidden="true" />}
+    {memoryPath && <path className={styles.memory(map.showsHidden)} d={memoryPath} aria-hidden="true" />}
+    {fogPath && <path className={styles.fog(map.showsHidden)} d={fogPath} aria-hidden="true" />}
     {/* Doors drawn again above the fog so they stand out; clicks go through the fog to the ones below. */}
     {sight && walls.some((wall) => wall.door) && !wallTool && <g className={styles.walls} aria-hidden="true">
       {walls.filter((wall) => wall.door).map((wall) => <line key={`fog-${wall.x1},${wall.y1},${wall.x2},${wall.y2}`} {...wallLine(wall)}
-        className={wall.door === "open" ? styles.doorOpen : styles.doorClosed} />)}
+        className={styles.wallLine(wall.door === "open" ? "doorOpen" : "doorClosed", false)} />)}
     </g>}
     {wallTool && wallTool !== "erase" && wallStart && <g className={styles.wallPreview} aria-hidden="true">
       {hoverVertex && <line x1={GUTTER + wallStart.x * CELL} y1={GUTTER + wallStart.y * CELL} x2={GUTTER + hoverVertex.x * CELL} y2={GUTTER + hoverVertex.y * CELL} />}
       <circle cx={GUTTER + wallStart.x * CELL} cy={GUTTER + wallStart.y * CELL} r={7} />
     </g>}
-    {dragCost && <text className={dragCost.over ? `${styles.dragCost} ${styles.dragCostOver}` : styles.dragCost} x={dragCost.x} y={dragCost.y} aria-hidden="true">{dragCost.label}</text>}
+    {dragCost && <text className={styles.dragCost(dragCost.over)} x={dragCost.x} y={dragCost.y} aria-hidden="true">{dragCost.label}</text>}
   </svg>;
 
   // In a fight, the table display lists everyone in initiative order with the one acting marked.
   const rank = new Map(combat?.order.map((entry, index) => [entry.tokenId, index]) ?? []);
   const legendTokens = combat ? [...state.tokens].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)) : state.tokens;
   const legend = <ul className={styles.legend} aria-label={t.legend}>
-    {legendTokens.map((token) => <li key={token.id} className={[token.defeated ? styles.legendDefeated : "", token.id === combat?.active ? styles.legendActive : ""].filter(Boolean).join(" ")}>
+    {legendTokens.map((token) => <li key={token.id} className={styles.legendItem(Boolean(token.defeated), token.id === combat?.active)}>
       <span className={styles.legendDot} style={{ background: colorOf(token) }} aria-hidden="true">{initials(token)}</span>
       {token.label} <small>{squareName(token.x, token.y)}{rank.has(token.id) ? ` · ${combat!.order[rank.get(token.id)!].initiative}` : ""}</small>
     </li>)}
   </ul>;
 
   const statusLabel = status === "live" ? t.live : status === "connecting" ? t.connecting : t.offline;
-  const statusBadge = <span className={`${styles.status} ${styles[status]}`} role="status"><span aria-hidden="true" />{statusLabel}</span>;
+  const statusBadge = <span className={styles.status(status)} role="status"><span aria-hidden="true" />{statusLabel}</span>;
 
   if (tableMode) {
     return <div ref={tableRef} className={styles.table}>
@@ -650,7 +650,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       <div className={styles.titleBlock}><p className={styles.kicker}>{t.kicker}</p><h1>{map.campaignName}</h1></div>
       <div className={styles.topActions}>
         {statusBadge}
-        {map.isDm && <label className={styles.switch}><input type="checkbox" checked={playersView} onChange={(event) => setPlayersView(event.target.checked)} />{t.viewToggle}</label>}
+        {map.isDm && <label className={styles.check}><input type="checkbox" checked={playersView} onChange={(event) => setPlayersView(event.target.checked)} />{t.viewToggle}</label>}
         <button type="button" className="button button-primary" onClick={enterTable}>{t.tableMode}</button>
       </div>
     </header>
@@ -659,8 +659,8 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
         <div className={styles.scroller}>{board}</div>
         {notice && <p className={styles.error} role="alert">{t[notice]}</p>}
         {selected && <div className={styles.selectedBar} aria-live="polite">
-          <span><b>{selected.label}</b> · {squareName(selected.x, selected.y)}</span>
-          {selectedEntry && <Movement entry={selectedEntry} locale={locale} />}
+          <span className={styles.selectedName}><b>{selected.label}</b> · {squareName(selected.x, selected.y)}</span>
+          {selectedEntry && <Movement entry={selectedEntry} locale={locale} inBar />}
           {canSeeSheet(selected) && <button type="button" className={styles.smallButton} aria-pressed={sheetId === selected.id}
             onClick={() => setSheetId(sheetId === selected.id ? null : selected.id)}>{t.sheet}</button>}
           {canMove(selected) ? <span className={styles.nudge}>
@@ -668,12 +668,12 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
             <button type="button" aria-label={t.moveUp} onClick={() => moveTo(selected, selected.x, selected.y - 1)}>↑</button>
             <button type="button" aria-label={t.moveDown} onClick={() => moveTo(selected, selected.x, selected.y + 1)}>↓</button>
             <button type="button" aria-label={t.moveRight} onClick={() => moveTo(selected, selected.x + 1, selected.y)}>→</button>
-          </span> : <small>{t.cannotMove}</small>}
+          </span> : <small className={styles.selectedNote(true)}>{t.cannotMove}</small>}
           {canMove(selected) && tokenVision(selected) && <span className={styles.nudge}>
             <button type="button" aria-label={t.turnLeft} title={t.turnLeft} onClick={() => turn(selected, -1)}>⟲</button>
             <button type="button" aria-label={t.turnRight} title={t.turnRight} onClick={() => turn(selected, 1)}>⟳</button>
           </span>}
-          {tokenVision(selected) && <small className={styles.facingLabel}>{t.facing} {t.directions[selected.facing ?? 0]}</small>}
+          {tokenVision(selected) && <small className={styles.selectedNote(false)}>{t.facing} {t.directions[selected.facing ?? 0]}</small>}
           {map.isDm && <VisionPicker token={selected} locale={locale} send={send} />}
           {canMove(selected) && walls.filter((wall) => wall.door && nearDoor(selected, wall)).map((door) => <button key={`${door.x1},${door.y1},${door.x2},${door.y2}`}
             type="button" className={styles.smallButton} onClick={() => onWallPick(door)}>
@@ -698,7 +698,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
           {(map.isDm ? map.heroes : mine).length ? <ul className={styles.list}>
             {(map.isDm ? map.heroes : mine).map((hero) => {
               const token = heroToken(hero.id);
-              return <li key={hero.id}>
+              return <li key={hero.id} className={styles.listItem()}>
                 <span className={styles.legendDot} style={{ background: heroColor.get(hero.id) }} aria-hidden="true" />
                 <span className={styles.itemName}>{hero.name}{token && <small>{t.onMap(squareName(token.x, token.y))}</small>}</span>
                 {token ? <>
@@ -728,7 +728,7 @@ function CopyLink({ url, locale }: { url: string; locale: Locale }) {
   const t = text[locale];
   const [copied, setCopied] = useState(false);
   return <div className={styles.copy}>
-    <input readOnly value={url} aria-label={t.copy} onFocus={(event) => event.target.select()} />
+    <input readOnly className={styles.copyInput} value={url} aria-label={t.copy} onFocus={(event) => event.target.select()} />
     <button type="button" className={styles.smallButton} onClick={() => {
       navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2_000); }).catch(() => undefined);
     }}>{copied ? t.copied : t.copy}</button>
@@ -740,10 +740,10 @@ function VisionPicker({ token, locale, send }: { token: MapToken; locale: Locale
   const current = token.vision ?? (token.kind === "hero" ? DEFAULT_HERO_VISION : { range: 0, angle: 90 as VisionAngle });
   const set = (range: number, angle: VisionAngle) => void send([{ type: "update", tokenId: token.id, vision: { range, angle } }]);
   return <span className={styles.vision}>
-    <label>{t.vision}<select className={styles.sizeSelect} value={current.range} onChange={(event) => set(Number(event.target.value), current.angle)}>
+    <label>{t.vision}<select className={styles.visionSelect} value={current.range} onChange={(event) => set(Number(event.target.value), current.angle)}>
       {visionRanges.map((range) => <option key={range} value={range}>{range ? t.visionRange(range) : t.visionNone}</option>)}
     </select></label>
-    <label>{t.visionAngle}<select className={styles.sizeSelect} value={current.angle} disabled={!current.range} onChange={(event) => set(current.range, Number(event.target.value) as VisionAngle)}>
+    <label>{t.visionAngle}<select className={styles.visionSelect} value={current.angle} disabled={!current.range} onChange={(event) => set(current.range, Number(event.target.value) as VisionAngle)}>
       {VISION_ANGLES.map((angle) => <option key={angle} value={angle}>{t.angles[angle]}</option>)}
     </select></label>
   </span>;
@@ -827,9 +827,9 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
     <section>
       <h2>{t.monsters}</h2>
       <form className={styles.form} onSubmit={addMonster}>
-        <label className={styles.grow}>{t.monsterName}<input required maxLength={TOKEN_LABEL_MAX} value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label>{t.count}<input type="number" min={1} max={MAP_MAX_MONSTERS_PER_ADD} value={count} onChange={(event) => setCount(Math.max(1, Math.min(MAP_MAX_MONSTERS_PER_ADD, Number(event.target.value) || 1)))} /></label>
-        <label>{t.size}<select value={size} onChange={(event) => setSize(Number(event.target.value) as TokenSize)}>
+        <label className={styles.grow}>{t.monsterName}<input required className={styles.field} maxLength={TOKEN_LABEL_MAX} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label>{t.count}<input type="number" className={styles.number} min={1} max={MAP_MAX_MONSTERS_PER_ADD} value={count} onChange={(event) => setCount(Math.max(1, Math.min(MAP_MAX_MONSTERS_PER_ADD, Number(event.target.value) || 1)))} /></label>
+        <label>{t.size}<select className={styles.field} value={size} onChange={(event) => setSize(Number(event.target.value) as TokenSize)}>
           {([1, 2, 3, 4] as TokenSize[]).map((value) => <option key={value} value={value}>{t.sizes[value]}</option>)}
         </select></label>
         <button type="submit" className="button button-primary">{t.add}</button>
@@ -837,7 +837,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
       <label className={styles.check}><input type="checkbox" checked={hidden} onChange={(event) => setHidden(event.target.checked)} />{t.hiddenNew}</label>
       <div className={styles.form}>
         <label className={styles.grow}>{t.fromJournal}
-          <select value={encounterId} onChange={(event) => setEncounterId(event.target.value)} disabled={!encounters?.length}>
+          <select className={styles.field} value={encounterId} onChange={(event) => setEncounterId(event.target.value)} disabled={!encounters?.length}>
             <option value="">{encounters && !encounters.length ? t.noEncounters : t.pickEncounter}</option>
             {encounters?.map((encounter) => <option key={encounter.id} value={encounter.id}>{encounter.title}</option>)}
           </select>
@@ -848,7 +848,7 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
 
     <section>
       <h2>{t.onBoard}</h2>
-      {monsters.length ? <ul className={styles.list}>{monsters.map((token) => <li key={token.id} className={token.hidden ? styles.itemHidden : ""}>
+      {monsters.length ? <ul className={styles.list}>{monsters.map((token) => <li key={token.id} className={styles.listItem(Boolean(token.hidden))}>
         <span className={styles.legendDot} style={{ background: token.defeated ? defeatedColor : monsterColor }} aria-hidden="true" />
         <button type="button" className={styles.itemName} onClick={() => onSelect(token.id)}>{token.label}
           <small>{squareName(token.x, token.y)}{token.hidden ? ` · ${t.hiddenTag}` : ""}{token.defeated ? ` · ${t.defeatedTag}` : ""}{sight && !token.hidden && !tokenInSight(token, sight) ? ` · ${t.unseenTag}` : ""}</small></button>
@@ -865,8 +865,8 @@ function DmTools({ map, locale, send, onSelect, onSaved, playersAudience, wallTo
     <section>
       <h2>{t.grid}</h2>
       <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void send([{ type: "resize", cols, rows }]); }}>
-        <label>{t.columns}<input type="number" min={MAP_MIN_SIZE} max={MAP_MAX_SIZE} value={cols} onChange={(event) => setCols(Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Number(event.target.value) || MAP_MIN_SIZE)))} /></label>
-        <label>{t.rows}<input type="number" min={MAP_MIN_SIZE} max={MAP_MAX_SIZE} value={rows} onChange={(event) => setRows(Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Number(event.target.value) || MAP_MIN_SIZE)))} /></label>
+        <label>{t.columns}<input type="number" className={styles.number} min={MAP_MIN_SIZE} max={MAP_MAX_SIZE} value={cols} onChange={(event) => setCols(Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Number(event.target.value) || MAP_MIN_SIZE)))} /></label>
+        <label>{t.rows}<input type="number" className={styles.number} min={MAP_MIN_SIZE} max={MAP_MAX_SIZE} value={rows} onChange={(event) => setRows(Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Number(event.target.value) || MAP_MIN_SIZE)))} /></label>
         <button type="submit" className="button button-quiet" disabled={cols === map.state.cols && rows === map.state.rows}>{t.resize}</button>
       </form>
       <label className={styles.check}><input type="checkbox" checked={!map.state.gridHidden} onChange={(event) => void send([{ type: "settings", gridHidden: !event.target.checked }])} />{t.gridLines}</label>
@@ -933,10 +933,10 @@ function SavedMaps({ map, locale, onLoaded, playersAudience }: { map: BattleMapV
       const trimmed = name.trim();
       if (trimmed) void run(() => api<{ saves: MapSaveSummary[] }>(`${base}/saves`, { method: "POST", body: { name: trimmed } }), (data) => { setSaves(data.saves); setName(""); }, t.savedMap(trimmed));
     }}>
-      <label className={styles.grow}>{t.saveName}<input required maxLength={60} value={name} onChange={(event) => setName(event.target.value)} /></label>
+      <label className={styles.grow}>{t.saveName}<input required className={styles.field} maxLength={60} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <button type="submit" className="button button-primary" disabled={busy}>{busy ? t.saving : t.saveAction}</button>
     </form>
-    {saves && (saves.length ? <ul className={styles.list}>{saves.map((save) => <li key={save.id}>
+    {saves && (saves.length ? <ul className={styles.list}>{saves.map((save) => <li key={save.id} className={styles.listItem()}>
       <span className={styles.itemName}>{save.name}<small>{t.saveSummary(save, date(save.createdAt))}</small></span>
       <button type="button" className={styles.smallButton} disabled={busy} onClick={async () => {
         if (await confirm({ title: t.loadConfirm(save.name), message: t.keepCurrent, confirmLabel: t.load })) void run(() => api<{ map: BattleMapView }>(`${base}/saves/${save.id}${query}`, { method: "POST" }), (data) => onLoaded(data.map), t.loadedMap(save.name));

@@ -2,7 +2,7 @@
 
 import { Skeleton, SkeletonRegion, Spinner } from "./skeleton";
 import { track } from "@/lib/telemetry-client";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { translate, type Locale } from "@/lib/i18n";
 import {
   encounterBudget,
@@ -262,6 +262,15 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
   const managedCampaigns = campaigns.filter((campaign) => campaign.canManage);
   const numberLocale = locale === "es" ? "es-ES" : "en-US";
 
+  // Stacked layout (phones, narrow windows): the proposals sit below the long form, so bring them into view.
+  const resultsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const results = resultsRef.current;
+    if (!roll || !results || results.getBoundingClientRect().top < window.innerHeight * 0.6) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    results.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [roll]);
+
   function generate() {
     const results = suggestEncounters(pool, partyLevels, difficulty, Math.random, 4, roleProfile,
       source === "custom" ? { maxCreatures: 20 } : { maxKinds, maxCreatures: 12 });
@@ -286,7 +295,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
                     const ids = savedCharacters.filter((character) => character.campaignId === event.target.value).map((character) => character.id);
                     if (event.target.value) setSelectedCharacterIds(ids);
                   }}>
-                    <option value="">…</option>
+                    <option value="">{translate(locale, "encounter.party.fromCampaignPlaceholder")}</option>
                     {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
                   </select>
                 </label>}
@@ -321,7 +330,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
           <div className="control-heading"><span className="step-number">02</span><div><h2>{translate(locale, "encounter.difficulty.title")}</h2><p>{translate(locale, "encounter.difficulty.description")}</p></div></div>
           <div className="difficulty-options">
             {(["low", "moderate", "high"] as const).map((item) => (
-              <button type="button" key={item} aria-pressed={difficulty === item} className={`difficulty-option ${difficulty === item ? "selected" : ""}`} onClick={() => setDifficulty(item)}>
+              <button type="button" key={item} aria-pressed={difficulty === item} className="choice difficulty-option" onClick={() => setDifficulty(item)}>
                 <span className={`difficulty-dot ${item}`} /><b>{translate(locale, `encounter.difficulty.${item}`)}</b>
                 <small>{translate(locale, `encounter.difficulty.description.${item}`)}</small>
               </button>
@@ -332,14 +341,14 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
           <div className="control-heading"><span className="step-number">03</span><div><h2>{translate(locale, "encounter.monsters.title")}</h2><p>{translate(locale, "encounter.monsters.description")}</p></div></div>
           <div className="difficulty-options source-options">
             {(["srd", "both", "custom"] as const).map((item) => (
-              <button type="button" key={item} aria-pressed={source === item} className={`difficulty-option ${source === item ? "selected" : ""}`} onClick={() => setSource(item)}>
+              <button type="button" key={item} aria-pressed={source === item} className="choice difficulty-option" onClick={() => setSource(item)}>
                 <b>{translate(locale, `encounter.monsters.source.${item}`)}</b>
                 <small>{item === "custom" ? translate(locale, creatures.every((creature) => creature.source === "Ejemplo editable") ? "encounter.monsters.sampleCount" : "encounter.monsters.customCount", { count: creatures.length }) : srd ? translate(locale, "encounter.monsters.srdCount", { count: srd.monsters.length, edition: "Open5e" }) : translate(locale, "encounter.monsters.api")}</small>
               </button>
             ))}
           </div>
           {usesSrd && !srd && !srdError && <SkeletonRegion label={translate(locale, "encounter.monsters.loading")}><p className="encounter-footnote" aria-hidden="true"><Spinner />{translate(locale, "encounter.monsters.loading")}</p><div className="type-chips">{[64, 88, 72, 96, 80].map((width) => <Skeleton key={width} width={width} height={30} style={{ borderRadius: 999 }} />)}</div></SkeletonRegion>}
-          {usesSrd && srdError && <p className="encounter-footnote monster-error" role="alert">{translate(locale, "encounter.monsters.error")} {srdError} <button type="button" className="small-action" onClick={() => setSrdAttempt((attempt) => attempt + 1)}>{translate(locale, "encounter.monsters.retry")}</button></p>}
+          {usesSrd && srdError && <p className="encounter-footnote monster-error" role="alert">{translate(locale, "encounter.monsters.error")} {translate(locale, "encounter.monsters.errorHint")} <button type="button" className="small-action" onClick={() => setSrdAttempt((attempt) => attempt + 1)}>{translate(locale, "encounter.monsters.retry")}</button></p>}
           {usesSrd && srd && <>
             <p className="filter-label">{translate(locale, "encounter.monsters.books")}</p>
             <div className="type-chips" role="group" aria-label={translate(locale, "encounter.monsters.books")}>
@@ -365,7 +374,7 @@ export default function EncounterBuilder({ partyLevels: initialPartyLevels, crea
           {roll ? `↻ ${translate(locale, "encounter.regenerate")}` : `✦ ${translate(locale, "encounter.generate")}`}
         </button>
       </section>
-      <section className="encounter-results" aria-live="polite" aria-label={translate(locale, "encounter.resultsAria")}>
+      <section ref={resultsRef} className="encounter-results scroll-mt-4" aria-live="polite" aria-label={translate(locale, "encounter.resultsAria")}>
         <div className="results-heading"><div><p className="eyebrow">{translate(locale, "encounter.proposals")}{roll > 1 ? ` · ${translate(locale, "encounter.roll", { number: roll })}` : ""}</p><h2>{suggestions.length ? translate(locale, "encounter.optionsReady", { count: suggestions.length }) : translate(locale, "encounter.optionsWaiting")}</h2></div><span className="result-sigil" aria-hidden="true">✳︎</span></div>
         {!suggestions.length ? (
           <div className="results-empty"><div className="empty-orbit" aria-hidden="true">⚔︎</div><p>{translate(locale, "encounter.empty.prompt")}<br /><b>{translate(locale, "encounter.empty.action")}</b> {translate(locale, "encounter.empty.detail")}</p></div>

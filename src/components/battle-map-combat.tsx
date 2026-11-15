@@ -11,7 +11,7 @@ import {
   type CombatEntry, type Combatant, type MapOp, type MapState, type MapToken,
 } from "@/lib/battle-map";
 import { useConfirm } from "./feedback";
-import styles from "./battle-map.module.css";
+import { bm as styles } from "./battle-map-styles";
 
 export type Locale = "en" | "es";
 
@@ -156,7 +156,7 @@ function ActiveCombat({ state, isDm, locale, colorOf, canControl, selectedId, on
         const isActive = entry.tokenId === combat.active;
         const budget = movementBudget(entry);
         const tags = [token.hidden ? t.hidden : "", token.defeated ? t.defeated : ""].filter(Boolean).join(" · ");
-        return <li key={entry.tokenId} className={[isActive ? styles.orderActive : "", token.defeated ? styles.orderDefeated : "", token.hidden ? styles.itemHidden : ""].filter(Boolean).join(" ")}
+        return <li key={entry.tokenId} className={styles.orderItem({ active: isActive, defeated: Boolean(token.defeated), hidden: Boolean(token.hidden) })}
           aria-current={isActive ? "step" : undefined}>
           {isDm ? <InitiativeInput value={entry.initiative} label={t.initiativeOf(token.label)} onChange={(initiative) => void send([{ type: "combatant", tokenId: token.id, initiative }])} />
             : <span className={styles.initiative}>{entry.initiative}</span>}
@@ -171,7 +171,7 @@ function ActiveCombat({ state, isDm, locale, colorOf, canControl, selectedId, on
       })}
     </ol>
     {isDm && outside.length > 0 && <div className={styles.form}>
-      <label className={styles.grow}>{t.join}<select value={joinId} onChange={(event) => setJoinId(event.target.value)}>
+      <label className={styles.grow}>{t.join}<select className={styles.field} value={joinId} onChange={(event) => setJoinId(event.target.value)}>
         <option value="">{t.pickToken}</option>
         {outside.map((token) => <option key={token.id} value={token.id}>{token.label}</option>)}
       </select></label>
@@ -183,16 +183,16 @@ function ActiveCombat({ state, isDm, locale, colorOf, canControl, selectedId, on
 }
 
 /** "Movement: 15 ft of 30 ft · 15 ft left", with a bar. */
-export function Movement({ entry, locale }: { entry: Combatant; locale: Locale }) {
+export function Movement({ entry, locale, inBar = false }: { entry: Combatant; locale: Locale; inBar?: boolean }) {
   const t = text[locale];
   const used = entry.moved ?? 0;
   const budget = movementBudget(entry);
   const distance = (squares: number) => formatDistance(squares, locale);
-  if (budget === null) return <span className={styles.movement}>{t.movement}: {t.movedOnly(distance(used))}</span>;
+  if (budget === null) return <span className={styles.movement(inBar)}>{t.movement}: {t.movedOnly(distance(used))}</span>;
   const left = budget - used;
-  return <span className={styles.movement}>
+  return <span className={styles.movement(inBar)}>
     {t.movement}: {t.moved(distance(used), distance(budget))} · <b className={left < 0 ? styles.over : undefined}>{left >= 0 ? t.left(distance(left)) : t.over(distance(-left))}</b>
-    <span className={styles.moveBar} aria-hidden="true"><span style={{ width: `${budget ? Math.min(100, used / budget * 100) : 100}%` }} className={left < 0 ? styles.over : undefined} /></span>
+    <span className={styles.moveBar} aria-hidden="true"><span style={{ width: `${budget ? Math.min(100, used / budget * 100) : 100}%` }} className={styles.moveFill(left < 0)} /></span>
   </span>;
 }
 
@@ -293,7 +293,7 @@ function CombatSetup({ state, locale, colorOf, send, infoFor, onCancel }: Props 
       <tbody>{state.tokens.map((token) => {
         const current = row(token.id);
         const bonus = info[token.id]?.bonus;
-        return <tr key={token.id} className={current.include ? "" : styles.setupOut}>
+        return <tr key={token.id} className={current.include ? undefined : styles.setupOut}>
           <td><input type="checkbox" checked={current.include} aria-label={`${t.include}: ${token.label}`} onChange={(event) => change(token.id, { include: event.target.checked })} /></td>
           <th scope="row"><span className={styles.legendDot} style={{ background: colorOf(token) }} aria-hidden="true" /> {token.label}</th>
           <td>{bonus === undefined ? "…" : signedBonus(bonus)}</td>

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Character } from "@/lib/api-client";
 import { attackList } from "@/lib/character-sheet";
-import { featureList, sheetFor, signed, speciesTraits } from "@/lib/character-view";
+import { featureList, sheetFor, signed, speciesTraits, characterIdentity } from "@/lib/character-view";
 import { say, type Feature } from "@/lib/dnd2024";
 import { translate } from "@/lib/i18n";
 import { fetchMonsterCatalog, type MonsterListEntry } from "@/lib/monster-api";
@@ -13,7 +13,7 @@ import type { MapOp, MapToken } from "@/lib/battle-map";
 import MonsterSheet from "./monster-sheet";
 import { Spinner } from "./skeleton";
 import { formatDistance, type Locale } from "./battle-map-combat";
-import styles from "./battle-map.module.css";
+import { bm as styles } from "./battle-map-styles";
 
 const text = {
   en: {
@@ -86,9 +86,9 @@ function BestiaryLink({ token, locale, onPick }: { token: MapToken; locale: Loca
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
   return <div className={styles.sheetLink}>
-    <label className={styles.grow}>{t.link}<input type="search" value={query} placeholder={t.search} onChange={(event) => setQuery(event.target.value)} /></label>
+    <label className={styles.grow}>{t.link}<input type="search" className={styles.field} value={query} placeholder={t.search} onChange={(event) => setQuery(event.target.value)} /></label>
     {busy ? <p className={styles.empty}><Spinner /> {t.searching}</p> : results && (results.length ? <ul className={styles.list}>
-      {results.map((entry) => <li key={entry.index}>
+      {results.map((entry) => <li key={entry.index} className={styles.listItem()}>
         <span className={styles.itemName}>{entry.name}{entry.source && <small>{entry.source}</small>}</span>
         <button type="button" className={styles.smallButton} aria-label={t.pick(entry.name)} onClick={() => onPick(entry.index)}>✓</button>
       </li>)}
@@ -111,7 +111,8 @@ function HeroSheet({ character, locale }: { character: Character; locale: Locale
   const sheet = sheetFor(character);
   const build = character.build;
   const attacks = build && sheet ? attackList(build, sheet) : [];
-  const subtitle = [character.species, character.className, tr("character.levelPill", { level: character.level }).toLocaleLowerCase(locale)].filter(Boolean).join(" · ");
+  const identity = characterIdentity(character, locale);
+  const subtitle = [identity.species, identity.className, tr("character.levelPill", { level: character.level }).toLocaleLowerCase(locale)].filter(Boolean).join(" · ");
   const vitals: [string, string][] = sheet ? [
     [tr("character.acShort"), String(sheet.armorClass)],
     [tr("character.hpShort"), String(sheet.hitPoints)],

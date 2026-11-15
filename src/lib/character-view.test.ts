@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Character } from "./api-client";
-import { featureList, sheetFor, signed, speciesTraits, startingItems } from "./character-view";
+import { characterIdentity, featureList, sheetFor, signed, speciesTraits, startingItems } from "./character-view";
 import { classes, species } from "./dnd2024";
 import type { CharacterBuild } from "./character-sheet";
 
@@ -18,6 +18,12 @@ const character = (overrides: Partial<Character> = {}): Character => ({
 });
 
 describe("character view helpers", () => {
+  it("shows saved class, species and background in the current language", () => {
+    const saved = { className: "Fighter", species: "Dwarf", background: "Soldier" };
+    expect(characterIdentity(saved, "es")).toEqual({ className: "Guerrero", species: "Enano", background: "Soldado" });
+    expect(characterIdentity({ className: "Pícaro", species: "", background: "Hand-made" }, "en")).toEqual({ className: "Rogue", species: "", background: "Hand-made" });
+  });
+
   it("formats bonuses with a sign and a true minus", () => {
     expect(signed(3)).toBe("+3");
     expect(signed(0)).toBe("+0");
