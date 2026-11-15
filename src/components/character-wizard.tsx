@@ -18,6 +18,8 @@ import { speciesTraits } from "@/lib/character-view";
 import { chosenSubclassId, subclassLabel, unlockedFeatures } from "@/lib/levelup";
 import { findSubclass, subclassesFor } from "@/lib/subclasses";
 import type { BackgroundData, ClassData } from "@/lib/dnd2024";
+import { castingFor, cleanSpells, sheetSpells, slotRows, spellIssues, spellLevelName, spellsLeft } from "@/lib/spells";
+import SpellManager from "./spell-manager";
 import { wz as styles } from "./wizard-styles";
 
 export interface WizardResult {
@@ -39,7 +41,7 @@ type Props = {
 const copy = {
   en: {
     kicker: "Character creation, 2024 rules", create: "Forge a new adventurer", edit: "Revise your adventurer",
-    steps: ["Class", "Background", "Species", "Abilities", "Proficiencies", "Equipment", "Details", "Summary"],
+    steps: ["Class", "Background", "Species", "Abilities", "Proficiencies", "Spells", "Equipment", "Details", "Summary"],
     back: "Back", next: "Continue", save: "Save character", cancel: "Cancel", close: "Close creator", quickCreate: "Character on one page",
     stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
     classIntro: "Your class is the heart of your adventurer: it sets your Hit Points, proficiencies and core features.",
@@ -54,7 +56,9 @@ const copy = {
     chooseSize: "Choose your size", sizeHelp: { medium: "About 4 to 7 feet tall", small: "About 2 to 4 feet tall" },
     spellAbility: "Spellcasting ability for species spells", spellAbilityHelp: "Usually the one your class casts with.", classCasts: "your class",
     chooseSkill: (n: number) => n === 1 ? "Choose 1 skill" : `Choose ${n} skills`, chooseFeat: "Versatile: choose an Origin feat",
-    spellList: "Spell list", abilitiesIntro: "Generate your six scores, then apply your background's increases (maximum 20).",
+    spellList: "Spell list",
+    spellsIntro: "Choose the cantrips you know and the spells you start with prepared. Tap the “i” next to a spell to read what it does.",
+    spellsMissing: (cantrips: number, prepared: number) => `Still to choose: ${[cantrips ? `${cantrips} ${cantrips === 1 ? "cantrip" : "cantrips"}` : "", prepared ? `${prepared} ${prepared === 1 ? "spell" : "spells"}` : ""].filter(Boolean).join(" and ")}. You can continue and pick them later from the sheet.`, abilitiesIntro: "Generate your six scores, then apply your background's increases (maximum 20).",
     methods: { standard: "Standard array", pointBuy: "Point buy", rolled: "Roll 4d6" } as Record<AbilityMethod, string>,
     methodHelp: { standard: "Assign 15, 14, 13, 12, 10 and 8.", pointBuy: `Spend up to ${POINT_BUY_BUDGET} points; scores from 8 to 15.`, rolled: "Roll 4d6 six times, dropping the lowest die each time." } as Record<AbilityMethod, string>,
     suggest: "Suggest for my class", roll: "Roll the dice", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} points`,
@@ -75,6 +79,7 @@ const copy = {
     summaryIntro: "Review the sheet. Everything here is calculated from your choices.",
     ac: "Armor Class", hp: "Hit Points", initiative: "Initiative", proficiency: "Proficiency", passive: "Passive Perception", spellDc: "Spell save DC", spellAtk: "Spell attack",
     issues: {
+      cantrips: "You have more cantrips than your class allows.", prepared: "You have more prepared spells than your class allows.",
       lineage: "Choose a lineage or ancestry.", spellAbility: "Choose the ability for your species spells.", speciesSkills: "Choose the species skill.", speciesFeat: "Choose the Origin feat.",
       scores: "Assign valid scores for the chosen method.", roll: "Roll the dice to get your scores.", bonuses: "Apply the background increases.", classSkills: "Choose all class skills.",
       duplicateFeat: "Your background already grants that feat: choose another one (Magic Initiate only with another spell list).",
@@ -84,7 +89,7 @@ const copy = {
   },
   es: {
     kicker: "Creación de personaje, reglas 2024", create: "Forja un nuevo aventurero", edit: "Revisa tu aventurero",
-    steps: ["Clase", "Trasfondo", "Especie", "Características", "Competencias", "Equipo", "Detalles", "Resumen"],
+    steps: ["Clase", "Trasfondo", "Especie", "Características", "Competencias", "Conjuros", "Equipo", "Detalles", "Resumen"],
     back: "Atrás", next: "Continuar", save: "Guardar personaje", cancel: "Cancelar", close: "Cerrar creador", quickCreate: "Personaje en una página",
     stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
     classIntro: "La clase es el corazón de tu aventurero: define sus puntos de golpe, competencias y rasgos principales.",
@@ -99,7 +104,9 @@ const copy = {
     chooseSize: "Elige tu tamaño", sizeHelp: { medium: "Entre 1,2 y 2,1 m de altura", small: "Entre 0,6 y 1,2 m de altura" },
     spellAbility: "Característica para los conjuros de la especie", spellAbilityHelp: "Normalmente, la que usa tu clase para lanzar conjuros.", classCasts: "tu clase",
     chooseSkill: (n: number) => n === 1 ? "Elige 1 habilidad" : `Elige ${n} habilidades`, chooseFeat: "Versátil: elige una dote de origen",
-    spellList: "Lista de conjuros", abilitiesIntro: "Genera tus seis puntuaciones y aplica los aumentos del trasfondo (máximo 20).",
+    spellList: "Lista de conjuros",
+    spellsIntro: "Elige los trucos que conoces y los conjuros con los que empiezas preparados. Toca la «i» junto a un conjuro para leer qué hace.",
+    spellsMissing: (cantrips: number, prepared: number) => `Te quedan por elegir: ${[cantrips ? `${cantrips} ${cantrips === 1 ? "truco" : "trucos"}` : "", prepared ? `${prepared} ${prepared === 1 ? "conjuro" : "conjuros"}` : ""].filter(Boolean).join(" y ")}. Puedes continuar y elegirlos más tarde desde la hoja.`, abilitiesIntro: "Genera tus seis puntuaciones y aplica los aumentos del trasfondo (máximo 20).",
     methods: { standard: "Matriz estándar", pointBuy: "Compra por puntos", rolled: "Tirar 4d6" } as Record<AbilityMethod, string>,
     methodHelp: { standard: "Asigna 15, 14, 13, 12, 10 y 8.", pointBuy: `Gasta hasta ${POINT_BUY_BUDGET} puntos; puntuaciones de 8 a 15.`, rolled: "Tira 4d6 seis veces y descarta el dado más bajo cada vez." } as Record<AbilityMethod, string>,
     suggest: "Sugerir para mi clase", roll: "Tirar los dados", points: (spent: number) => `${spent} / ${POINT_BUY_BUDGET} puntos`,
@@ -120,6 +127,7 @@ const copy = {
     summaryIntro: "Revisa la ficha. Todo se calcula a partir de tus elecciones.",
     ac: "Clase de armadura", hp: "Puntos de golpe", initiative: "Iniciativa", proficiency: "Competencia", passive: "Percepción pasiva", spellDc: "CD de conjuros", spellAtk: "Ataque de conjuro",
     issues: {
+      cantrips: "Tienes más trucos de los que permite tu clase.", prepared: "Tienes más conjuros preparados de los que permite tu clase.",
       lineage: "Elige un linaje o ascendencia.", spellAbility: "Elige la característica para los conjuros de la especie.", speciesSkills: "Elige la habilidad de la especie.", speciesFeat: "Elige la dote de origen.",
       scores: "Asigna puntuaciones válidas para el método elegido.", roll: "Tira los dados para obtener tus puntuaciones.", bonuses: "Aplica los aumentos del trasfondo.", classSkills: "Elige todas las habilidades de clase.",
       duplicateFeat: "Tu trasfondo ya otorga esa dote: elige otra (Iniciado en la magia solo con otra lista de conjuros).",
@@ -128,6 +136,9 @@ const copy = {
     srd: "Datos de reglas del Manual del Jugador 2024 y del System Reference Document 5.2 (CC-BY-4.0).",
   },
 };
+
+const SPELLS_STEP = 5;
+const DETAILS_STEP = 7;
 
 const signed = (value: number) => `${value >= 0 ? "+" : "−"}${Math.abs(value)}`;
 
@@ -227,9 +238,12 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   const sizeOptions = speciesSizeOptions(sp);
   const beforeClass = new Set<SkillKey>([...bg.skills, ...speciesSkillsOf(build)]);
   const show = (target: number) => quick || step === target;
+  const spellProblems = spellIssues(build, level);
+  const casting = castingFor(build, level);
+  const missing = spellsLeft(build, level);
   const issues = quick
-    ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...(name.trim() ? [] : ["name"])])]
-    : [...stepIssues(build, step), ...(step === 6 && !name.trim() ? ["name"] : [])];
+    ? [...new Set([...c.steps.flatMap((_, index) => stepIssues(build, index)), ...spellProblems, ...(name.trim() ? [] : ["name"])])]
+    : [...stepIssues(build, step), ...(step === SPELLS_STEP ? spellProblems : []), ...(step === DETAILS_STEP && !name.trim() ? ["name"] : [])];
   const heading = (target: number) => quick && <h3 className={styles.sectionTitle}>{c.steps[target]}</h3>;
   const selectFor = (items: { id: string; name: { en: string; es: string } }[], value: string, onPick: (id: never) => void) =>
     <label className={styles.field}><select value={value} aria-label={c.steps[0]} onChange={(event) => (onPick as (id: string) => void)(event.target.value)}>
@@ -240,6 +254,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     if (classId === build.classId) return;
     // Level-up choices (Fighting Styles, Expertise, feats…) belong to the old class.
     update({ classId, classSkills: [], expertise: [], classEquipment: "A", useSubclass: true, subclassId: undefined, customSubclass: undefined, levelUps: undefined,
+      // Spells from feats or the species stay; the old class's cantrips and prepared spells go.
+      spells: cleanSpells({ ...build, classId, useSubclass: true, subclassId: undefined, spells: build.spells ? { ...build.spells, known: [], book: [], custom: build.spells.custom?.filter((entry) => entry.other) } : undefined }, level),
       ...(build.abilityMethod === "standard" ? { baseScores: suggestedAssignment(STANDARD_ARRAY, classId) } : {}) });
   }
   /** Skill picks that a new background or species already grants are dropped, so the player chooses others. */
@@ -294,7 +310,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
   }
   function finish() {
     // The stepper allows jumping ahead, so check every step before saving.
-    const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === 6 && !name.trim()));
+    const incomplete = c.steps.findIndex((_, index) => stepIssues(build, index).length > 0 || (index === SPELLS_STEP && spellProblems.length > 0) || (index === DETAILS_STEP && !name.trim()));
     if (incomplete >= 0) { setStep(incomplete); return; }
     // Level-ups above the chosen level no longer apply.
     // A pending roll used by this character now belongs to it, and the next character rolls fresh. One it didn't use stays pending.
@@ -302,7 +318,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     const usesPending = !!pending && pending.pool.join() === build.rolledPool?.join();
     if (usesPending && build.abilityMethod === "rolled") writePendingRoll(null);
     const kept = usesPending && build.abilityMethod !== "rolled" ? { ...build, rolledPool: undefined, rolledDice: undefined } : build;
-    onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...kept, levelUps: build.levelUps?.filter((entry) => entry.level <= level) } });
+    onSave({ name: name.trim(), level, notes: notes.trim(), build: { ...kept, levelUps: build.levelUps?.filter((entry) => entry.level <= level), spells: cleanSpells(kept, level) } });
   }
 
   const pool = build.abilityMethod === "standard" ? [...STANDARD_ARRAY] : build.rolledPool ?? [];
@@ -321,7 +337,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
     {!quick && <nav className={styles.steps} aria-label={c.stepOf(step + 1, c.steps.length)}>
       {c.steps.map((label, index) => <button type="button" key={label} className={styles.step} data-state={index === step ? "current" : index < step ? "done" : undefined}
         aria-current={index === step ? "step" : undefined} onClick={() => go(index)}>
-        <span>{index < step ? "✓" : ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][index]}</span>{label}
+        <span>{index < step ? "✓" : ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][index]}</span>{label}
       </button>)}
     </nav>}
 
@@ -501,8 +517,15 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         </fieldset>}
       </>}
 
-      {show(5) && <>
-        {heading(5)}
+      {show(SPELLS_STEP) && <>
+        {heading(SPELLS_STEP)}
+        {casting && <p className={styles.intro}>{c.spellsIntro}</p>}
+        <SpellManager locale={locale} build={build} level={level} value={build.spells} onChange={(spells) => update({ spells })} />
+        {casting && (missing.cantrips > 0 || missing.prepared > 0) && <p className={styles.note} role="status">{c.spellsMissing(missing.cantrips, missing.prepared)}</p>}
+      </>}
+
+      {show(6) && <>
+        {heading(6)}
         <p className={styles.intro}>{c.equipmentIntro}</p>
         {[{ title: `${c.classKit} · ${say(cls.name, locale)}`, options: cls.equipment, value: build.classEquipment, set: (id: string) => update({ classEquipment: id as CharacterBuild["classEquipment"] }) },
           { title: `${c.backgroundKit} · ${say(bg.name, locale)}`, options: bg.equipment, value: build.backgroundEquipment, set: (id: string) => update({ backgroundEquipment: id as CharacterBuild["backgroundEquipment"] }) },
@@ -514,8 +537,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         <p className={styles.gold}>{c.totalGold}: <b>{sheet?.gold ?? 0} {locale === "es" ? "po" : "GP"}</b></p>
       </>}
 
-      {show(6) && <>
-        {heading(6)}
+      {show(7) && <>
+        {heading(7)}
         <p className={styles.intro}>{c.detailsIntro}</p>
         <div className={styles.formGrid}>
           <label className={styles.field}>{c.name}<input autoFocus required maxLength={50} value={name} onChange={(event) => setName(event.target.value)} placeholder={c.namePlaceholder} /></label>
@@ -536,7 +559,7 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
         <label className={styles.field}>{c.notes}<textarea rows={3} maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
       </>}
 
-      {show(7) && sheet && <>
+      {show(8) && sheet && <>
         <p className={styles.intro}>{c.summaryIntro}</p>
         <article className={styles.summary}>
           <header><h3>{name || "—"}</h3><p>{[say(sp.lineages?.find((item) => item.id === build.lineageId)?.name, locale), say(sp.name, locale), say(cls.name, locale), `${locale === "es" ? "nivel" : "level"} ${sheet.level}`].filter(Boolean).join(" · ")}</p>
@@ -556,7 +579,8 @@ export default function CharacterWizard({ locale, initial, quick = false, onSave
               <h4>{c.features}</h4><p>{unlockedFeatures(build, level).map((feature) => say(feature.name, locale)).join(" · ")}</p>
               <h4>{c.traits}</h4><p>{speciesTraits(build).map((trait) => say(trait.name, locale)).join(" · ")}{sheet.darkvision ? ` · ${c.darkvision} ${sheet.darkvision} ${c.ft}` : ""}{sheet.speciesSpells ? ` · ${c.spellDc} ${sheet.speciesSpells.saveDc}, ${c.spellAtk} ${signed(sheet.speciesSpells.attack)}` : ""}</p>
               <h4>{c.feat}</h4><p>{sheet.feats.map((feat) => say(featInfo(feat).name, locale)).join(" · ")}</p>
-              {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)} · {say(cls.spellcasting.slots, locale)}</p></>}
+              {cls.spellcasting && <><h4>{c.spellcasting}</h4><p>{c.spellDc} {sheet.spellSaveDc} · {c.spellAtk} {signed(sheet.spellAttack ?? 0)}{casting ? ` · ${slotRows(casting, undefined).map((row) => `${spellLevelName(row.level, locale)}: ${row.total}`).join(", ")}` : ""}</p></>}
+              {sheetSpells(build.spells, locale).map((group) => <p key={group.level}><b>{spellLevelName(group.level, locale)}:</b> {group.spells.map((entry) => say(entry.name, locale)).join(" · ")}</p>)}
               <h4>{c.languages}</h4><p>{[locale === "es" ? "Común" : "Common", ...build.languages.map((index) => say(standardLanguages[index], locale))].join(", ")}</p>
               <h4>{c.totalGold}</h4><p>{sheet.gold} {locale === "es" ? "po" : "GP"} · {c.hitDie} {sheet.hitDice}</p>
             </section>

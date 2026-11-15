@@ -20,8 +20,8 @@ export const wz = {
   kicker: "m-0 mb-1.5 font-label text-sm tracking-[.02em] text-accent",
   close: "size-8 cursor-pointer rounded-full border border-line bg-transparent text-xl text-ink pointer-coarse:size-11 max-[650px]:size-11",
 
-  steps: "grid grid-cols-8 border-y border-line bg-paper/70 max-[820px]:grid-cols-4",
-  step: `grid cursor-pointer justify-items-center gap-1 border-0 border-r border-line bg-transparent px-1 py-2.5 font-body text-xs font-semibold text-muted last:border-r-0 hover:text-ink max-[820px]:nth-4:border-r-0 max-[820px]:nth-[-n+4]:border-b [&_span]:size-6.5 ${stepNumber} ${stepState}`,
+  steps: "grid grid-cols-[repeat(9,minmax(max-content,1fr))] overflow-x-auto border-y border-line bg-paper/70 max-[820px]:grid-cols-3",
+  step: `grid cursor-pointer justify-items-center gap-1 border-0 border-r border-line bg-transparent px-0.75 py-2.5 font-body text-xs font-semibold text-muted last:border-r-0 hover:text-ink max-[820px]:nth-[3n]:border-r-0 max-[820px]:nth-[-n+6]:border-b [&_span]:size-6.5 ${stepNumber} ${stepState}`,
 
   body: "px-6 pt-5 pb-2 max-[560px]:px-3.5 [&>label]:mt-3.5",
   intro: "m-0 mb-4 max-w-180 text-sm leading-relaxed text-muted italic",

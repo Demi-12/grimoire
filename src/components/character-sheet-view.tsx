@@ -7,6 +7,8 @@ import { findClass, say, skillKeys, standardLanguages, type Feature } from "@/li
 import { translate, type Locale } from "@/lib/i18n";
 import { MAX_LEVEL } from "@/lib/levelup";
 import { abilities, abilityModifier, proficiencyBonus } from "@/lib/rules";
+import type { SpellChoices } from "@/lib/spells";
+import CharacterSpells from "./character-spells";
 
 /* Tailwind class lists for the repeated pieces of the sheet. */
 const panel = "panel min-w-0 px-4 pt-3.5 pb-4";
@@ -31,6 +33,8 @@ type Props = {
   /** Only passed when the viewer may change the character. */
   onEdit?: () => void;
   onLevelUp?: () => void;
+  /** Saves the spells picked or the slots spent; only passed when the viewer may change the character. */
+  onSpells?: (spells: SpellChoices | undefined) => Promise<void>;
 };
 
 function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
@@ -40,7 +44,7 @@ function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
 }
 
 /** Everything the app knows about a character, readable on screen (the PDF sheet is separate). */
-export default function CharacterSheetView({ character, campaignName, locale, onBack, onExport, onEdit, onLevelUp }: Props) {
+export default function CharacterSheetView({ character, campaignName, locale, onBack, onExport, onEdit, onLevelUp, onSpells }: Props) {
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const sheet = sheetFor(character);
   const build = character.build;
@@ -128,8 +132,6 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.proficiencyLabel")}</span><b className={statValue}>{signed(sheet.proficiency)}</b></div>
             <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.passivePerception")}</span><b className={statValue}>{sheet.passivePerception}</b></div>
             {sheet.darkvision ? <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.darkvision")}</span><b className={statValue}>{sheet.darkvision}</b></div> : null}
-            {sheet.spellSaveDc ? <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.spellDc")}</span><b className={statValue}>{sheet.spellSaveDc}</b></div> : null}
-            {sheet.spellAttack !== undefined && sheet.spellSaveDc ? <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.spellAttack")}</span><b className={statValue}>{signed(sheet.spellAttack)}</b></div> : null}
           </div> : <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
             <div className={`${statBox} gap-0.5`}><span className={`${statLabel} uppercase`}>{t("character.proficiencyLabel")}</span><b className={statValue}>{signed(bonus)}</b></div>
           </div>}
@@ -142,6 +144,8 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <b className="font-display text-[15px] font-bold" title={t("character.sheetAttackBonus")}>{signed(attack.bonus)}</b>
             <span className="text-muted max-[650px]:col-span-full">{`${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}`}</span></li>)}</ul>
         </section>}
+
+        {build && <CharacterSpells character={character} locale={locale} scores={sheet?.scores ?? character.scores} onSave={onSpells} />}
 
         {features.length > 0 && <section className={panel} aria-labelledby="sheet-features">
           <h3 id="sheet-features" className={panelTitle}>{t("character.sheetFeatures")}</h3>
