@@ -6,7 +6,7 @@ import { readJsonLimited } from "@/lib/request-body";
 import { rateLimiter, type RateLimitPolicy } from "@/lib/rate-limit";
 import { isAccountStatus, isSiteRole, parseAdminEmails, type AppUser, type SiteRole } from "@/lib/permissions";
 
-export const jsonError = (status: number, error: string) => NextResponse.json({ error }, { status });
+export const jsonError = (status: number, error: string, code?: string) => NextResponse.json(code ? { error, code } : { error }, { status });
 
 /**
  * The signed-in user with role and status read fresh from PostgreSQL, never from the cached
@@ -51,10 +51,12 @@ export async function requireUser(roles?: SiteRole[]): Promise<AppUser | NextRes
 export const readJson = readJsonLimited;
 
 /** Map a data-layer failure to an HTTP response. */
-export function dataErrorResponse(error: "not-found" | "forbidden" | "invalid" | "blocked" | "limit") {
+export function dataErrorResponse(error: "not-found" | "forbidden" | "invalid" | "blocked" | "turn" | "movement" | "limit") {
   if (error === "not-found") return jsonError(404, "Not found.");
   if (error === "forbidden") return jsonError(403, "You don't have permission for that.");
-  if (error === "blocked") return jsonError(409, "A wall or a closed door is in the way.");
+  if (error === "blocked") return jsonError(409, "A wall or a closed door is in the way.", "blocked");
+  if (error === "turn") return jsonError(409, "It isn't this creature's turn.", "turn");
+  if (error === "movement") return jsonError(409, "That's further than this creature can move this turn.", "movement");
   if (error === "limit") return jsonError(409, "That's the most this campaign can keep.");
   return jsonError(400, "That change isn't valid.");
 }

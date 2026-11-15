@@ -3,18 +3,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import Link from "next/link";
 import { track } from "@/lib/telemetry-client";
-import { api, ApiError, type SavedEncounter } from "@/lib/api-client";
+import { api, ApiError, type Character, type SavedEncounter } from "@/lib/api-client";
 import type { MapSaveSummary } from "@/lib/battle-map-data";
 import {
-  applyMapOps, blockingEdges, canControlToken, columnName, currentSight, exploredCells, facingScreenAngle, nearDoor, rowsForImage, squareName,
+  applyMapOps, blockingEdges, canControlToken, columnName, combatantOf, currentSight, exploredCells, facingScreenAngle, movementBudget, movementSteps, nearDoor, pathLength, rowsForImage, squareName,
   tokenInSight, tokenSight, tokenVision,
   DEFAULT_HERO_VISION, MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX, VISION_ANGLES,
   type Facing, type MapHero, type MapOp, type MapWall, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@/lib/battle-map";
 import { useDocumentTitle } from "@/lib/use-document-title";
+import { fetchMonster, type MonsterStatBlock } from "@/lib/monster-api";
 import { rememberMap } from "@/lib/last-map";
 import { Spinner } from "./skeleton";
 import { useConfirm, useToast } from "./feedback";
+import CombatTracker, { combatInfo, formatDistance, Movement, type CombatInfo } from "./battle-map-combat";
+import TokenSheet from "./battle-map-sheet";
 import styles from "./battle-map.module.css";
 
 type Locale = "en" | "es";
@@ -79,6 +82,10 @@ const text = {
     deletedMap: (name: string) => `Saved map "${name}" deleted.`, newMapDone: "The table is clear.",
     noSaves: "No saved maps yet.", saveError: "That couldn't be done. A campaign keeps up to 20 saved maps.",
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} tokens · ${save.walls} walls${save.hasBackground ? " · picture" : ""} · ${date}`,
+    turn: "It isn't this hero's turn yet: wait for the DM to pass it on.", movement: "Not enough movement left this turn. Dash if you need more, or ask the DM.",
+    sheet: "Sheet", autoSheet: "Open the sheet when picking a token",
+    roundTurn: (round: number, name: string) => `Round ${round} · ${name}'s turn`, roundOnly: (round: number) => `Round ${round}`,
+    turnTag: "their turn", unreachable: "can't get there",
   },
   es: {
     back: "Campañas", kicker: "MAPA DE BATALLA", docTitle: (name: string) => `${name} · Mapa de batalla · Grimoire`, live: "En directo", connecting: "Conectando…", offline: "Reconectando…",
@@ -133,6 +140,10 @@ const text = {
     deletedMap: (name: string) => `Mapa guardado «${name}» borrado.`, newMapDone: "La mesa está vacía.",
     noSaves: "Aún no hay mapas guardados.", saveError: "No se pudo hacer. Una campaña guarda hasta 20 mapas.",
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} fichas · ${save.walls} muros${save.hasBackground ? " · imagen" : ""} · ${date}`,
+    turn: "Aún no es el turno de este héroe: espera a que el DM lo pase.", movement: "No te queda movimiento suficiente este turno. Usa Correr si necesitas más o pídeselo al DM.",
+    sheet: "Ficha", autoSheet: "Abrir la ficha al elegir una ficha del mapa",
+    roundTurn: (round: number, name: string) => `Ronda ${round} · turno de ${name}`, roundOnly: (round: number) => `Ronda ${round}`,
+    turnTag: "su turno", unreachable: "no puede llegar",
   },
 };
 
@@ -143,6 +154,8 @@ const heroColors = ["#2f6690", "#2e7d4f", "#7b4fa8", "#a8620f", "#16777a", "#a83
 const monsterColor = "#922610";
 const defeatedColor = "#6b6158";
 const visionRanges = [0, 2, 4, 6, 8, 12, 18, 24];
+/** Remembers whether picking a token opens its sheet. */
+const AUTO_SHEET_ITEM = "grimoire.map.autoSheet";
 
 /** URL of the map's background picture; the key makes every upload a new URL. */
 const backgroundUrl = (campaignId: string, key: string) => `/api/campaigns/${encodeURIComponent(campaignId)}/map/background?k=${encodeURIComponent(key)}`;
@@ -184,7 +197,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const t = text[locale];
   const [map, setMap] = useState<BattleMapView | null>(null);
   const [loadError, setLoadError] = useState<LoadError>("");
-  const [notice, setNotice] = useState<"" | "moveError" | "blocked" | "tooFar">("");
+  const [notice, setNotice] = useState<"" | "moveError" | "blocked" | "tooFar" | "turn" | "movement">("");
   const [wallTool, setWallTool] = useState<WallTool | null>(null);
   const [wallStart, setWallStart] = useState<Vertex | null>(null);
   const [hoverVertex, setHoverVertex] = useState<Vertex | null>(null);
@@ -195,6 +208,10 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [showCones, setShowCones] = useState(true);
+  const [sheetId, setSheetId] = useState<string | null>(null);
+  const [autoSheet, setAutoSheet] = useState(true);
+  const [characters, setCharacters] = useState<Map<string, Character> | null>(null);
+  const monsters = useRef(new Map<string, Promise<MonsterStatBlock | undefined>>());
   const svgRef = useRef<SVGSVGElement | null>(null);
   const tableRef = useRef<HTMLDivElement | null>(null);
   /** While our own changes are in flight, ignore server states that predate them (no snapping back). */
@@ -211,7 +228,40 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   useEffect(() => {
     const lang = document.documentElement.lang;
     setLocale(lang === "es" ? "es" : "en");
+    try { if (window.localStorage.getItem(AUTO_SHEET_ITEM) === "off") setAutoSheet(false); } catch { /* storage disabled */ }
   }, []);
+  function changeAutoSheet(on: boolean) {
+    setAutoSheet(on);
+    try { window.localStorage.setItem(AUTO_SHEET_ITEM, on ? "on" : "off"); } catch { /* storage disabled */ }
+  }
+
+  // The campaign's characters, for the heroes' sheets and initiative (fetched again when the party changes).
+  const heroKey = map?.heroes.map((hero) => hero.id).join(",") ?? null;
+  useEffect(() => {
+    if (heroKey === null) return;
+    let live = true;
+    api<{ characters: Character[] }>("/api/characters")
+      .then(({ characters: list }) => { if (live) setCharacters(new Map(list.map((character) => [character.id, character]))); })
+      .catch(() => { if (live) setCharacters(new Map()); });
+    return () => { live = false; };
+  }, [heroKey]);
+  const loadMonster = useCallback((slug: string) => {
+    let found = monsters.current.get(slug);
+    if (!found) {
+      found = fetchMonster(slug).catch(() => { monsters.current.delete(slug); return undefined; });
+      monsters.current.set(slug, found);
+    }
+    return found;
+  }, []);
+  const infoFor = useCallback(async (token: MapToken): Promise<CombatInfo> => combatInfo(
+    token, token.characterId ? characters?.get(token.characterId) : undefined, token.monsterSlug ? await loadMonster(token.monsterSlug) : undefined,
+  ), [characters, loadMonster]);
+
+  // Picking a token opens its sheet; so does the start of a turn the viewer runs (the DM's monsters, a player's hero).
+  useEffect(() => { if (selectedId && autoSheet) setSheetId(selectedId); }, [selectedId, autoSheet]);
+  const activeId = map?.state.combat?.active ?? null;
+  const activeMine = Boolean(map && activeId && (map.isDm || map.state.tokens.some((token) => token.id === activeId && token.kind === "hero" && map.heroes.some((hero) => hero.mine && hero.id === token.characterId))));
+  useEffect(() => { if (activeId && activeMine && autoSheet) setSheetId(activeId); }, [activeId, activeMine, autoSheet]);
 
   const receive = useCallback((next: BattleMapView, force = false) => {
     if (!force && pending.current.count > 0 && next.version <= pending.current.ignoreUpTo) return;
@@ -296,7 +346,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
     let temp = 0;
     const local = applyMapOps(map.state, ops, actor, map.heroes, () => `tmp-${Date.now()}-${temp++}`);
     // The walls this device knows are a subset of the server's, so a move blocked here is blocked there too.
-    if (!local.ok && local.error === "blocked") { setNotice("blocked"); return; }
+    if (!local.ok && (local.error === "blocked" || local.error === "turn" || local.error === "movement")) { setNotice(local.error); return; }
     if (local.ok) setMap({ ...map, state: local.state });
     pending.current.count += 1;
     pending.current.ignoreUpTo = Math.max(pending.current.ignoreUpTo, map.version);
@@ -307,7 +357,8 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       receive(saved);
     } catch (cause) {
       pending.current.count -= 1;
-      setNotice(cause instanceof ApiError && cause.status === 409 ? "blocked" : "moveError");
+      const code = cause instanceof ApiError && cause.status === 409 ? cause.code : undefined;
+      setNotice(code === "turn" || code === "movement" ? code : cause instanceof ApiError && cause.status === 409 ? "blocked" : "moveError");
       api<{ map: BattleMapView }>(`/api/campaigns/${encodeURIComponent(campaignId)}/map${query}`).then(({ map: fresh }) => receive(fresh, true)).catch(() => undefined);
     }
   }, [map, actor, campaignId, receive]);
@@ -332,6 +383,14 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const canMove = (token: MapToken) => canControlToken(actor, token, map.heroes);
   const width = GUTTER + state.cols * CELL;
   const height = GUTTER + state.rows * CELL;
+  const colorOf = (token: MapToken) => token.defeated ? defeatedColor : token.kind === "hero" ? heroColor.get(token.characterId ?? "") ?? heroColors[0] : monsterColor;
+  // Heroes' sheets are open to the whole table; monsters' stat blocks only to the DM.
+  const canSeeSheet = (token: MapToken) => token.kind === "hero" || map.isDm;
+  const combat = state.combat;
+  const activeToken = combat?.active ? state.tokens.find((token) => token.id === combat.active) : undefined;
+  const activeEntry = activeToken ? combatantOf(state, activeToken.id) : undefined;
+  const selectedEntry = selected ? combatantOf(state, selected.id) : undefined;
+  const sheetToken = sheetId ? state.tokens.find((token) => token.id === sheetId) : undefined;
 
   function svgPoint(clientX: number, clientY: number) {
     const svg = svgRef.current;
@@ -420,7 +479,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
     moveTo(token, token.x + step[0], token.y + step[1]);
   }
 
-  const tokenName = (token: MapToken) => `${token.label}, ${squareName(token.x, token.y)}${token.hidden ? ` (${t.hiddenTag})` : ""}${token.defeated ? ` (${t.defeatedTag})` : ""}`;
+  const tokenName = (token: MapToken) => `${token.label}, ${squareName(token.x, token.y)}${token.hidden ? ` (${t.hiddenTag})` : ""}${token.defeated ? ` (${t.defeatedTag})` : ""}${token.id === state.combat?.active ? ` (${t.turnTag})` : ""}`;
 
   // Big tokens first so small ones standing next to them stay clickable; the dragged one on top.
   const ordered = [...state.tokens].sort((a, b) => b.size - a.size || (a.id === drag?.id ? 1 : b.id === drag?.id ? -1 : 0));
@@ -452,6 +511,34 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
   const wallLine = (wall: MapWall) => ({ x1: GUTTER + wall.x1 * CELL, y1: GUTTER + wall.y1 * CELL, x2: GUTTER + wall.x2 * CELL, y2: GUTTER + wall.y2 * CELL });
   const doorName = (wall: MapWall) => `${t.door} ${wallSquare(wall, state.cols, state.rows)} (${wall.door === "open" ? t.doorOpen : t.doorClosed})`;
 
+  // Where the creature whose turn it is can still get to, round walls (each square 5 ft, diagonals too).
+  let reachPath = "";
+  const reachBudget = activeEntry ? movementBudget(activeEntry) : null;
+  if (activeToken && activeEntry && reachBudget !== null && !activeToken.defeated && reachBudget > (activeEntry.moved ?? 0)) {
+    const cells = new Set<string>();
+    for (const spot of movementSteps(state, activeToken, reachBudget - (activeEntry.moved ?? 0)).keys()) {
+      const [x, y] = spot.split(",").map(Number);
+      for (let dx = 0; dx < activeToken.size; dx++) for (let dy = 0; dy < activeToken.size; dy++) cells.add(`${x + dx},${y + dy}`);
+    }
+    reachPath = cellsPath(cells);
+  }
+  // While dragging a creature in the fight: how far the drop square is, and whether it has that much movement left.
+  let dragCost: { x: number; y: number; label: string; over: boolean } | null = null;
+  const dragged = drag?.moved ? state.tokens.find((token) => token.id === drag.id) : undefined;
+  const draggedEntry = dragged ? combatantOf(state, dragged.id) : undefined;
+  if (drag && dragged && draggedEntry) {
+    const x = clampCell(Math.round((drag.x - GUTTER) / CELL), dragged.size, state.cols);
+    const y = clampCell(Math.round((drag.y - GUTTER) / CELL), dragged.size, state.rows);
+    const path = pathLength(state, dragged, x, y);
+    const cost = path ?? (map.isDm ? Math.max(Math.abs(x - dragged.x), Math.abs(y - dragged.y)) : null);
+    const budget = movementBudget(draggedEntry);
+    dragCost = {
+      x: drag.x + dragged.size * CELL / 2, y: drag.y - 10,
+      label: cost === null ? t.unreachable : formatDistance(cost, locale),
+      over: cost === null || (budget !== null && (draggedEntry.moved ?? 0) + cost > budget),
+    };
+  }
+
   const boardStyle = { "--ratio": width / height, "--min-width": `${state.cols * 30 + 20}px` } as CSSProperties;
   const board = <svg ref={svgRef} className={styles.board} style={boardStyle} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={t.boardLabel(map.campaignName)}
     onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setDrag(null)}>
@@ -464,6 +551,7 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       ...Array.from({ length: state.rows + 1 }, (_, i) => `M${GUTTER} ${GUTTER + i * CELL}H${width}`),
     ].join("")} />}
     {cones.length > 0 && <g clipPath={`url(#grid-${map.campaignId})`} aria-hidden="true">{cones}</g>}
+    {reachPath && <path className={styles.reach} d={reachPath} aria-hidden="true" />}
     {walls.length > 0 && <g className={wallTool === "erase" ? styles.wallsErasing : styles.walls}>
       {walls.map((wall) => {
         const line = wallLine(wall);
@@ -490,13 +578,15 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       const top = dragging ? drag.y : GUTTER + token.y * CELL;
       const span = token.size * CELL;
       const radius = span / 2 - 4;
-      const fill = token.defeated ? defeatedColor : token.kind === "hero" ? heroColor.get(token.characterId ?? "") ?? heroColors[0] : monsterColor;
+      const fill = colorOf(token);
+      const acting = token.id === combat?.active;
       const mine = token.kind === "hero" && map.heroes.some((hero) => hero.id === token.characterId && hero.mine);
       const classes = [styles.token, wallTool ? styles.passThrough : "", dragging ? styles.dragging : "", token.hidden ? styles.hidden : "", token.id === selectedId ? styles.selected : "", canMove(token) ? styles.movable : ""].filter(Boolean).join(" ");
       return <g key={token.id} className={classes} style={{ transform: `translate(${left}px, ${top}px)` }}
         tabIndex={0} role="button" aria-label={tokenName(token)} aria-pressed={token.id === selectedId}
         onPointerDown={(event) => onTokenPointerDown(event, token)} onKeyDown={(event) => onTokenKey(event, token)}>
         <title>{tokenName(token)}</title>
+        {acting && <circle className={styles.activeRing} cx={span / 2} cy={span / 2} r={radius + 3} />}
         {token.id === selectedId && <circle className={styles.selectRing} cx={span / 2} cy={span / 2} r={radius + 3} />}
         <circle cx={span / 2} cy={span / 2} r={radius} fill={fill} className={mine ? styles.mineDisc : styles.disc} />
         <text className={styles.tokenText} x={span / 2} y={span / 2 + 1} style={{ fontSize: Math.max(15, Math.min(30, radius * 0.75)) }}>{initials(token)}</text>
@@ -518,12 +608,16 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       {hoverVertex && <line x1={GUTTER + wallStart.x * CELL} y1={GUTTER + wallStart.y * CELL} x2={GUTTER + hoverVertex.x * CELL} y2={GUTTER + hoverVertex.y * CELL} />}
       <circle cx={GUTTER + wallStart.x * CELL} cy={GUTTER + wallStart.y * CELL} r={7} />
     </g>}
+    {dragCost && <text className={dragCost.over ? `${styles.dragCost} ${styles.dragCostOver}` : styles.dragCost} x={dragCost.x} y={dragCost.y} aria-hidden="true">{dragCost.label}</text>}
   </svg>;
 
+  // In a fight, the table display lists everyone in initiative order with the one acting marked.
+  const rank = new Map(combat?.order.map((entry, index) => [entry.tokenId, index]) ?? []);
+  const legendTokens = combat ? [...state.tokens].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)) : state.tokens;
   const legend = <ul className={styles.legend} aria-label={t.legend}>
-    {state.tokens.map((token) => <li key={token.id} className={token.defeated ? styles.legendDefeated : ""}>
-      <span className={styles.legendDot} style={{ background: token.defeated ? defeatedColor : token.kind === "hero" ? heroColor.get(token.characterId ?? "") ?? heroColors[0] : monsterColor }} aria-hidden="true">{initials(token)}</span>
-      {token.label} <small>{squareName(token.x, token.y)}</small>
+    {legendTokens.map((token) => <li key={token.id} className={[token.defeated ? styles.legendDefeated : "", token.id === combat?.active ? styles.legendActive : ""].filter(Boolean).join(" ")}>
+      <span className={styles.legendDot} style={{ background: colorOf(token) }} aria-hidden="true">{initials(token)}</span>
+      {token.label} <small>{squareName(token.x, token.y)}{rank.has(token.id) ? ` · ${combat!.order[rank.get(token.id)!].initiative}` : ""}</small>
     </li>)}
   </ul>;
 
@@ -535,7 +629,9 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
       <main className={styles.tableMain} id="main">
         <h1 className="sr-only">{map.campaignName}</h1>
         <div className={styles.tableBar}>
-          <b>{map.campaignName}</b>{statusBadge}
+          <b>{map.campaignName}</b>
+          {combat && <span className={styles.tableTurn} aria-live="polite">{activeToken ? t.roundTurn(combat.round, activeToken.label) : t.roundOnly(combat.round)}</span>}
+          {statusBadge}
           <button type="button" className="button button-quiet" onClick={exitTable}>{t.exitTable}</button>
         </div>
         <div className={styles.tableBoard}>{board}</div>
@@ -564,6 +660,9 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
         {notice && <p className={styles.error} role="alert">{t[notice]}</p>}
         {selected && <div className={styles.selectedBar} aria-live="polite">
           <span><b>{selected.label}</b> · {squareName(selected.x, selected.y)}</span>
+          {selectedEntry && <Movement entry={selectedEntry} locale={locale} />}
+          {canSeeSheet(selected) && <button type="button" className={styles.smallButton} aria-pressed={sheetId === selected.id}
+            onClick={() => setSheetId(sheetId === selected.id ? null : selected.id)}>{t.sheet}</button>}
           {canMove(selected) ? <span className={styles.nudge}>
             <button type="button" aria-label={t.moveLeft} onClick={() => moveTo(selected, selected.x - 1, selected.y)}>←</button>
             <button type="button" aria-label={t.moveUp} onClick={() => moveTo(selected, selected.x, selected.y - 1)}>↑</button>
@@ -583,11 +682,17 @@ export default function BattleMap({ campaignId }: { campaignId: string }) {
         </div>}
         <div className={styles.boardOptions}>
           <label className={styles.check}><input type="checkbox" checked={showCones} onChange={(event) => setShowCones(event.target.checked)} />{t.showCones}</label>
+          <label className={styles.check}><input type="checkbox" checked={autoSheet} onChange={(event) => changeAutoSheet(event.target.checked)} />{t.autoSheet}</label>
         </div>
         <p className={styles.hint}>{t.howTo} {t.keysHint}</p>
       </div>
 
       <aside className={styles.panel} aria-label={map.isDm ? t.heroes : t.yourHeroes}>
+        <CombatTracker state={state} isDm={map.isDm} locale={locale} colorOf={colorOf} canControl={canMove} selectedId={selectedId}
+          onSelect={setSelectedId} send={send} infoFor={infoFor} />
+        {sheetToken && canSeeSheet(sheetToken) && <TokenSheet key={sheetToken.id} token={sheetToken} locale={locale} isDm={map.isDm} send={send}
+          character={sheetToken.characterId ? characters?.get(sheetToken.characterId) : undefined} charactersLoaded={characters !== null}
+          onClose={() => setSheetId(null)} />}
         <section>
           <h2>{map.isDm ? t.heroes : t.yourHeroes}</h2>
           {(map.isDm ? map.heroes : mine).length ? <ul className={styles.list}>

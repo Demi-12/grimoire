@@ -153,3 +153,74 @@
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tools small { color: var(--muted); font: 500 13px var(--font-label); }
 .tools [aria-pressed="true"] { color: #fff; background: var(--crimson); border-color: var(--crimson); }
+
+/* Fights: initiative order, turns and movement. */
+.combat { display: grid; gap: 10px; }
+.combatHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.combatHead h2 { flex: 1 1 140px; }
+.turnBanner { display: grid; gap: 6px; padding: 8px 10px; background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--gilt); font-size: 15px; }
+.turnTools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.turnTools [aria-pressed="true"] { color: #fff; background: var(--crimson); border-color: var(--crimson); }
+.inlineField { display: inline-flex; align-items: center; gap: 4px; font: 700 13px var(--font-label); }
+.inlineField small { color: var(--muted); font-weight: 500; }
+.movement { display: grid; gap: 4px; font: 500 14px var(--font-label); }
+.selectedBar .movement { flex: 1 1 180px; }
+.movement .over, .over { color: #a32a1d; }
+:global(:root[data-theme="dark"]) .movement .over, :global(:root[data-theme="dark"]) .over { color: #ff9c86; }
+.moveBar { display: block; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.moveBar > span { display: block; height: 100%; background: var(--gilt); }
+.moveBar > span.over { background: #c0392b; }
+.order { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.order li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); background: var(--paper); }
+.order .itemName[aria-pressed="true"] { text-decoration: underline; }
+.orderActive { border-color: var(--gilt) !important; box-shadow: inset 4px 0 0 var(--gilt); }
+.orderDefeated .itemName { text-decoration: line-through; opacity: .7; }
+.initiative { min-width: 32px; font: 700 16px var(--font-label); text-align: center; }
+.panel input.initiativeInput { width: 54px; min-height: 32px; padding: 4px 6px; font-size: 14px; }
+.setup { display: grid; gap: 10px; }
+.setupTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.setupTable th, .setupTable td { padding: 4px 3px; text-align: left; vertical-align: middle; }
+.setupTable thead th { color: var(--muted); font: 700 12px var(--font-label); }
+.setupTable tbody th { font-weight: 700; overflow-wrap: anywhere; }
+.setupTable input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--crimson); }
+.setupTable input.initiativeInput { width: 100%; min-width: 46px; }
+.setupOut th, .setupOut td:nth-child(3) { opacity: .55; }
+.activeRing { fill: none; stroke: var(--gilt); stroke-width: 5; stroke-dasharray: 9 6; pointer-events: none; animation: spin 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .activeRing { animation: none; } }
+.reach { fill: var(--gilt); fill-opacity: .24; pointer-events: none; }
+.dragCost { fill: #fff; stroke: #0b0911; stroke-width: 5px; paint-order: stroke; font: 700 18px var(--font-label); text-anchor: middle; pointer-events: none; }
+.dragCostOver { fill: #ffb4a3; }
+.tableTurn { flex: none; padding: 2px 10px; border: 2px solid var(--gilt); font: 700 16px var(--font-label); }
+.legendActive { font-weight: 700; outline: 2px solid var(--gilt); outline-offset: 2px; }
+
+/* The sheet of the picked token, next to the board. */
+.sheet { gap: 8px !important; }
+.sheetHead { display: flex; align-items: center; gap: 8px; }
+.sheetHead h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sheetBody { display: grid; gap: 10px; max-height: min(75vh, 900px); overflow: auto; overscroll-behavior: contain; }
+.monsterSheet { padding: 6px 4px; }
+.sheetLink { display: grid; gap: 8px; }
+.sheetLink label { display: grid; gap: 4px; font: 700 13px var(--font-label); }
+.heroSheet { display: grid; gap: 10px; font-size: 15px; }
+.heroSheet h3 { margin: 0; font: 700 var(--text-xs) var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.heroSub { margin: 0; font-weight: 700; }
+.heroSub small { display: block; color: var(--muted); font: 500 13px var(--font-label); }
+.vitals, .scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin: 0; }
+.scores { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.vitals > div, .scores > div { display: grid; gap: 2px; padding: 6px; text-align: center; background: var(--paper); border: 1px solid var(--line); }
+.vitals dt, .scores dt { color: var(--muted); font: 700 12px var(--font-label); overflow-wrap: anywhere; }
+.vitals dd, .scores dd { margin: 0; font: 700 17px var(--font-label); }
+.scores abbr { text-decoration: none; }
+.scores dd small { display: block; color: var(--muted); font: 500 12px var(--font-label); }
+.attacks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.attacks li { padding: 5px 8px; background: var(--paper); border: 1px solid var(--line); }
+.attacks span { color: var(--crimson); font-weight: 700; }
+.attacks small { display: block; color: var(--muted); font-size: 13px; }
+.heroLine { margin: 0; font-size: 14px; }
+.sheetDetails summary { cursor: pointer; font: 700 14px var(--font-label); min-height: 32px; display: flex; align-items: center; gap: 4px; }
+.sheetDetails summary small { color: var(--muted); font-weight: 500; }
+.sheetDetails dl { display: grid; gap: 6px; margin: 4px 0 0; }
+.sheetDetails dt { font-weight: 700; font-size: 14px; }
+.sheetDetails dd { margin: 0; color: var(--muted); font-size: 13px; }
+.sheetFull { color: var(--crimson); font: 700 14px var(--font-label); }
