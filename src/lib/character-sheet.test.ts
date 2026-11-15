@@ -74,7 +74,7 @@ describe("derived sheet", () => {
   it("blocks steps with missing choices", () => {
     expect(stepIssues({ ...fighter, classSkills: ["perception"] }, 4)).toContain("classSkills");
     expect(stepIssues({ ...fighter, speciesId: "elf", speciesSkills: [] }, 2)).toEqual(expect.arrayContaining(["lineage", "speciesSkills"]));
-    expect(stepIssues(fighter, 6)).toEqual([]);
+    expect(stepIssues(fighter, 7)).toEqual([]);
   });
 
   it("rejects skills granted twice or Expertise in a skill the character lacks", () => {

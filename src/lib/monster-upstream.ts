@@ -24,7 +24,7 @@ export class UpstreamError extends Error {
   }
 }
 
-async function getJson(path: string, cache: "day" | "none" = "day", timeoutMs = DETAIL_TIMEOUT_MS): Promise<{ status: number; body: unknown }> {
+export async function getJson(path: string, cache: "day" | "none" = "day", timeoutMs = DETAIL_TIMEOUT_MS): Promise<{ status: number; body: unknown }> {
   const upstream = await fetch(`${API_ROOT}${path}`, {
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(timeoutMs),

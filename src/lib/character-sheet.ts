@@ -8,6 +8,7 @@ import {
 import { effectsOf, type Effect } from "./effects";
 import { classFeatures, featInfo, SUBCLASS_LEVEL, subclassFeatures, type Feature, type FightingStyleId, type LevelFeatId, type Progression } from "./levelup-data";
 import { findBookSubclass } from "./subclasses";
+import type { SpellChoices } from "./spells";
 
 export type AbilityMethod = "standard" | "pointBuy" | "rolled";
 export type BonusMode = "plus2plus1" | "plus1x3";
@@ -73,6 +74,8 @@ export interface CharacterBuild {
   featSkills: SkillKey[];
   magicInitiateList?: MagicInitiateList;
   expertise: SkillKey[];
+  /** Cantrips, prepared spells and spent slots; absent on non-casters and on sheets saved before spells were tracked. */
+  spells?: SpellChoices;
   /** Two standard languages besides Common (indices into standardLanguages). */
   languages: number[];
   classEquipment: "A" | "B" | "C";
@@ -394,6 +397,6 @@ export function stepIssues(build: CharacterBuild, step: number): string[] {
         || build.expertise.some((skill) => !proficient.has(skill))) issues.push("expertise");
     }
   }
-  if (step === 6 && build.languages.length !== 2) issues.push("languages");
+  if (step === 7 && build.languages.length !== 2) issues.push("languages");
   return issues;
 }

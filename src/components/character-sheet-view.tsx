@@ -7,6 +7,8 @@ import { findClass, say, skillKeys, standardLanguages, type Feature } from "@/li
 import { translate, type Locale } from "@/lib/i18n";
 import { MAX_LEVEL } from "@/lib/levelup";
 import { abilities, abilityModifier, proficiencyBonus } from "@/lib/rules";
+import type { SpellChoices } from "@/lib/spells";
+import CharacterSpells from "./character-spells";
 import styles from "./character-sheet-view.module.css";
 
 type Props = {
@@ -19,6 +21,8 @@ type Props = {
   /** Only passed when the viewer may change the character. */
   onEdit?: () => void;
   onLevelUp?: () => void;
+  /** Saves the spells picked or the slots spent; only passed when the viewer may change the character. */
+  onSpells?: (spells: SpellChoices | undefined) => Promise<void>;
 };
 
 function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
@@ -28,7 +32,7 @@ function FeatureList({ items, locale }: { items: Feature[]; locale: Locale }) {
 }
 
 /** Everything the app knows about a character, readable on screen (the PDF sheet is separate). */
-export default function CharacterSheetView({ character, campaignName, locale, onBack, onExport, onEdit, onLevelUp }: Props) {
+export default function CharacterSheetView({ character, campaignName, locale, onBack, onExport, onEdit, onLevelUp, onSpells }: Props) {
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const sheet = sheetFor(character);
   const build = character.build;
@@ -115,8 +119,6 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <div className={styles.vital}><span>{t("character.proficiencyLabel")}</span><b>{signed(sheet.proficiency)}</b></div>
             <div className={styles.vital}><span>{t("character.passivePerception")}</span><b>{sheet.passivePerception}</b></div>
             {sheet.darkvision ? <div className={styles.vital}><span>{t("character.darkvision")}</span><b>{sheet.darkvision}</b></div> : null}
-            {sheet.spellSaveDc ? <div className={styles.vital}><span>{t("character.spellDc")}</span><b>{sheet.spellSaveDc}</b></div> : null}
-            {sheet.spellAttack !== undefined && sheet.spellSaveDc ? <div className={styles.vital}><span>{t("character.spellAttack")}</span><b>{signed(sheet.spellAttack)}</b></div> : null}
           </div> : <div className={styles.vitals}>
             <div className={styles.vital}><span>{t("character.proficiencyLabel")}</span><b>{signed(bonus)}</b></div>
           </div>}
@@ -129,6 +131,8 @@ export default function CharacterSheetView({ character, campaignName, locale, on
             <b title={t("character.sheetAttackBonus")}>{signed(attack.bonus)}</b>
             <span className={styles.muted}>{`${attack.dice}${attack.modifier ? signed(attack.modifier) : ""} ${say(attack.type, locale)}`}</span></li>)}</ul>
         </section>}
+
+        {build && <CharacterSpells character={character} locale={locale} scores={sheet?.scores ?? character.scores} onSave={onSpells} />}
 
         {features.length > 0 && <section className={styles.panel} aria-labelledby="sheet-features">
           <h3 id="sheet-features">{t("character.sheetFeatures")}</h3>

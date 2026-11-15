@@ -1,0 +1,41 @@
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 10px; }
+.head h3 { margin: 0 !important; }
+.word { font-size: 17px !important; line-height: 30px; }
+.help { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.link { border: 0; background: none; padding: 0; color: var(--crimson); font: 600 13px var(--font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.slots { margin-top: 14px; }
+.slotsHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.slots h4, .group h4 { margin: 0 0 4px; font: 600 var(--text-xs) var(--font-label); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.slots ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.slots li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 5px 0; border-bottom: 1px dotted var(--line); font-size: 15px; color: var(--ink); }
+.slots li:last-child { border-bottom: 0; }
+.slots small { font-size: var(--text-xs); color: var(--muted); }
+.pips { display: flex; flex-wrap: wrap; gap: 4px; }
+/* 28px targets with a smaller drawn circle, so slots are easy to hit on a phone. */
+.pip { position: relative; display: inline-block; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; }
+button.pip { cursor: pointer; }
+.pip::before { content: ""; position: absolute; inset: 5px; border: 2px solid var(--crimson); border-radius: 50%; background: var(--crimson); }
+.spent::before { background: transparent; border-color: var(--control-line, var(--muted)); }
+button.pip:hover::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--crimson) 30%, transparent); }
+
+.group { margin-top: 14px; }
+.group ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.group li { border-bottom: 1px dotted var(--line); }
+.group li:last-child { border-bottom: 0; }
+.spell { display: flex; align-items: baseline; gap: 4px 10px; width: 100%; padding: 8px 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.spell span { flex: 1; min-width: 0; font: 600 15px var(--font-display); overflow-wrap: anywhere; }
+.spell small { font-size: var(--text-xs); color: var(--muted); text-align: right; }
+.spell i { flex: none; width: 18px; text-align: center; font: 700 15px var(--font-display); font-style: normal; color: var(--crimson); }
+.spell:hover span { color: var(--crimson); }
+.group li > div { padding-inline: 0; border-top: 0; padding-top: 0; }
+
+/* The desktop layout zooms <html> (--ui-zoom), so viewport units are divided by it to stay inside the window. */
+.dialog { --zoom: var(--ui-zoom, 1); width: min(920px, calc(100vw / var(--zoom) - 24px)); max-width: none; max-height: calc(100dvh / var(--zoom) - 24px); margin: auto; padding: 0; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.dialog::backdrop { background: rgba(17, 14, 31, .55); }
+.dialogBox { display: flex; flex-direction: column; max-height: calc(100dvh / var(--zoom) - 26px); }
+.dialogBox header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.dialogBox h3 { margin: 0; font: 600 19px var(--font-display); color: var(--ink); }
+.close { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 20px; cursor: pointer; }
+.dialogBody { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
+.dialogBox footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }

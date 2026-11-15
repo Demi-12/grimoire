@@ -10,6 +10,8 @@ import {
   skillOptions, skillsFor, subclassLabel, withSubclass, type LevelStep, type SubclassPick,
 } from "@/lib/levelup";
 import { epicBoons, featInfo, type Feature, type LevelFeatId, type FightingStyleId } from "@/lib/levelup-data";
+import { castingFor, cleanSpells, sheetSpells, spellLevelName, spellsLeft, type SpellChoices } from "@/lib/spells";
+import SpellManager from "./spell-manager";
 import styles from "./character-wizard.module.css";
 import { subclassesFor, subclassTracked } from "@/lib/subclasses";
 import own from "./level-up.module.css";
@@ -30,12 +32,14 @@ const copy = {
   en: {
     kicker: "Level up", title: (name: string, level: number) => `${name} reaches level ${level}`, close: "Close level up", back: "Back", next: "Continue",
     confirm: "Confirm level up", cancel: "Cancel", stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
-    steps: { overview: "What's new", hp: "Hit points", subclass: "Subclass", asi: "Improvement", boon: "Epic Boon", fightingStyle: "Fighting Style", skills: "Skills", expertise: "Expertise", review: "Review" } as Record<string, string>,
+    steps: { overview: "What's new", hp: "Hit points", subclass: "Subclass", asi: "Improvement", boon: "Epic Boon", fightingStyle: "Fighting Style", skills: "Skills", expertise: "Expertise", spells: "Spells", review: "Review" } as Record<string, string>,
     reassure: "Nothing is saved until the last step, and you can go back at any time. If you're unsure, the options marked “Recommended” are safe picks for a new player.",
     newFeatures: "New abilities", noFeatures: "This level has no brand-new class feature. You still get more Hit Points, and the choices on the next steps.",
     proficiency: "Proficiency Bonus", proficiencyHelp: "Added to attacks, saves and skills you're trained in. It grows at levels 5, 9, 13 and 17.",
     numbers: "Numbers that grew", spellsTitle: "Your magic grows", cantrips: "Cantrips known", prepared: "Prepared spells", slots: "Spell slots", pact: (count: number, level: number) => `${count} slots of level ${level} (they recharge on a Short Rest)`,
-    spellHint: "Choose your new spells with your Dungeon Master or from your class list. Grimoire doesn't track the spell list yet, so note them in your sheet's notes.",
+    spellHint: "You'll choose your new spells in the Spells step of this guide.",
+    spellsIntro: "Pick the spells this level gives you. You can also swap one you already had for another from your list.",
+    spellsMissing: (cantrips: number, prepared: number) => `Still to choose: ${[cantrips ? `${cantrips} ${cantrips === 1 ? "cantrip" : "cantrips"}` : "", prepared ? `${prepared} ${prepared === 1 ? "spell" : "spells"}` : ""].filter(Boolean).join(" and ")}. You can continue and pick them later from the sheet.`,
     spellbookHint: "Wizards also copy two new spells into their spellbook every level.", subclassFeaturesTitle: "From your subclass",
     choicesAhead: "Coming up, you'll choose:", aheadNames: { subclass: "your subclass", asi: "an Ability Score Improvement or a feat", boon: "an Epic Boon", fightingStyle: "a Fighting Style", skills: "new skills", expertise: "Expertise skills" } as Record<string, string>,
     hpIntro: "Hit Points (HP) measure how much punishment you can take. Each level adds a bit more, plus your Constitution modifier. You can take the fixed average or roll your Hit Die.",
@@ -65,12 +69,14 @@ const copy = {
   es: {
     kicker: "Subir de nivel", title: (name: string, level: number) => `${name} llega al nivel ${level}`, close: "Cerrar subida de nivel", back: "Atrás", next: "Continuar",
     confirm: "Confirmar subida de nivel", cancel: "Cancelar", stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
-    steps: { overview: "Novedades", hp: "Puntos de golpe", subclass: "Subclase", asi: "Mejora", boon: "Don épico", fightingStyle: "Estilo de combate", skills: "Habilidades", expertise: "Pericia", review: "Revisión" } as Record<string, string>,
+    steps: { overview: "Novedades", hp: "Puntos de golpe", subclass: "Subclase", asi: "Mejora", boon: "Don épico", fightingStyle: "Estilo de combate", skills: "Habilidades", expertise: "Pericia", spells: "Conjuros", review: "Revisión" } as Record<string, string>,
     reassure: "No se guarda nada hasta el último paso y puedes volver atrás cuando quieras. Si dudas, las opciones marcadas como «Recomendado» son una apuesta segura para quien empieza.",
     newFeatures: "Nuevas habilidades", noFeatures: "Este nivel no trae una habilidad de clase nueva. Aun así ganas más puntos de golpe y tomas las decisiones de los siguientes pasos.",
     proficiency: "Bonificador por competencia", proficiencyHelp: "Se suma a ataques, salvaciones y habilidades en las que eres competente. Sube en los niveles 5, 9, 13 y 17.",
     numbers: "Números que crecen", spellsTitle: "Tu magia crece", cantrips: "Trucos conocidos", prepared: "Conjuros preparados", slots: "Espacios de conjuro", pact: (count: number, level: number) => `${count} espacios de nivel ${level} (se recuperan con un descanso corto)`,
-    spellHint: "Elige tus conjuros nuevos con tu Director de Juego o desde la lista de tu clase. Grimoire aún no guarda la lista de conjuros; anótalos en las notas de la ficha.",
+    spellHint: "Elegirás tus conjuros nuevos en el paso «Conjuros» de esta guía.",
+    spellsIntro: "Elige los conjuros que te da este nivel. También puedes cambiar uno que ya tenías por otro de tu lista.",
+    spellsMissing: (cantrips: number, prepared: number) => `Te quedan por elegir: ${[cantrips ? `${cantrips} ${cantrips === 1 ? "truco" : "trucos"}` : "", prepared ? `${prepared} ${prepared === 1 ? "conjuro" : "conjuros"}` : ""].filter(Boolean).join(" y ")}. Puedes continuar y elegirlos más tarde desde la hoja.`,
     spellbookHint: "Los magos además copian dos conjuros nuevos a su libro de conjuros cada nivel.", subclassFeaturesTitle: "De tu subclase",
     choicesAhead: "A continuación elegirás:", aheadNames: { subclass: "tu subclase", asi: "una mejora de característica o una dote", boon: "un don épico", fightingStyle: "un estilo de combate", skills: "habilidades nuevas", expertise: "habilidades con pericia" } as Record<string, string>,
     hpIntro: "Los puntos de golpe (PG) miden cuánto castigo aguantas. Cada nivel suma un poco más, además de tu modificador de Constitución. Puedes tomar el promedio fijo o tirar tu dado de golpe.",
@@ -123,7 +129,10 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
   // The build with the subclass being picked, so its level 3 features (and the choices they ask for) show up.
   const target = useMemo(() => withSubclass(build, pick), [build, pick]);
   const steps = useMemo(() => levelUpSteps(target, next), [target, next]);
-  const flow: ("overview" | LevelStep | "review")[] = ["overview", ...steps, "review"];
+  const casting = useMemo(() => castingFor(target, next), [target, next]);
+  const [spellPicks, setSpellPicks] = useState<SpellChoices | undefined>(build.spells);
+  const withSpells = useMemo(() => ({ ...target, spells: spellPicks }), [target, spellPicks]);
+  const flow: ("overview" | LevelStep | "spells" | "review")[] = ["overview", ...steps, ...(casting ? ["spells" as const] : []), "review"];
   const [asiKind, setAsiKind] = useState<"scores" | "feat">("scores");
   const [spread, setSpread] = useState<"plus2" | "plus1">("plus2");
   const [picks, setPicks] = useState<AbilityKey[]>([]);
@@ -153,12 +162,15 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
     ...(steps.includes("expertise") ? { expertise } : {}),
   };
   const issues = levelUpIssues(build, next, choice, pick);
-  const result = issues.length === 0 ? applyLevelUp(build, next, choice, pick) : null;
+  const leveled = issues.length === 0 ? applyLevelUp(build, next, choice, pick) : null;
+  // A Long Rest comes with the new level, so spent slots aren't carried over.
+  const result = leveled ? { ...leveled, spells: cleanSpells({ ...leveled, spells: spellPicks ? { ...spellPicks, used: undefined } : undefined }, next) } : null;
   const after = useMemo(() => result ? deriveSheet(result, next) : null, [result, next]);
 
   const gains = levelGains(target, next);
   const current = flow[position];
-  const blocked = current !== "overview" && current !== "review" && issues.includes(current);
+  const blocked = current !== "overview" && current !== "review" && current !== "spells" && issues.includes(current);
+  const missing = spellsLeft(withSpells, next);
   const last = position === flow.length - 1;
   const conModifier = abilityModifier(scoresBefore.con);
   const hpBonus = hpPerLevelBonus(target, next);
@@ -198,6 +210,7 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
     if (choice.fightingStyle && steps.includes("fightingStyle")) reviewRows.push([c.rows.style, say(featInfo(choice.fightingStyle).name, locale)]);
     if (steps.includes("skills") && newSkills.length) reviewRows.push([c.rows.skills, newSkills.map((skill) => translate(locale, `skill.${skill}`)).join(" · ")]);
     if (steps.includes("expertise") && expertise.length) reviewRows.push([c.rows.expertise, expertise.map((skill) => translate(locale, `skill.${skill}`)).join(" · ")]);
+    for (const group of sheetSpells(result.spells, locale)) reviewRows.push([spellLevelName(group.level, locale), group.spells.map((entry) => say(entry.name, locale)).join(" · ")]);
   }
 
   return <section className={styles.wizard} aria-labelledby="levelup-title">
@@ -321,6 +334,12 @@ export default function LevelUp({ locale, name, level, build, onSave, onCancel }
           {options.length ? <SkillChecks options={options} chosen={expertise} limit={limit} onChange={setExpertise} locale={locale} /> : <p className={styles.note}>{c.expertiseNone}</p>}
         </>;
       })()}
+
+      {current === "spells" && <>
+        <p className={styles.intro}>{c.spellsIntro}{build.classId === "wizard" ? ` ${c.spellbookHint}` : ""}</p>
+        <SpellManager locale={locale} build={target} level={next} value={spellPicks} onChange={setSpellPicks} />
+        {(missing.cantrips > 0 || missing.prepared > 0) && <p className={styles.note} role="status">{c.spellsMissing(missing.cantrips, missing.prepared)}</p>}
+      </>}
 
       {current === "review" && <>
         <p className={styles.intro}>{c.reviewIntro}</p>

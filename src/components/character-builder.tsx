@@ -13,6 +13,8 @@ import { attackList } from "@/lib/character-sheet";
 import { alignments, backgrounds, classes, findClass, say, skillKeys, species as speciesList, standardLanguages, type Feature, type Text } from "@/lib/dnd2024";
 import { MAX_LEVEL } from "@/lib/levelup";
 import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
+import { castingFor, sheetSpells, slotRows, spellFacts, spellLevelName, type SpellChoices } from "@/lib/spells";
+import { castingNumbers } from "./character-spells";
 import { track } from "@/lib/telemetry-client";
 import { useConfirm, useToast } from "./feedback";
 
@@ -201,6 +203,13 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
     }
   }
 
+  /** Spells and spent slots are changed from the open sheet, without going through the creator. */
+  async function saveSpells(record: Character, spells: SpellChoices | undefined) {
+    if (!record.build) return;
+    await onSave({ name: record.name, level: record.level, notes: record.notes, campaignId: record.campaignId, className: record.className, species: record.species,
+      background: record.background, scores: record.scores, build: { ...record.build, spells } }, record.id);
+  }
+
   function startLevelUp(record: Character) {
     setShowEditor(false); setWizard(null); setLevelingUp(record);
   }
@@ -247,7 +256,8 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
       ? <CharacterSheetView character={viewing} campaignName={campaignName(viewing.campaignId)} locale={locale}
           onBack={() => onSelect(null)} onExport={own ? () => exportSheet(own) : undefined}
           onEdit={own?.editable ? () => { onSelect(null); startEdit(own); } : undefined}
-          onLevelUp={own?.editable && own.build ? () => { onSelect(null); startLevelUp(own); } : undefined} />
+          onLevelUp={own?.editable && own.build ? () => { onSelect(null); startLevelUp(own); } : undefined}
+          onSpells={own?.editable && own.build ? (spells) => saveSpells(own, spells) : undefined} />
       : <div className="empty-state"><h2>{translate(locale, "character.notFoundTitle")}</h2><p>{translate(locale, "character.notFoundDescription")}</p>
           <button type="button" className="button button-primary" onClick={() => onSelect(null)}>‹ {translate(locale, "character.backToList")}</button></div>)}
     <div className={`section-heading builder-toolbar${listClass}`}>
@@ -308,13 +318,24 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
               <section className="sheet-section"><h4>{translate(locale, "character.sheetStory")}</h4><div className="sheet-writing-area short">{character.build?.appearance && <p className="sheet-filled">{character.build.appearance}</p>}</div></section>
               <section className="sheet-section"><h4>{translate(locale, "character.sheetTreasure")}</h4><div className="sheet-writing-area short">{sheet && <p className="sheet-filled">{sheet.gold} {locale === "es" ? "po" : "GP"}</p>}</div></section>
             </div>
-            <section className="sheet-section"><h4>{translate(locale, "character.sheetSpells")}</h4><div className="sheet-spell-lines">{Array.from({ length: 4 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div></section>
+            <section className="sheet-section"><h4>{translate(locale, "character.sheetSpells")}</h4>{(() => {
+              const casting = character.build ? castingFor(character.build, character.level) : null;
+              if (!casting) return null;
+              const numbers = castingNumbers(casting, (sheet?.scores ?? character.scores)[casting.ability], character.level);
+              return <p className="sheet-filled">{translate(locale, `ability.${casting.ability}`)} · {translate(locale, "character.spellDc")} {numbers.dc} · {translate(locale, "character.spellAttack")} {signed(numbers.attack)}
+                {" · "}{slotRows(casting, undefined).map((row) => `${spellLevelName(row.level, locale)}: ${"○".repeat(row.total)}`).join("  ")}</p>;
+            })()}<div className="sheet-spell-lines">{Array.from({ length: 4 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div></section>
             <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
           </section>
           {character.build && <section className="sheet-page sheet-page-traits">
             <header className="sheet-banner"><span aria-hidden="true">✧</span><p>{translate(locale, "character.sheetEdition")}</p><h2>{translate(locale, "character.sheetTraitsDetail")}</h2><small>{character.name}</small></header>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetFeatures")}</h4><PrintFeatureList items={featureList(character.build, character.level)} locale={locale} /></section>
             <section className="sheet-section"><h4>{translate(locale, "character.sheetSpeciesTraits")}</h4><PrintFeatureList items={speciesTraits(character.build)} locale={locale} /></section>
+            {sheetSpells(character.build.spells, locale).length > 0 && <section className="sheet-section"><h4>{translate(locale, "character.sheetSpellList")}</h4>
+              <PrintFeatureList locale={locale} items={sheetSpells(character.build.spells, locale).flatMap((group) => group.spells.map((entry) => {
+                const facts = (language: Locale) => [spellLevelName(entry.level, language), entry.spell ? spellFacts(entry.spell, language) : ""].filter(Boolean).join(" · ");
+                return { name: entry.name, tip: { en: facts("en"), es: facts("es") } };
+              }))} /></section>}
             <footer className="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{translate(locale, "character.sheetEdition")}</span></footer>
           </section>}
         </div>

@@ -213,7 +213,7 @@ export interface LevelGains {
   proficiency: { from: number; to: number } | null;
   scaling: Change[];
   spells: { before: SpellProgress | null; after: SpellProgress } | null;
-  /** Spellcasters remind the player to pick new spells; the app doesn't track spell lists. */
+  /** Whether the number of prepared spells grows at this level. */
   prepareSpells: boolean;
 }
 
