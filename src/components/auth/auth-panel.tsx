@@ -421,14 +421,13 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
   return (
     <section className="auth-panel auth-panel-account" aria-labelledby="auth-security-title">
       <header className="auth-head">
-        <p className="eyebrow"><span />{t.kicker}</p>
-        <h1 id="auth-security-title" className="auth-title">{t.settings}</h1>
+        <h2 id="auth-security-title" className="auth-title">{t.settings}</h2>
         <p className="auth-lede">{t.signedIn} <strong>{email}</strong></p>
       </header>
 
       <div className="auth-sections">
         <section className="auth-section">
-          <h2 className="auth-section-title">{t.passkeys}</h2>
+          <h3 className="auth-section-title">{t.passkeys}</h3>
           {passkeys.length === 0 ? <p className="auth-section-note">{t.noPasskeys}</p> : <ul className="auth-keys">
             {passkeys.map(key => <li key={key.id}>
               <span>{key.name || (locale === "es" ? "Clave de acceso" : "Passkey")}</span>
@@ -439,7 +438,7 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
         </section>
 
         <section className="auth-section">
-          <h2 className="auth-section-title">2FA · TOTP</h2>
+          <h3 className="auth-section-title">2FA · TOTP</h3>
           {twoFactorEnabled && <p className="auth-section-note auth-section-ok">{t.twoFactorOn}</p>}
           <Field id="security-2fa-password" label={t.enterPassword}>
             <PasswordInput id="security-2fa-password" name="password" showLabel={t.showPassword} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
@@ -463,7 +462,7 @@ function AccountSecurity({ locale, email, onSignOut }: { locale: Locale; email: 
         </section>
 
         <section className="auth-section">
-          <h2 className="auth-section-title">{t.changePassword}</h2>
+          <h3 className="auth-section-title">{t.changePassword}</h3>
           <form id="auth-change-password" className="auth-form" method="post" onSubmit={event => void changePassword(event)}>
             {/* Tells password managers which saved login to update. */}
             <input className="sr-only" type="email" name="username" autoComplete="username" value={email} readOnly tabIndex={-1} aria-hidden="true" />

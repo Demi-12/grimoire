@@ -2,7 +2,7 @@
 
 import { type Character } from "@/lib/api-client";
 import { attackList } from "@/lib/character-sheet";
-import { featureList, sheetFor, signed, speciesTraits, startingItems } from "@/lib/character-view";
+import { featureList, sheetFor, signed, speciesTraits, startingItems, characterIdentity } from "@/lib/character-view";
 import { findClass, say, skillKeys, standardLanguages, type Feature } from "@/lib/dnd2024";
 import { translate, type Locale } from "@/lib/i18n";
 import { MAX_LEVEL } from "@/lib/levelup";
@@ -39,7 +39,8 @@ export default function CharacterSheetView({ character, campaignName, locale, on
   const gear = build ? startingItems(build, locale) : [];
   const attacks = build && sheet ? attackList(build, sheet) : [];
   const languages = build ? [t("character.common"), ...build.languages.map((index) => standardLanguages[index]).filter(Boolean).map((language) => say(language, locale))] : [];
-  const subtitle = [character.species, character.className, character.background].filter(Boolean).join(" · ") || t("character.adventurer");
+  const identity = characterIdentity(character, locale);
+  const subtitle = [identity.species, identity.className, identity.background].filter(Boolean).join(" · ") || t("character.adventurer");
   const initial = character.name.slice(0, 1).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US");
 
   return <article className={styles.sheet} aria-labelledby="sheet-title">

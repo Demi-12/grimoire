@@ -183,7 +183,7 @@ export function newBuild(): CharacterBuild {
 }
 
 function Choice({ selected, onClick, children, disabled, title }: { selected: boolean; onClick: () => void; children: ReactNode; disabled?: boolean; title?: string }) {
-  return <button type="button" className={`${styles.choice} ${selected ? styles.selected : ""}`} aria-pressed={selected} onClick={onClick} disabled={disabled} title={title}>{children}</button>;
+  return <button type="button" className={`choice ${styles.choice}`} aria-pressed={selected} onClick={onClick} disabled={disabled} title={title}>{children}</button>;
 }
 
 function SkillPicker({ options, chosen, limit, locked, onChange, locale, lockedLabel }: {

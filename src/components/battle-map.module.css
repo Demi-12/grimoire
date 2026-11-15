@@ -57,21 +57,21 @@
 .tokenText { fill: #fff; font-family: var(--font-label); font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
 .cross { stroke: #fff; stroke-width: 4; stroke-linecap: round; pointer-events: none; }
 
-.selectedBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); font-size: 15px; }
+.selectedBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); font-size: 15px; border-radius: var(--radius-control); }
 .selectedBar > span:first-child { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
 .selectedBar small { flex: 1 1 180px; color: var(--muted); font-size: 13px; }
 .nudge { display: inline-flex; gap: 4px; }
 .nudge button { width: 44px; height: 44px; font-size: 20px; color: var(--ink); background: var(--paper); border: 1px solid var(--control-line); cursor: pointer; }
 .nudge button:hover { background: var(--surface); }
 .hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
-.error { margin: 10px 0 0; padding: 8px 10px; color: #762b23; background: rgba(131, 56, 45, .08); border: 1px solid #c99b83; font-size: 14px; }
+.error { margin: 10px 0 0; padding: 8px 10px; color: #762b23; background: rgba(131, 56, 45, .08); border: 1px solid #c99b83; font-size: 14px; border-radius: var(--radius-card); }
 :global(:root[data-theme="dark"]) .error { color: #ffc1a7; border-color: #8d5141; }
 
-.panel { display: grid; gap: 18px; padding: 14px; background: var(--surface); border: 1px solid var(--line); }
+.panel { display: grid; gap: 18px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .panel section { display: grid; gap: 10px; }
 .panel h2 { margin: 0; color: var(--accent); font: 700 var(--text-xs) var(--font-label); letter-spacing: .14em; text-transform: uppercase; }
 .list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); background: var(--paper); }
+.list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); background: var(--paper); border-radius: var(--radius-control); }
 .itemHidden { border-style: dashed !important; }
 .itemName { flex: 1; min-width: 120px; padding: 0; color: inherit; background: none; border: 0; font: 700 15px var(--font-body); text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .itemName small { display: block; color: var(--muted); font: 500 13px var(--font-label); }
@@ -81,7 +81,7 @@
 .empty { margin: 0; color: var(--muted); font-size: 14px; font-style: italic; }
 .form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .form label { display: grid; gap: 4px; font: 700 13px var(--font-label); }
-.panel input:not([type="checkbox"]), .panel select { min-height: 36px; padding: 6px 8px; color: var(--ink); background: var(--paper); border: 1px solid var(--control-line); border-radius: 2px; font: 500 15px var(--font-body); }
+.panel input:not([type="checkbox"]), .panel select { min-height: 36px; padding: 6px 8px; color: var(--ink); background: var(--paper); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: 500 15px var(--font-body); }
 .form input[type="number"] { width: 76px; }
 .grow { flex: 1 1 160px; }
 .grow input, .grow select { width: 100%; }
@@ -96,7 +96,7 @@
 .legendDot { display: inline-grid; place-items: center; flex: none; min-width: 22px; height: 22px; padding: 0 3px; border-radius: 11px; color: #fff; font: 700 12px var(--font-label); }
 
 .loading, .notice { max-width: 560px; margin: 15vh auto 0; text-align: center; font-size: 17px; }
-.notice { display: grid; gap: 14px; justify-items: center; padding: 24px; background: var(--surface); border: 1px solid var(--line); }
+.notice { display: grid; gap: 14px; justify-items: center; padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .notice p { margin: 0; }
 
 /* Table display: the board fills the screen of the device in the middle of the table. */
@@ -132,7 +132,7 @@
 .vision label { display: inline-flex; align-items: center; gap: 4px; font: 700 13px var(--font-label); }
 .vision select { min-height: 32px; padding: 4px 6px; color: var(--ink); background: var(--paper); border: 1px solid var(--control-line); font-size: 13px; }
 .boardOptions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
-.backgroundPreview { display: block; width: 100%; max-height: 140px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); }
+.backgroundPreview { display: block; width: 100%; max-height: 140px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-control); }
 
 /* Walls and doors. A wide transparent line under each one makes it easy to tap. */
 .walls, .wallsErasing { pointer-events: none; }

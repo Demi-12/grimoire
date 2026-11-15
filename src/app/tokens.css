@@ -16,6 +16,7 @@
  *   --gilt-text          gilt that is dark enough to carry text
  *   --leather            sidebar and banner base
  *   --danger             destructive actions (text and borders)
+ *   --field              background of text fields and selects
  *   --status-critical    errors in charts (fixed in both themes); always paired with an icon or words
  *   --good-text / --bad-text  text for a change that is good or bad news (>= 4.5:1 on --surface)
  */
@@ -35,6 +36,7 @@
   --good-text: #1f6b2a;
   --bad-text: #a3261f;
   --danger: #8a2318;
+  --field: #fbfaff;
   --on-accent: #f1edf8;
   --sunken: color-mix(in srgb, var(--accent) 7%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
@@ -56,6 +58,7 @@
   --good-text: #6fd38a;
   --bad-text: #ff9a8f;
   --danger: #ff9a8f;
+  --field: #120f22;
   --on-accent: #f3effb;
   --sunken: color-mix(in srgb, var(--accent) 6%, var(--surface));
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
