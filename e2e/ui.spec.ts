@@ -246,3 +246,44 @@ for (const theme of themes) {
     });
   }
 }
+
+// Phones print without blocking: `window.print()` returns at once, `afterprint` fires before the preview is drawn,
+// and the call only counts inside the tap. The stub does the same, then the page is laid out for print afterwards.
+for (const width of [360, 1280]) {
+  for (const route of ["/characters", "/characters/ch1"]) {
+    test(`export sheet to PDF from ${route}, ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await mockApi(page);
+      await page.addInitScript(() => {
+        localStorage.setItem("grimoire.locale.v1", "en");
+        const calls: { activeGesture: boolean | null; marked: boolean }[] = [];
+        Object.assign(window, { printCalls: calls });
+        window.print = () => {
+          calls.push({
+            activeGesture: navigator.userActivation ? navigator.userActivation.isActive : null,
+            marked: document.body.dataset.printingSheet === "true" && document.querySelector('.character-card[data-print-target="true"] .sheet-page') !== null,
+          });
+          setTimeout(() => window.dispatchEvent(new Event("afterprint")), 0);
+        };
+      });
+      await page.goto(route);
+      await page.getByRole("button", { name: "Export sheet · PDF" }).first().click();
+      expect(await page.evaluate(() => (window as unknown as { printCalls: unknown[] }).printCalls)).toEqual([{ activeGesture: true, marked: true }]);
+
+      // The preview is drawn after `afterprint`: the sheet must still be the only thing printed.
+      await page.waitForTimeout(300);
+      await page.emulateMedia({ media: "print" });
+      await expect(page.locator('.character-card[data-print-target="true"] .sheet-page').first()).toBeVisible();
+      await expect(page.locator(".workspace-header")).toBeHidden();
+      await expect(page.locator(".sidebar")).toBeHidden();
+      // Only the sheet: the card's buttons would spill onto an extra blank page.
+      await expect(page.getByRole("button", { name: "Export sheet · PDF" })).toHaveCount(0);
+
+      // Back on the page, the next touch puts it back as it was.
+      await page.emulateMedia({ media: "screen" });
+      await page.mouse.click(5, 400);
+      await expect(page.locator("body")).not.toHaveAttribute("data-printing-sheet", /.*/);
+      await expect(page.locator('[data-print-target="true"]')).toHaveCount(0);
+    });
+  }
+}

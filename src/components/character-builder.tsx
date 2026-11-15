@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { Spinner } from "./skeleton";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { abilities, abilityModifier, type AbilityKey, type AbilityScores, proficiencyBonus } from "@/lib/rules";
 import { translate, type Locale } from "@/lib/i18n";
 import type { Campaign, Character, CharacterDraft } from "@/lib/api-client";
@@ -145,14 +146,9 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   const confirm = useConfirm();
   const toast = useToast();
 
-  useEffect(() => {
-    const resetPrintState = () => {
-      delete document.body.dataset.printingSheet;
-      setPrintingId(null);
-    };
-    window.addEventListener("afterprint", resetPrintState);
-    return () => window.removeEventListener("afterprint", resetPrintState);
-  }, []);
+  /** Undoes the print-only state of the last export; set while that state is on. */
+  const endPrint = useRef<(() => void) | null>(null);
+  useEffect(() => () => endPrint.current?.(), []);
 
   useEffect(() => {
     if (!startCreating) return;
@@ -241,9 +237,24 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
   }
 
   function exportSheet(record: Character) {
+    endPrint.current?.();
+    // The sheet is marked before print() and print() runs inside the tap itself: phones ignore a print()
+    // that comes after the gesture, so it cannot wait for React to re-render on its own.
+    flushSync(() => setPrintingId(record.id));
     document.body.dataset.printingSheet = "true";
-    setPrintingId(record.id);
-    window.setTimeout(() => window.print(), 50);
+    const end = () => {
+      document.removeEventListener("pointerdown", end, true);
+      document.removeEventListener("keydown", end, true);
+      delete document.body.dataset.printingSheet;
+      setPrintingId(null);
+      endPrint.current = null;
+    };
+    endPrint.current = end;
+    // On phones print() returns at once and `afterprint` fires before the preview is drawn, so undoing it there
+    // printed the whole app instead of the sheet. The page goes back to normal on the next touch or key instead.
+    document.addEventListener("pointerdown", end, true);
+    document.addEventListener("keydown", end, true);
+    window.print();
   }
 
   const viewing = selectedId ? (allCharacters ?? characters).find((record) => record.id === selectedId) : undefined;
@@ -349,11 +360,11 @@ export default function CharacterBuilder({ locale, characters, campaigns, onSave
           <span>{translate(locale, `ability.${key}`).slice(0, 3).toLocaleUpperCase(locale === "es" ? "es-ES" : "en-US")}</span><b>{character.scores[key]}</b><small>{modifier >= 0 ? "+" : "−"}{Math.abs(modifier)}</small></div>; })}</div>
         {character.notes && <p className="character-notes">{character.notes}</p>}
         {/* Opening the sheet and levelling up come first; editing, exporting and deleting are a quieter second row, deleting set apart in red. */}
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5 print:hidden">
           {onSelect && <button className="button button-primary button-sm" type="button" onClick={() => onSelect(character.id)}>{translate(locale, "character.viewSheet")}</button>}
           {character.build && character.level < MAX_LEVEL && <button type="button" className="button button-quiet button-sm" onClick={() => startLevelUp(character)}>{translate(locale, "character.levelUp")}</button>}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0">
+        <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0 print:hidden">
           <button type="button" className="small-action" onClick={() => startEdit(character)}>{translate(locale, "character.edit")}</button>
           <button type="button" className="small-action export-action" onClick={() => exportSheet(character)}>{translate(locale, "character.exportPdf")}</button>
           <span className="flex-1" aria-hidden="true" />
