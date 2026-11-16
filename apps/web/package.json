@@ -1,0 +1,34 @@
+{
+  "name": "@grimoire/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Angular web app: the whole signed-in toolkit and the live battle map.",
+  "scripts": {
+    "ng": "ng",
+    "build": "ng build",
+    "dev": "ng serve",
+    "typecheck": "ngc -p tsconfig.app.json --noEmit"
+  },
+  "dependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "@better-auth/passkey": "1.7.10",
+    "@grimoire/shared": "workspace:*",
+    "better-auth": "1.7.10",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.7",
+    "@angular/cli": "^22.2.7",
+    "@angular/compiler-cli": "^22.2.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2"
+  }
+}
