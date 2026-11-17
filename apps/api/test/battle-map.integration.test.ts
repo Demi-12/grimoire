@@ -1,12 +1,13 @@
 /**
- * Runs the battle map data layer and its live notifications against a real PostgreSQL with the Liquibase
+ * Runs the battle map service and its live notifications against a real PostgreSQL with the Liquibase
  * schema applied. Skipped unless TEST_DATABASE_URL points at a disposable database, e.g.
  *   TEST_DATABASE_URL=postgres://postgres@localhost:5432/grimoire_test pnpm test
  * The test creates its own users and removes them (cascading) when it finishes.
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AppUser } from "../src/lib/permissions";
+import type { AppUser } from "@grimoire/shared/permissions";
+import type { MapService } from "../src/map/map.service.js";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -14,26 +15,27 @@ describe.skipIf(!url)("battle maps on PostgreSQL", () => {
   const tag = randomUUID().slice(0, 8);
   const mk = (name: string): AppUser => ({ id: `bm-${tag}-${name}`, name, email: `${name}-${tag}@example.test`, role: "user", status: "approved" });
   const dm = mk("dm"), player = mk("player"), stranger = mk("stranger");
-  let mapData: typeof import("../src/lib/battle-map-data");
-  let hub: typeof import("../src/lib/battle-map-hub");
-  let pool: typeof import("../src/lib/db").pool;
+  let mapData: MapService;
+  let hub: typeof import("../src/map/battle-map-hub.js");
+  let pool: typeof import("../src/database/db.js").pool;
   let campaignId: string;
   let heroId: string;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = url;
-    ({ pool } = await import("../src/lib/db"));
-    const data = await import("../src/lib/data");
-    mapData = await import("../src/lib/battle-map-data");
-    hub = await import("../src/lib/battle-map-hub");
+    ({ pool } = await import("../src/database/db.js"));
+    const campaigns = new (await import("../src/campaigns/campaigns.service.js")).CampaignsService();
+    const characters = new (await import("../src/characters/characters.service.js")).CharactersService(campaigns);
+    mapData = new (await import("../src/map/map.service.js")).MapService();
+    hub = await import("../src/map/battle-map-hub.js");
     for (const user of [dm, player, stranger]) {
       await pool.query('INSERT INTO "user" ("id", "name", "email", "role", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, now(), now())', [user.id, user.name, user.email, user.role, user.status]);
     }
-    const campaign = await data.createCampaign(dm, { name: `Map ${tag}`, description: "" });
+    const campaign = await campaigns.createCampaign(dm, { name: `Map ${tag}`, description: "" });
     if (!campaign.ok) throw new Error("campaign setup failed");
     campaignId = campaign.value.id;
     await pool.query('INSERT INTO "campaign_member" ("campaignId", "userId", "role") VALUES ($1, $2, \'player\')', [campaignId, player.id]);
-    const hero = await data.createCharacter(player, {
+    const hero = await characters.createCharacter(player, {
       name: "Lia", level: 3, className: "Rogue", species: "Elf", background: "", notes: "", campaignId,
       scores: { str: 10, dex: 16, con: 12, int: 10, wis: 12, cha: 10 },
     });

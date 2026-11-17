@@ -4,7 +4,7 @@ import { passkey } from "@better-auth/passkey";
 import { twoFactor } from "better-auth/plugins";
 import { sendAuthEmail } from "./auth-email.js";
 import { resetPasswordEmail } from "./auth-email-templates.js";
-import { countApprovedAdmins } from "../data/data.js";
+import { countApprovedAdmins } from "../admin/admin-count.js";
 import { pool } from "../database/db.js";
 import { parseAdminEmails } from "@grimoire/shared/permissions";
 

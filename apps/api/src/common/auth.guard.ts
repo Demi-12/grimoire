@@ -34,14 +34,23 @@ export class ApprovedGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const user = await getCurrentUser(context.switchToHttp().getRequest<AppRequest>());
-    if (!user) throw new ApiError(401, "Sign in to continue.");
-    if (user.status === "pending") throw new ApiError(403, "Your account is waiting for approval.");
-    if (user.status !== "approved") throw new ApiError(403, "Your account has been blocked.");
     const roles = this.reflector.getAllAndOverride<SiteRole[] | undefined>(ROLES_KEY, [context.getHandler(), context.getClass()]);
-    if (roles?.length && !roles.includes(user.role)) throw new ApiError(403, "You don't have permission for that.");
+    await requireApproved(context.switchToHttp().getRequest<AppRequest>(), roles);
     return true;
   }
+}
+
+/**
+ * The approved account behind a request (optionally with one of `roles`), or the 401/403 it is turned away
+ * with. What `@Approved()` runs; call it directly only where a route needs an account on one of its branches.
+ */
+export async function requireApproved(request: AppRequest, roles?: SiteRole[]): Promise<AppUser> {
+  const user = await getCurrentUser(request);
+  if (!user) throw new ApiError(401, "Sign in to continue.");
+  if (user.status === "pending") throw new ApiError(403, "Your account is waiting for approval.");
+  if (user.status !== "approved") throw new ApiError(403, "Your account has been blocked.");
+  if (roles?.length && !roles.includes(user.role)) throw new ApiError(403, "You don't have permission for that.");
+  return user;
 }
 
 /** Require an approved account (optionally with one of `roles`) for a controller or a handler. */

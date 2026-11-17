@@ -32,7 +32,7 @@ export function createWebMiddleware(directory = webDistDirectory()): RequestHand
   if (!existsSync(indexPath)) return [];
   const indexHtml = readFileSync(indexPath, "utf8");
 
-  const files = express.static(directory, {
+  const serveFiles = express.static(directory, {
     index: false,
     fallthrough: true,
     setHeaders(response, path) {
@@ -40,8 +40,14 @@ export function createWebMiddleware(directory = webDistDirectory()): RequestHand
     },
   });
 
+  const isApi = (request: Request) => request.path === "/api" || request.path.startsWith("/api/");
+
+  // The API is never served from disk: an /api path that happens to resolve to a file or folder of the build
+  // (`/api/x/..%2F..` is the build's root) must still reach the API, which answers it.
+  const files: RequestHandler = (request, response, next) => { if (isApi(request)) next(); else serveFiles(request, response, next); };
+
   const page = (request: Request, response: Response, next: NextFunction) => {
-    if ((request.method !== "GET" && request.method !== "HEAD") || request.path === "/api" || request.path.startsWith("/api/")) { next(); return; }
+    if ((request.method !== "GET" && request.method !== "HEAD") || isApi(request)) { next(); return; }
     // A missing file (old bundle name, typo) is a 404, not the app shell with a 200.
     if (extname(request.path)) { response.status(404).type("text/plain").send("Not found"); return; }
     const hasSessionCookie = getSessionCookie(fromNodeHeaders(request.headers)) !== null;

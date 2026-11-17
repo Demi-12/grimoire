@@ -1,13 +1,14 @@
 /**
- * Runs the homebrew data layer against a real PostgreSQL with the Liquibase schema applied.
+ * Runs the homebrew service against a real PostgreSQL with the Liquibase schema applied.
  * Skipped unless TEST_DATABASE_URL points at a disposable database, e.g.
  *   TEST_DATABASE_URL=postgres://postgres@localhost:5432/grimoire_test pnpm test
  * The test creates its own users and removes them (cascading) when it finishes.
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AppUser } from "../src/lib/permissions";
-import type { HomebrewInput } from "../src/lib/homebrew";
+import type { HomebrewInput } from "@grimoire/shared/homebrew";
+import type { AppUser } from "@grimoire/shared/permissions";
+import type { HomebrewService } from "../src/homebrew/homebrew.service.js";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -23,9 +24,9 @@ describe.skipIf(!url)("homebrew monsters on PostgreSQL", () => {
   const tag = randomUUID().slice(0, 8);
   const mk = (name: string, role: "admin" | "user" = "user"): AppUser => ({ id: `hb-${tag}-${name}`, name, email: `${name}-${tag}@example.test`, role, status: "approved" });
   const alice = mk("alice"), bob = mk("bob"), dave = mk("dave"), root = mk("root", "admin");
-  let data: typeof import("../src/lib/data");
-  let homebrew: typeof import("../src/lib/homebrew");
-  let pool: typeof import("../src/lib/db").pool;
+  let data: HomebrewService;
+  let homebrew: typeof import("@grimoire/shared/homebrew");
+  let pool: typeof import("../src/database/db.js").pool;
   let campaignId: string;
   let otherCampaignId: string;
 
@@ -46,14 +47,15 @@ describe.skipIf(!url)("homebrew monsters on PostgreSQL", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = url;
-    ({ pool } = await import("../src/lib/db"));
-    data = await import("../src/lib/data");
-    homebrew = await import("../src/lib/homebrew");
+    ({ pool } = await import("../src/database/db.js"));
+    const campaigns = new (await import("../src/campaigns/campaigns.service.js")).CampaignsService();
+    data = new (await import("../src/homebrew/homebrew.service.js")).HomebrewService();
+    homebrew = await import("@grimoire/shared/homebrew");
     for (const user of [alice, bob, dave, root]) {
       await pool.query('INSERT INTO "user" ("id", "name", "email", "role", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, now(), now())', [user.id, user.name, user.email, user.role, user.status]);
     }
-    const first = await data.createCampaign(alice, { name: `Mine ${tag}`, description: "" });
-    const second = await data.createCampaign(dave, { name: `Elsewhere ${tag}`, description: "" });
+    const first = await campaigns.createCampaign(alice, { name: `Mine ${tag}`, description: "" });
+    const second = await campaigns.createCampaign(dave, { name: `Elsewhere ${tag}`, description: "" });
     if (!first.ok || !second.ok) throw new Error("campaign setup failed");
     campaignId = first.value.id;
     otherCampaignId = second.value.id;

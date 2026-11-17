@@ -1,5 +1,9 @@
+/**
+ * Account backups: export everything the user owns, restore a backup file without duplicates, and the
+ * one-time import of data an old version kept in the browser. The file format lives in @grimoire/shared/backup.
+ */
+import { Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
-import { transaction } from "../database/db.js";
 import {
   BackupRestoreError,
   backupSections,
@@ -13,28 +17,15 @@ import {
   type RestoreResult,
   type SectionStore,
 } from "@grimoire/shared/backup";
-import { createCampaign, createCharacter, listCampaigns, listCharacters, listCreatures, listEncounters } from "./data.js";
-import type { AppUser, CreatureInput, EncounterInput } from "@grimoire/shared/permissions";
+import { canCreateCampaign, type AppUser, type CharacterInput, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
+import { CampaignsService } from "../campaigns/campaigns.service.js";
+import { EncountersService } from "../campaigns/encounters.service.js";
+import { CharactersService } from "../characters/characters.service.js";
+import { CreaturesService } from "../creatures/creatures.service.js";
+import { transaction } from "../database/db.js";
 
 const MAX_CREATURES_PER_USER = 500;
 const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
-
-/**
- * Everything the user owns, ready to download. Reuses the regular list queries, which already scope
- * rows to the viewer, and the section serializers whitelist fields (no ids of people, emails,
- * invites or tokens can reach the file).
- */
-export async function exportBackup(user: AppUser, now: Date = new Date()): Promise<BackupFile> {
-  const campaigns = (await listCampaigns(user)).filter((campaign) => campaign.ownerId === user.id);
-  const characters = (await listCharacters(user)).filter((character) => character.ownerId === user.id);
-  const creatures = await listCreatures(user);
-  const encounters = [];
-  for (const campaign of campaigns) {
-    const listed = await listEncounters(user, campaign.id);
-    if (listed.ok) encounters.push(...listed.value);
-  }
-  return serializeBackup({ campaigns, characters, creatures, encounters }, now);
-}
 
 type Db = Pick<PoolClient, "query">;
 
@@ -48,7 +39,7 @@ const section = (name: string) => {
 const noMap: IdMap = {};
 
 /** One store per registered section; add the store for a new section here. */
-function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
+function createStores(user: AppUser, db: Db, campaigns: CampaignsService, characters: CharactersService): Record<string, SectionStore> {
   let creatureTotal = 0;
   const encounterTotals = new Map<string, number>();
 
@@ -65,7 +56,7 @@ function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
         return found;
       },
       async create(item) {
-        const created = await createCampaign(user, item as { name: string; description: string }, db);
+        const created = await campaigns.createCampaign(user, item as { name: string; description: string }, db);
         if (!created.ok) throw new Error("Campaign could not be restored.");
         return created.value.id;
       },
@@ -90,7 +81,7 @@ function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
       async create(raw, idMap) {
         const item = raw as BackupCharacter;
         const campaignId = item.campaignId ? idMap.campaigns?.get(item.campaignId) ?? null : null;
-        const created = await createCharacter(user, { ...item, campaignId }, db);
+        const created = await characters.createCharacter(user, { ...item, campaignId }, db);
         if (!created.ok) throw new Error("Character could not be restored.");
         return created.value.id;
       },
@@ -98,7 +89,7 @@ function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
 
     creatures: {
       async existing() {
-        // Same lock as createCreature in data.ts, so a creature added meanwhile can't push the account past the limit.
+        // Same lock as createCreature in creatures.service.ts, so a creature added meanwhile can't push the account past the limit.
         await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`creature-limit:${user.id}`]);
         const rows = await db.query<{ id: string; name: string; xp: number; source: string; monsterSlug: string | null }>(
           'SELECT "id", "name", "xp", "source", "monsterSlug" FROM "creature" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
@@ -159,13 +150,76 @@ function createStores(user: AppUser, db: Db): Record<string, SectionStore> {
   };
 }
 
-/**
- * Restore a validated backup into the user's account in one transaction: all or nothing, and
- * serialized per user so two concurrent restores can't both create the same items.
- */
-export async function importBackup(user: AppUser, backup: ParsedBackup): Promise<RestoreResult> {
-  return transaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`backup-restore:${user.id}`]);
-    return runRestore(backup, createStores(user, client));
-  });
+@Injectable()
+export class BackupService {
+  constructor(
+    private readonly campaigns: CampaignsService,
+    private readonly characters: CharactersService,
+    private readonly creatures: CreaturesService,
+    private readonly encounters: EncountersService,
+  ) {}
+
+  /**
+   * Everything the user owns, ready to download. Reuses the regular list queries, which already scope
+   * rows to the viewer, and the section serializers whitelist fields (no ids of people, emails,
+   * invites or tokens can reach the file).
+   */
+  async exportBackup(user: AppUser, now: Date = new Date()): Promise<BackupFile> {
+    const campaigns = (await this.campaigns.listCampaigns(user)).filter((campaign) => campaign.ownerId === user.id);
+    const characters = (await this.characters.listCharacters(user)).filter((character) => character.ownerId === user.id);
+    const creatures = await this.creatures.listCreatures(user);
+    const encounters = [];
+    for (const campaign of campaigns) {
+      const listed = await this.encounters.listEncounters(user, campaign.id);
+      if (listed.ok) encounters.push(...listed.value);
+    }
+    return serializeBackup({ campaigns, characters, creatures, encounters }, now);
+  }
+
+  /**
+   * Restore a validated backup into the user's account in one transaction: all or nothing, and
+   * serialized per user so two concurrent restores can't both create the same items.
+   */
+  async importBackup(user: AppUser, backup: ParsedBackup): Promise<RestoreResult> {
+    return transaction(async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`backup-restore:${user.id}`]);
+      return runRestore(backup, createStores(user, client, this.campaigns, this.characters));
+    });
+  }
+
+  /**
+   * Copy what a user had saved in this browser into their account. Campaigns are imported only for
+   * DMs/admins; character ids from the browser are remapped to the new server ids.
+   */
+  async importLocalData(
+    user: AppUser,
+    characters: (CharacterInput & { localId: string })[],
+    campaigns: { name: string; description: string; characterIds: string[] }[],
+    creatures: CreatureInput[] = [],
+  ): Promise<{ characters: number; campaigns: number; creatures: number }> {
+    return transaction(async (client) => {
+      let creatureCount = 0;
+      for (const creature of creatures) {
+        if ((await this.creatures.createCreature(user, creature, client)).ok) creatureCount += 1;
+      }
+      const idMap = new Map<string, string>();
+      for (const character of characters) {
+        const created = await this.characters.createCharacter(user, { ...character, campaignId: null }, client);
+        if (created.ok) idMap.set(character.localId, created.value.id);
+      }
+      let campaignCount = 0;
+      if (canCreateCampaign(user)) {
+        for (const campaign of campaigns) {
+          const created = await this.campaigns.createCampaign(user, campaign, client);
+          if (!created.ok) continue;
+          campaignCount += 1;
+          const ids = campaign.characterIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id));
+          if (ids.length) {
+            await client.query('UPDATE "character" SET "campaignId" = $1 WHERE "id" = ANY($2::uuid[]) AND "ownerId" = $3', [created.value.id, ids, user.id]);
+          }
+        }
+      }
+      return { characters: idMap.size, campaigns: campaignCount, creatures: creatureCount };
+    });
+  }
 }

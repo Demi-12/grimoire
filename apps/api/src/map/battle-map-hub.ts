@@ -1,14 +1,16 @@
-import { Client } from "pg";
-import { BATTLE_MAP_CHANNEL } from "./battle-map-data.js";
-
 /**
  * Fan-out of "this campaign's map changed" to the open map streams of this process.
  *
- * Changes are announced with PostgreSQL NOTIFY (battle-map-data.ts), so every app instance hears them, not
+ * Changes are announced with PostgreSQL NOTIFY (map.service.ts), so every app instance hears them, not
  * only the one that saved the change. One dedicated connection per process LISTENs; it is opened with the
  * first stream and reconnects with backoff. After a reconnect every stream is told to re-read, since
  * notifications sent while the connection was down are lost.
  */
+import { Client } from "pg";
+
+/** PostgreSQL channel that carries the id of a campaign whose map just changed. */
+export const BATTLE_MAP_CHANNEL = "grimoire_battle_map";
+
 type Listener = () => void;
 
 interface Hub {

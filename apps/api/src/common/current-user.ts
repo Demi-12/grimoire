@@ -6,7 +6,7 @@ import type { Request } from "express";
 import { fromNodeHeaders } from "better-auth/node";
 import { isAccountStatus, isSiteRole, parseAdminEmails, type AppUser } from "@grimoire/shared/permissions";
 import { auth } from "../auth/auth.js";
-import { countApprovedAdmins } from "../data/data.js";
+import { countApprovedAdmins } from "../admin/admin-count.js";
 import { pool } from "../database/db.js";
 
 /** Express request once a guard has resolved its account (null: looked up, nobody signed in). */
