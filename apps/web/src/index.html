@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Grimoire · Your D&amp;D table</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Your Dungeons &amp; Dragons table, bound in a single book: characters, campaigns, encounters and a live battle map." />
+    <meta name="application-name" content="Grimoire" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Grimoire" />
+    <meta property="og:title" content="Grimoire · Your D&amp;D table" />
+    <meta property="og:description" content="Your Dungeons &amp; Dragons table, bound in a single book: characters, campaigns, encounters and a live battle map." />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e6e3ef" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#110e1f" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-icon.png" />
+    <link rel="preload" href="/fonts/alegreya-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/alegreya-sc-500-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/alegreya-sans-sc-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Must stay byte-for-byte THEME_INIT_SCRIPT (packages/shared/src/theme-init.ts): the CSP allows it by hash. -->
+    <script>(function(){var d=document.documentElement;try{var t=localStorage.getItem("grimoire.theme.v1");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}d.dataset.theme=t;var l=localStorage.getItem("grimoire.locale.v1");if(l!=="es"&&l!=="en"){l=(navigator.language||"").toLowerCase().indexOf("es")===0?"es":"en"}d.lang=l}catch(e){}})();</script>
+  </head>
+  <body>
+    <app-root></app-root>
+    <noscript>Grimoire needs JavaScript to run.</noscript>
+  </body>
+</html>

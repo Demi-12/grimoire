@@ -893,7 +893,9 @@ button {
     margin: 0 !important;
     padding: 0 !important;
   }
-  body[data-printing-sheet] .page-content > *:not(section[aria-labelledby="characters-title"]) {
+  /* Everything in the page except the characters section: what is not it, does not hold it and is not inside it.
+     (Written with :has() rather than a child selector because Angular's component elements sit in between.) */
+  body[data-printing-sheet] .page-content *:not(section[aria-labelledby="characters-title"]):not(:has(section[aria-labelledby="characters-title"])):not(section[aria-labelledby="characters-title"] *) {
     display: none !important;
   }
   body[data-printing-sheet] section[aria-labelledby="characters-title"] > .section-heading {

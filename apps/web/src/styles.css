@@ -1,18 +1,23 @@
 /*
  * Grimoire styles: Tailwind with the app's own theme.
  *
- *   tokens.css          colour variables, switched by <html data-theme="dark">
+ *   styles/fonts.css    the self-hosted Alegreya faces and their --f-* variables
+ *   styles/tokens.css   colour variables, switched by <html data-theme="dark">
  *   @theme below        maps them into Tailwind (bg-surface, text-accent, border-line, font-display, rounded-card…)
- *   ../styles/ui.css    shared components (button, card, page header, tabs, choice, segmented…) in the components layer
- *   ../styles/app.css   the rest of the screens' class-based styles, also in the components layer
+ *   styles/ui.css       shared components (button, card, page header, tabs, choice, segmented…) in the components layer
+ *   styles/app.css      the rest of the screens' class-based styles, also in the components layer
  *
  * Everything custom lives in a layer, so a Tailwind utility in a className always wins over it.
  * Dark mode: the `dark:` variant follows the theme toggle (data-theme), not only the OS setting.
  */
 @import "tailwindcss";
-@import "./tokens.css";
-@import "../styles/app.css" layer(components);
-@import "../styles/ui.css" layer(components);
+@import "./styles/fonts.css";
+@import "./styles/tokens.css";
+@import "./styles/app.css" layer(components);
+@import "./styles/ui.css" layer(components);
+
+/* Class names live in the templates and in the *-styles.ts class lists. */
+@source "./app";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -43,7 +48,7 @@
 }
 
 @theme {
-  /* Alegreya (self-hosted by next/font in layout.tsx, which sets the --f-* variables). */
+  /* Alegreya (self-hosted: styles/fonts.css declares the faces and sets the --f-* variables). */
   --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
   --font-body: var(--f-alegreya), Georgia, serif;
   --font-label: var(--f-alegreya-sans-sc), var(--f-alegreya-sans), sans-serif;

@@ -1,0 +1,113 @@
+<div [class]="sectionStack">
+  <header appPageHeader [title]="t('home.title')" [description]="summary()"></header>
+
+  <nav class="grid grid-cols-2 gap-3 max-[650px]:gap-2 min-[901px]:grid-cols-4" [attr.aria-label]="t('home.quick')">
+    <a [class]="primaryTile" routerLink="/characters/new">
+      <span [class]="glyphWell(true)"><svg appIcon="plus"></svg></span>
+      <span><b [class]="tileLabel">{{ t("home.createCharacter") }}</b><small [class]="tileNote + ' opacity-90'">{{ t("home.quick.createNote") }}</small></span>
+    </a>
+    <a [class]="tile" [routerLink]="mapShortcut().href">
+      <span [class]="glyphWell()"><svg appIcon="map"></svg></span>
+      <span><b [class]="tileLabel">{{ t("nav.map") }}</b><small [class]="tileNote + ' text-muted'">{{ mapShortcut().campaignName ?? t("home.quick.mapNone") }}</small></span>
+    </a>
+    <!-- On a phone Encounters already sits under "Run" in the bottom bar. -->
+    <a [class]="tile + ' max-[650px]:hidden'" routerLink="/encounters">
+      <span [class]="glyphWell()"><svg appIcon="encounters"></svg></span>
+      <span><b [class]="tileLabel">{{ t("nav.encounters") }}</b><small [class]="tileNote + ' text-muted'">{{ t("home.quick.encountersNote") }}</small></span>
+    </a>
+    <a [class]="tile" routerLink="/campaigns">
+      <span [class]="glyphWell()"><svg appIcon="campaigns"></svg></span>
+      <span><b [class]="tileLabel">{{ t("nav.campaigns") }}</b><small [class]="tileNote + ' text-muted'">{{ t("home.quick.campaignsNote") }}</small></span>
+    </a>
+  </nav>
+
+  <div class="flex flex-wrap items-start gap-6">
+    <section class="flex min-w-0 flex-[3_1_440px] flex-col gap-3.5" aria-labelledby="home-characters">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="home-characters" [class]="sectionTitle">{{ t("home.characters") }}</h2>
+        @if (characters().length > 0) {
+          <div class="chips" role="group" [attr.aria-label]="t('home.filter')">
+            @for (id of filters; track id) {
+              <button type="button" class="chip" [attr.aria-pressed]="filter() === id" (click)="filter.set(id)">{{ t("home.filter." + id, { count: counts()[id] }) }}</button>
+            }
+          </div>
+        }
+      </div>
+
+      @if (characters().length === 0) {
+        <div [class]="firstRun">
+          <div><h3 [class]="sectionTitle">{{ t("home.firstTitle") }}</h3><p class="mt-1.5 mb-0 max-w-[46ch] leading-normal text-muted">{{ t("home.firstDescription") }}</p></div>
+          <a class="button button-primary" routerLink="/characters/new">✦ {{ t("home.createCharacter") }}</a>
+        </div>
+      } @else {
+        @if (visible().length === 0) { <p class="m-0 text-muted italic">{{ t("home.filterEmpty") }}</p> }
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+          @for (card of cards(); track card.character.id) {
+            <article class="panel flex flex-col gap-3.5 p-4.5">
+              <div class="flex items-start gap-3">
+                <span class="grid size-11 flex-none place-items-center rounded-full bg-sunken font-display text-[19px] font-medium text-accent" aria-hidden="true">{{ card.initial }}</span>
+                <div class="min-w-0 flex-1">
+                  <h3 [class]="cardTitle">{{ card.character.name }}</h3>
+                  <p class="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">{{ card.subtitle }}<span class="flex-none rounded-control border border-line px-1.5 py-0.5 font-label text-xs whitespace-nowrap">{{ t("character.levelPill", { level: card.character.level }) }}</span></p>
+                </div>
+              </div>
+              @if (card.stats; as stats) {
+                <dl class="m-0 grid grid-cols-3 gap-1.5 text-center">
+                  @for (stat of stats; track stat[0]) {
+                    <div class="rounded-control bg-sunken px-1 py-2">
+                      <dt class="font-label text-xs text-muted">{{ t(stat[0]) }}</dt><dd class="m-0 font-statblock text-lg font-bold text-ink">{{ stat[1] }}</dd>
+                    </div>
+                  }
+                </dl>
+              }
+              <dl class="m-0 grid grid-cols-6 gap-0.5 text-center font-statblock">
+                @for (ability of abilities; track ability.key) {
+                  <div class="flex flex-col gap-px">
+                    <dt class="font-label text-xs text-muted"><abbr [title]="t('ability.' + ability.key)">{{ upper(t("ability." + ability.key).slice(0, 3)) }}</abbr></dt>
+                    <dd class="m-0 text-sm font-bold text-ink">{{ card.character.scores[ability.key] }}</dd>
+                    <dd class="m-0 text-xs text-accent">{{ signedMod(card.character.scores[ability.key]) }}</dd>
+                  </div>
+                }
+              </dl>
+              <div class="mt-auto flex items-center justify-between gap-2.5 border-t border-line pt-3 font-statblock text-sm">
+                <span class="min-w-0 truncate text-muted">{{ card.campaignName }}</span>
+                <a class="inline-flex min-h-11 flex-none items-center font-bold text-accent" [routerLink]="['/characters', card.character.id]" [attr.aria-label]="t('home.openSheetAria', { name: card.character.name })">{{ t("home.openSheet") }}</a>
+              </div>
+            </article>
+          }
+          <a class="flex min-h-50 flex-col items-start justify-center gap-2 rounded-card border border-dashed border-control-line p-4.5 text-ink no-underline hover:border-accent" routerLink="/characters/new">
+            <span class="grid size-11 place-items-center rounded-full border border-dashed border-accent text-xl text-accent" aria-hidden="true"><svg appIcon="plus"></svg></span>
+            <b class="font-display text-xl font-medium">{{ t("home.newCharacter") }}</b>
+            <small class="text-sm leading-normal text-muted">{{ t("home.newCharacterNote") }}</small>
+          </a>
+        </div>
+        @if (visible().length > maxCards) { <a class="inline-flex min-h-11 items-center self-start font-statblock text-sm font-bold text-accent" routerLink="/characters">{{ t("home.seeAllCharacters") }}</a> }
+      }
+    </section>
+
+    <section class="flex min-w-0 flex-[1_1_240px] flex-col gap-3.5" aria-labelledby="home-campaigns">
+      <h2 id="home-campaigns" [class]="sectionTitle">{{ t("home.yourCampaigns") }}</h2>
+      @if (campaigns().length === 0) {
+        <div class="panel flex flex-col gap-2.5 p-4">
+          <p [class]="note">{{ t("home.noCampaigns") }}</p>
+          <div [class]="cardActions"><a [class]="cardAction" routerLink="/campaigns" fragment="campaign-name">{{ t("home.createCampaign") }}</a></div>
+        </div>
+      } @else {
+        @for (table of tables(); track table.campaign.id) {
+          <article class="panel flex flex-col gap-2.5 p-4">
+            <div>
+              <p [class]="roleLine(table.isDm)">{{ table.isDm ? (table.players === 1 ? t("home.roleDmOne") : t("home.roleDm", { count: table.players })) : upper(t("home.rolePlayer", { name: table.dm })) }}</p>
+              <h3 [class]="cardTitle">{{ table.campaign.name }}</h3>
+              @if (!table.isDm && table.heroes.length > 0) { <p [class]="note + ' mt-1'">{{ t("home.playingWith", { names: table.heroes.join(", ") }) }}</p> }
+            </div>
+            <div [class]="cardActions">
+              <a [class]="cardAction" [routerLink]="['/map', table.campaign.id]" [attr.aria-label]="t('home.campaignMapAria', { name: table.campaign.name })">{{ t("home.campaignMap") }}</a>
+              <a [class]="cardAction" routerLink="/campaigns" [fragment]="'campaign-' + table.campaign.id" [attr.aria-label]="t('home.campaignOpenAria', { name: table.campaign.name })">{{ t("home.campaignOpen") }}</a>
+            </div>
+          </article>
+        }
+      }
+      <p class="local-data-note">◈ {{ t("home.privacyDescription") }}</p>
+    </section>
+  </div>
+</div>

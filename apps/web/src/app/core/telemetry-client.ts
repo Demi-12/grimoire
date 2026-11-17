@@ -1,6 +1,4 @@
-"use client";
-
-import { isForeignScriptError, type ClientEventName, type EventProps } from "@/lib/analytics";
+import { isForeignScriptError, type ClientEventName, type EventProps } from "@grimoire/shared/analytics";
 
 /**
  * Fire-and-forget reporting to /api/telemetry. Nothing here may throw or block the UI: failures are dropped.
