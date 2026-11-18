@@ -1,0 +1,143 @@
+<!-- Features or traits with their summaries, for the detail page of the printed sheet. -->
+<ng-template #printFeatureList let-items>
+  <dl class="sheet-trait-list">
+    @for (item of items; track $index) { <div><dt>{{ item.name }}</dt>@if (item.tip) {<dd>{{ item.tip }}</dd>}</div> }
+  </dl>
+</ng-template>
+
+<section aria-labelledby="characters-title">
+  @if (selectedId() && onSelect()) {
+    @if (viewing(); as viewing) {
+      <app-character-sheet-view [character]="viewing" [campaignName]="campaignName(viewing.campaignId)"
+        [onBack]="back" [onExport]="own() ? exportOwn : undefined"
+        [onEdit]="own()?.editable ? editOwn : undefined"
+        [onLevelUp]="own()?.editable && own()?.build ? levelUpOwn : undefined"
+        [onSpells]="own()?.editable && own()?.build ? spellsOwn : undefined" />
+    } @else {
+      <div class="empty-state"><h2>{{ t("character.notFoundTitle") }}</h2><p>{{ t("character.notFoundDescription") }}</p>
+        <button type="button" class="button button-primary" (click)="back()">‹ {{ t("character.backToList") }}</button></div>
+    }
+  }
+  <div [class]="'section-heading builder-toolbar' + listClass()">
+    @if (idle()) {
+      <div class="builder-actions">
+        <button class="button button-quiet" (click)="startWizard(true)">{{ t("character.quickButton") }}</button>
+        <button class="button button-primary" (click)="startWizard(false)">{{ t("character.newButton") }}</button>
+      </div>
+    }
+  </div>
+  @if (wizard(); as wizard) {
+    <app-character-wizard [quick]="wizard.quick ?? false" [onCancel]="closeWizard" [onSave]="wizardSave" [initial]="wizardInitial()" />
+  }
+  @for (target of levelUpTarget(); track target.record.id) {
+    <app-level-up [name]="target.record.name" [level]="target.record.level" [build]="target.build" [onCancel]="closeLevelUp" [onSave]="levelUpSave" />
+  }
+  @for (key of editorKey(); track key) {
+    <app-character-editor [character]="editing()" [campaigns]="campaigns()" [onSave]="save" [onCancel]="closeEditor" />
+  }
+  @if (error()) { <p class="validation-message mt-2 text-sm font-medium text-bad" role="alert">{{ error() }}</p> }
+  @if (characters().length === 0 && idle() && !selectedId()) {
+    <div class="empty-state"><span aria-hidden="true">✦</span><h3>{{ t("character.emptyTitle") }}</h3><p>{{ t("character.emptyDescription") }}</p>
+      <button class="button button-primary" (click)="startWizard(false)">{{ t("character.createFirst") }}</button></div>
+  } @else {
+    <div [class]="'character-grid' + listClass()">
+      @for (card of cards(); track card.character.id) {
+        <article class="character-card" [attr.data-print-target]="printingId() === card.character.id ? 'true' : null">
+          <div class="character-card-top"><span class="avatar-mark">{{ card.initial }}</span><span class="level-pill">{{ t("character.levelPill", { level: card.character.level }) }}</span></div>
+          <h3>@if (onSelect()) {<a class="character-name-link" [routerLink]="['/characters', card.character.id]">{{ card.character.name }}</a>} @else {<ng-container>{{ card.character.name }}</ng-container>}</h3><p class="character-subtitle">{{ card.subtitle }}</p>
+          @if (card.campaignName) { <p class="character-subtitle">⚑ {{ card.campaignName }}</p> }
+          <div class="export-only export-sheet-content">
+            <section class="sheet-page sheet-page-main">
+              <header class="sheet-banner"><span aria-hidden="true">✧</span><p>{{ t("character.sheetEdition") }}</p><h2>{{ card.character.name }}</h2><small>{{ card.bannerSubtitle }}</small></header>
+              <div class="export-details">
+                <div><small>{{ t("character.speciesLabel") }}</small><b>{{ card.identity.species || "—" }}</b></div>
+                <div><small>{{ t("character.classLabel") }}</small><b>{{ card.identity.className || "—" }} · {{ card.character.level }}</b></div>
+                <div><small>{{ t("character.backgroundLabel") }}</small><b>{{ card.identity.background || "—" }}</b></div>
+                <div><small>{{ t("character.proficiencyLabel") }}</small><b>+{{ proficiencyBonus(card.character.level) }}</b></div>
+                <div><small>{{ t("character.sheetAlignment") }}</small><b>{{ card.alignment }}</b></div>
+                <div><small>{{ t("character.sheetPassivePerception") }}</small><b>{{ card.sheet?.passivePerception ?? "—" }}</b></div>
+              </div>
+              <section class="sheet-section"><h4>{{ t("character.scoresTitle") }}</h4><p class="export-legend">{{ t("character.abilityScoreLabel") }} · {{ t("character.abilityModifierLabel") }}</p>
+                <div class="export-abilities">
+                  @for (score of card.scores; track score.key) { <div><span>{{ score.label }}</span><b>{{ score.score }}</b><small>{{ score.modifier }}</small></div> }
+                </div>
+              </section>
+              <section class="sheet-section"><h4>{{ t("character.sheetCombat") }}</h4>
+                <div class="export-combat">
+                  @for (stat of card.combat; track stat.key) { <div>{{ t(stat.key) }}<b>{{ stat.value }}</b></div> }
+                </div>
+              </section>
+              <section class="sheet-section"><h4>{{ t("character.sheetAttacks") }}</h4>
+                <div class="sheet-equipment-table sheet-attack-table"><div><b>{{ t("character.sheetItem") }}</b><b>{{ t("character.sheetAttackBonus") }}</b><b>{{ t("character.sheetDamage") }}</b></div>
+                  @for (attack of card.attackRows; track $index) { <div><span>{{ attack.name }}</span><span>{{ attack.bonus }}</span><span>{{ attack.damage }}</span></div> }
+                </div></section>
+              <div class="sheet-columns">
+                <section class="sheet-section"><h4>{{ t("character.sheetSavingThrows") }}</h4><div class="sheet-line-list">
+                  @for (save of card.saves; track save.key) { <div><span>{{ save.label }}</span><i [attr.class]="save.marker"></i>&ngsp;<b>{{ save.bonus }}</b></div> }
+                </div></section>
+                <section class="sheet-section"><h4>{{ t("character.sheetSkills") }}</h4><div class="sheet-line-list sheet-skill-list">
+                  @for (skill of card.skills; track skill.skill) { <div><span>{{ skill.label }}</span><i [attr.class]="skill.marker"></i><b>{{ skill.bonus }}</b></div> }
+                </div></section>
+              </div>
+              <section class="sheet-section"><h4>{{ t("character.notes") }}</h4><div class="sheet-note-area">{{ card.character.notes }}</div></section>
+              <footer class="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{{ t("character.sheetEdition") }}</span></footer>
+            </section>
+            <section class="sheet-page sheet-page-extra">
+              <header class="sheet-banner"><span aria-hidden="true">✧</span><p>{{ t("character.sheetEdition") }}</p><h2>{{ t("character.sheetAdventurerRecord") }}</h2><small>{{ card.character.name }}</small></header>
+              <section class="sheet-section"><h4>{{ t("character.sheetFeatures") }}</h4><div class="sheet-writing-area tall">@if (card.featuresText !== null) {<p class="sheet-filled">{{ card.featuresText }}</p>}</div></section>
+              <div class="sheet-columns">
+                <section class="sheet-section"><h4>{{ t("character.sheetSpeciesTraits") }}</h4><div class="sheet-writing-area medium">@if (card.traitsText !== null) {<p class="sheet-filled">{{ card.traitsText }}</p>}</div></section>
+                <section class="sheet-section"><h4>{{ t("character.sheetProficiencies") }}</h4><div class="sheet-writing-area medium">@if (card.proficiencies; as proficiencies) {<p class="sheet-filled">{{ proficiencies.gear }}<br />{{ t("character.sheetLanguages") }}: {{ proficiencies.languages }}</p>}</div></section>
+              </div>
+              <section class="sheet-section"><h4>{{ t("character.sheetEquipment") }}</h4><div class="sheet-equipment-table"><div><b>{{ t("character.sheetItem") }}</b><b>{{ t("character.sheetQuantity") }}</b><b>{{ t("character.sheetWeight") }}</b><b>{{ t("character.sheetNotes") }}</b></div>
+                @for (item of card.equipmentRows; track $index) { <div><span>{{ item }}</span><span></span><span></span><span></span></div> }
+              </div></section>
+              <div class="sheet-columns">
+                <section class="sheet-section"><h4>{{ t("character.sheetStory") }}</h4><div class="sheet-writing-area short">@if (card.character.build?.appearance; as appearance) {<p class="sheet-filled">{{ appearance }}</p>}</div></section>
+                <section class="sheet-section"><h4>{{ t("character.sheetTreasure") }}</h4><div class="sheet-writing-area short">@if (card.sheet; as sheet) {<p class="sheet-filled">{{ sheet.gold }} {{ gold() }}</p>}</div></section>
+              </div>
+              <section class="sheet-section"><h4>{{ t("character.sheetSpells") }}</h4>@if (card.spellsText !== null) {<p class="sheet-filled">{{ card.spellsText }}</p>}<div class="sheet-spell-lines">
+                @for (line of spellLines; track line) { <div><i></i><span></span><span></span><span></span></div> }
+              </div></section>
+              <footer class="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{{ t("character.sheetEdition") }}</span></footer>
+            </section>
+            @if (card.character.build) {
+              <section class="sheet-page sheet-page-traits">
+                <header class="sheet-banner"><span aria-hidden="true">✧</span><p>{{ t("character.sheetEdition") }}</p><h2>{{ t("character.sheetTraitsDetail") }}</h2><small>{{ card.character.name }}</small></header>
+                <section class="sheet-section"><h4>{{ t("character.sheetFeatures") }}</h4><ng-container [ngTemplateOutlet]="printFeatureList" [ngTemplateOutletContext]="{ $implicit: card.featureDetail }" /></section>
+                <section class="sheet-section"><h4>{{ t("character.sheetSpeciesTraits") }}</h4><ng-container [ngTemplateOutlet]="printFeatureList" [ngTemplateOutletContext]="{ $implicit: card.traitDetail }" /></section>
+                @if (card.spellDetail.length > 0) {
+                  <section class="sheet-section"><h4>{{ t("character.sheetSpellList") }}</h4><ng-container [ngTemplateOutlet]="printFeatureList" [ngTemplateOutletContext]="{ $implicit: card.spellDetail }" /></section>
+                }
+                <footer class="sheet-footer"><span>✧ GRIMOIRE ✧</span><span>{{ t("character.sheetEdition") }}</span></footer>
+              </section>
+            }
+          </div>
+          @if (card.sheet; as sheet) {
+            <div class="card-vitals">
+              <div><span>{{ t("character.acShort") }}</span><b>{{ sheet.armorClass }}</b></div>
+              <div><span>{{ t("character.hpShort") }}</span><b>{{ sheet.hitPoints }}</b></div>
+              <div><span>{{ t("character.initShort") }}</span><b>{{ signed(sheet.initiative) }}</b></div>
+              <div><span>{{ t("character.speedShort") }}</span><b>{{ sheet.speed }}</b></div>
+            </div>
+          }
+          <div class="mini-stats">
+            @for (score of card.scores; track score.key) { <div><span>{{ score.short }}</span><b>{{ score.score }}</b><small>{{ score.modifier }}</small></div> }
+          </div>
+          @if (card.character.notes) { <p class="character-notes">{{ card.character.notes }}</p> }
+          <!-- Opening the sheet and levelling up come first; editing, exporting and deleting are a quieter second row, deleting set apart in red. -->
+          <div class="mt-4 flex flex-wrap gap-2 border-t border-line pt-3.5 print:hidden">
+            @if (onSelect()) { <button class="button button-primary button-sm" type="button" (click)="select(card.character.id)">{{ t("character.viewSheet") }}</button> }
+            @if (card.canLevelUp) { <button type="button" class="button button-quiet button-sm" (click)="startLevelUp(card.character)">{{ t("character.levelUp") }}</button> }
+          </div>
+          <div class="mt-1 flex flex-wrap items-center gap-x-1 gap-y-0 print:hidden">
+            <button type="button" class="small-action" (click)="startEdit(card.character)">{{ t("character.edit") }}</button>
+            <button type="button" class="small-action export-action" (click)="exportSheet(card.character)">{{ t("character.exportPdf") }}</button>
+            <span class="flex-1" aria-hidden="true"></span>
+            <button type="button" class="small-action danger-action" (click)="remove(card.character)">{{ t("character.delete") }}</button>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>

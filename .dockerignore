@@ -1,9 +1,13 @@
 .git
 .github
-.next
+.angular
 node_modules
+**/node_modules
+**/dist
 coverage
-tests
+e2e
+playwright-report
+test-results
 .env
 .env.*
 !.env.example

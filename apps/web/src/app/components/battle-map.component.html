@@ -1,0 +1,261 @@
+<ng-template #board>
+  @if (map(); as map) {
+    <svg #svg [class]="bm.board(tableMode())" [style.--ratio]="ratio()" [style.--min-width]="minWidth()" [attr.viewBox]="viewBox()" role="group" [attr.aria-label]="t().boardLabel(map.campaignName)"
+      (pointermove)="onPointerMove($event)" (pointerup)="onPointerUp($event)" (pointercancel)="drag.set(null)">
+      <defs><clipPath [attr.id]="gridClipId()"><rect [attr.x]="gutter" [attr.y]="gutter" [attr.width]="gridWidth()" [attr.height]="gridHeight()" /></clipPath></defs>
+      <rect [class]="bm.floor" [attr.x]="gutter" [attr.y]="gutter" [attr.width]="gridWidth()" [attr.height]="gridHeight()" (click)="onFloorClick($event)" />
+      @if (backgroundSrc(); as src) {
+        <image [class]="bm.backdrop" [attr.href]="src" [attr.x]="gutter" [attr.y]="gutter" [attr.width]="gridWidth()" [attr.height]="gridHeight()" preserveAspectRatio="none" aria-hidden="true" />
+      }
+      @if (!map.state.gridHidden) {
+        <path [class]="bm.gridLines" [attr.d]="gridPath()" />
+      }
+      @if (cones().length > 0) {
+        <g [attr.clip-path]="gridClipUrl()" aria-hidden="true">
+          @for (cone of cones(); track cone.id) {
+            <g>
+              @if (cone.clip; as clip) {
+                <clipPath [attr.id]="clip.id"><path [attr.d]="clip.d" /></clipPath>
+                <g [attr.clip-path]="clip.url"><path [class]="bm.cone" [attr.d]="cone.d" [attr.fill]="cone.color" [attr.stroke]="cone.color" /></g>
+              } @else {
+                <path [class]="bm.cone" [attr.d]="cone.d" [attr.fill]="cone.color" [attr.stroke]="cone.color" />
+              }
+            </g>
+          }
+        </g>
+      }
+      @if (reachPath()) {
+        <path [class]="bm.reach" [attr.d]="reachPath()" aria-hidden="true" />
+      }
+      @if (wallViews().length > 0) {
+        <g [class]="bm.walls">
+          @for (view of wallViews(); track view.key) {
+            <g [attr.class]="view.interactive ? bm.wallPick : null" [attr.role]="view.interactive ? 'button' : null" [attr.tabindex]="view.interactive ? 0 : null"
+              [attr.aria-label]="view.interactive ? view.label : null" [attr.aria-hidden]="view.interactive ? null : 'true'"
+              (click)="view.interactive && onWallPick(view.wall)" (keydown)="view.interactive && onWallKey($event, view.wall)">
+              <line [attr.x1]="view.line.x1" [attr.y1]="view.line.y1" [attr.x2]="view.line.x2" [attr.y2]="view.line.y2" [class]="bm.wallHit" />
+              <line [attr.x1]="view.line.x1" [attr.y1]="view.line.y1" [attr.x2]="view.line.x2" [attr.y2]="view.line.y2" [class]="view.lineClass" />
+            </g>
+          }
+        </g>
+      }
+      <g [class]="bm.coords" aria-hidden="true">
+        @for (column of columnLabels(); track $index) { <text [attr.x]="column.x" [attr.y]="column.y">{{ column.label }}</text> }
+        @for (row of rowLabels(); track $index) { <text [attr.x]="row.x" [attr.y]="row.y">{{ row.label }}</text> }
+      </g>
+      @for (view of tokenViews(); track view.token.id) {
+        <g [class]="view.classes" [style.transform]="view.transform" tabindex="0" role="button" [attr.aria-label]="view.name" [attr.aria-pressed]="view.selected"
+          (pointerdown)="onTokenPointerDown($event, view.token)" (keydown)="onTokenKey($event, view.token)">
+          <title>{{ view.name }}</title>
+          @if (view.acting) {
+            <circle [class]="bm.activeRing" [attr.cx]="view.half" [attr.cy]="view.half" [attr.r]="view.radius + 3" />
+          }
+          @if (view.selected) {
+            <circle [class]="bm.selectRing" [attr.cx]="view.half" [attr.cy]="view.half" [attr.r]="view.radius + 3" />
+          }
+          <circle [attr.cx]="view.half" [attr.cy]="view.half" [attr.r]="view.radius" [attr.fill]="view.fill" [class]="view.disc" />
+          <text [class]="bm.tokenText" [attr.x]="view.half" [attr.y]="view.half + 1" [style.font-size.px]="view.fontSize">{{ view.initials }}</text>
+          @if (view.cross; as cross) {
+            <path [class]="bm.cross" [attr.d]="cross" />
+          }
+          @if (view.facing; as facing) {
+            <path [class]="bm.facing" [attr.transform]="facing.transform" [attr.d]="facing.d" />
+          }
+        </g>
+      }
+      <!-- Above the tokens: players never get monsters out there, and the DM sees which ones are unseen. -->
+      @if (fogPaths().memory) {
+        <path [class]="bm.memory(map.showsHidden)" [attr.d]="fogPaths().memory" aria-hidden="true" />
+      }
+      @if (fogPaths().fog) {
+        <path [class]="bm.fog(map.showsHidden)" [attr.d]="fogPaths().fog" aria-hidden="true" />
+      }
+      <!-- Doors drawn again above the fog so they stand out; clicks go through the fog to the ones below. -->
+      @if (fogDoors().length > 0) {
+        <g [class]="bm.walls" aria-hidden="true">
+          @for (door of fogDoors(); track door.key) {
+            <line [attr.x1]="door.line.x1" [attr.y1]="door.line.y1" [attr.x2]="door.line.x2" [attr.y2]="door.line.y2" [class]="door.lineClass" />
+          }
+        </g>
+      }
+      @if (wallPreview(); as preview) {
+        <g [class]="bm.wallPreview" aria-hidden="true">
+          @if (preview.line; as line) {
+            <line [attr.x1]="line.x1" [attr.y1]="line.y1" [attr.x2]="line.x2" [attr.y2]="line.y2" />
+          }
+          <circle [attr.cx]="preview.cx" [attr.cy]="preview.cy" r="7" />
+        </g>
+      }
+      @if (dragCost(); as cost) {
+        <text [class]="bm.dragCost(cost.over)" [attr.x]="cost.x" [attr.y]="cost.y" aria-hidden="true">{{ cost.label }}</text>
+      }
+    </svg>
+  }
+</ng-template>
+
+<ng-template #statusBadge>
+  <span [class]="bm.status(status())" role="status"><span aria-hidden="true"></span>{{ statusLabel() }}</span>
+</ng-template>
+
+@if (loadError(); as loadError) {
+  <main [class]="bm.page" id="main">
+    <section [class]="bm.notice" role="alert">
+      <p>{{ loadError === "signin" ? t().signIn : loadError === "notfound" ? t().notFound : t().loadError }}</p>
+      @if (loadError === "signin") {
+        <a class="button button-primary" routerLink="/">{{ t().signInAction }}</a>
+      } @else if (loadError === "load") {
+        <button type="button" class="button button-primary" (click)="retry()">{{ t().retry }}</button>
+      } @else {
+        <a class="button button-quiet" routerLink="/campaigns">{{ t().back }}</a>
+      }
+    </section>
+  </main>
+} @else {
+  @if (map(); as map) {
+    <!-- One root element for both layouts: it is the one put full screen, so it must stay when the table display starts. -->
+    <div #tableRoot [class]="tableMode() ? bm.table : bm.page">
+      @if (tableMode()) {
+        <main [class]="bm.tableMain" id="main">
+          <h1 class="sr-only">{{ map.campaignName }}</h1>
+          <div [class]="bm.tableBar">
+            <b>{{ map.campaignName }}</b>
+            @if (map.state.combat; as combat) {
+              @let acting = activeToken();
+              <span [class]="bm.tableTurn" aria-live="polite">{{ acting ? t().roundTurn(combat.round, acting.label) : t().roundOnly(combat.round) }}</span>
+            }
+            <ng-container [ngTemplateOutlet]="statusBadge" />
+            <button type="button" class="button button-quiet" (click)="exitTable()">{{ t().exitTable }}</button>
+          </div>
+          <div [class]="bm.tableBoard"><ng-container [ngTemplateOutlet]="board" /></div>
+          <ul [class]="bm.legend" [attr.aria-label]="t().legend">
+            @for (entry of legend(); track entry.token.id) {
+              <li [class]="entry.classes">
+                <span [class]="bm.legendDot" [style.background]="entry.color" aria-hidden="true">{{ entry.initials }}</span>{{ entry.token.label }} <small>{{ entry.note }}</small>
+              </li>
+            }
+          </ul>
+        </main>
+      } @else {
+        <header [class]="bm.top">
+          <a [class]="bm.back" routerLink="/campaigns">← {{ t().back }}</a>
+          <div [class]="bm.titleBlock"><p [class]="bm.kicker">{{ t().kicker }}</p><h1>{{ map.campaignName }}</h1></div>
+          <div [class]="bm.topActions">
+            <ng-container [ngTemplateOutlet]="statusBadge" />
+            @if (map.isDm) {
+              <label [class]="bm.check"><input #playersField type="checkbox" [checked]="playersView()" (change)="playersView.set(playersField.checked)" />{{ t().viewToggle }}</label>
+            }
+            <button type="button" class="button button-primary" (click)="enterTable()">{{ t().tableMode }}</button>
+          </div>
+        </header>
+        <main [class]="bm.layout" id="main">
+          <div [class]="bm.boardWrap">
+            <div [class]="bm.scroller"><ng-container [ngTemplateOutlet]="board" /></div>
+            @if (notice(); as notice) {
+              <p [class]="bm.error" role="alert">{{ t()[notice] }}</p>
+            }
+            @if (selected(); as selected) {
+              <div [class]="bm.selectedBar" aria-live="polite">
+                <span [class]="bm.selectedName"><b>{{ selected.label }}</b> · {{ squareName(selected.x, selected.y) }}</span>
+                @if (selectedEntry(); as entry) {
+                  <app-movement [entry]="entry" [inBar]="true" />
+                }
+                @if (canSeeSheet(selected)) {
+                  <button type="button" [class]="bm.smallButton" [attr.aria-pressed]="sheetId() === selected.id" (click)="toggleSheet(selected)">{{ t().sheet }}</button>
+                }
+                @if (canMove(selected)) {
+                  <span [class]="bm.nudge">
+                    <button type="button" [attr.aria-label]="t().moveLeft" (click)="moveTo(selected, selected.x - 1, selected.y)">←</button>
+                    <button type="button" [attr.aria-label]="t().moveUp" (click)="moveTo(selected, selected.x, selected.y - 1)">↑</button>
+                    <button type="button" [attr.aria-label]="t().moveDown" (click)="moveTo(selected, selected.x, selected.y + 1)">↓</button>
+                    <button type="button" [attr.aria-label]="t().moveRight" (click)="moveTo(selected, selected.x + 1, selected.y)">→</button>
+                  </span>
+                } @else {
+                  <small [class]="bm.selectedNote(true)">{{ t().cannotMove }}</small>
+                }
+                @if (canMove(selected) && tokenVision(selected)) {
+                  <span [class]="bm.nudge">
+                    <button type="button" [attr.aria-label]="t().turnLeft" [title]="t().turnLeft" (click)="turn(selected, -1)">⟲</button>
+                    <button type="button" [attr.aria-label]="t().turnRight" [title]="t().turnRight" (click)="turn(selected, 1)">⟳</button>
+                  </span>
+                }
+                @if (tokenVision(selected)) {
+                  <small [class]="bm.selectedNote(false)">{{ t().facing }} {{ t().directions[selected.facing ?? 0] }}</small>
+                }
+                @if (map.isDm) {
+                  @let vision = currentVision(selected);
+                  <span [class]="bm.vision">
+                    <label>{{ t().vision }}<select #rangeField [class]="bm.visionSelect" (change)="setVisionRange(selected, rangeField.value)">
+                      @for (range of visionRanges; track range) { <option [value]="range" [selected]="range === vision.range">{{ range ? t().visionRange(range) : t().visionNone }}</option> }
+                    </select></label>
+                    <label>{{ t().visionAngle }}<select #angleField [class]="bm.visionSelect" [disabled]="!vision.range" (change)="setVisionAngle(selected, angleField.value)">
+                      @for (angle of visionAngles; track angle) { <option [value]="angle" [selected]="angle === vision.angle">{{ t().angles[angle] }}</option> }
+                    </select></label>
+                  </span>
+                }
+                @for (door of selectedDoors(); track door.key) {
+                  <button type="button" [class]="bm.smallButton" (click)="onWallPick(door.door)">{{ door.label }}</button>
+                }
+                <button type="button" [class]="bm.smallButton" (click)="selectedId.set(null)">{{ t().deselect }}</button>
+              </div>
+            }
+            <div [class]="bm.boardOptions">
+              <label [class]="bm.check"><input #conesField type="checkbox" [checked]="showCones()" (change)="showCones.set(conesField.checked)" />{{ t().showCones }}</label>
+              <label [class]="bm.check"><input #autoSheetField type="checkbox" [checked]="autoSheet()" (change)="changeAutoSheet(autoSheetField.checked)" />{{ t().autoSheet }}</label>
+            </div>
+            <p [class]="bm.hint">{{ t().howTo }} {{ t().keysHint }}</p>
+          </div>
+
+          <aside [class]="bm.panel" [attr.aria-label]="map.isDm ? t().heroes : t().yourHeroes">
+            <app-battle-map-combat [state]="map.state" [isDm]="map.isDm" [colorOf]="colorOf" [canControl]="canMove" [selectedId]="selectedId()"
+              [onSelect]="select" [send]="send" [infoFor]="infoFor()" />
+            @if (sheetToken(); as sheetToken) {
+              @if (canSeeSheet(sheetToken)) {
+                <!-- A new sheet for each token, as if remounted. -->
+                @for (id of [sheetToken.id]; track id) {
+                  <app-battle-map-sheet [token]="sheetToken" [isDm]="map.isDm" [onLink]="link" [character]="characterOf(sheetToken)" [charactersLoaded]="characters() !== null"
+                    [onClose]="closeSheet" />
+                }
+              }
+            }
+            <section>
+              <h2>{{ map.isDm ? t().heroes : t().yourHeroes }}</h2>
+              @if (heroRows().length) {
+                <ul [class]="bm.list">
+                  @for (row of heroRows(); track row.hero.id) {
+                    <li [class]="bm.listItem()">
+                      <span [class]="bm.legendDot" [style.background]="row.color" aria-hidden="true"></span>
+                      <span [class]="bm.itemName">{{ row.hero.name }}@if (row.token; as token) {<small>{{ t().onMap(squareName(token.x, token.y)) }}</small>}</span>
+                      @if (row.token; as token) {
+                        <button type="button" [class]="bm.smallButton" (click)="selectedId.set(token.id)">{{ t().select }}</button>
+                        <button type="button" [class]="bm.smallButton" [attr.aria-label]="t().remove + ': ' + row.hero.name" (click)="removeToken(token)">×</button>
+                      } @else {
+                        <button type="button" [class]="bm.smallButton" (click)="placeHero(row.hero.id)">{{ t().place }}</button>
+                      }
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p [class]="bm.empty">{{ map.isDm ? t().noHeroes : t().noOwnHeroes }}</p>
+              }
+              @if (map.isDm && unplacedHeroes().length > 0) {
+                <button type="button" class="button button-quiet" (click)="placeAll()">{{ t().placeAll }}</button>
+              }
+            </section>
+
+            @if (map.isDm) {
+              <app-battle-map-dm-tools [map]="map" [send]="send" [onSelect]="select" [onSaved]="saved" [playersAudience]="audience() === 'players'"
+                [wallTool]="wallTool()" [onWallTool]="changeWallTool" />
+            }
+
+            <section>
+              <p [class]="bm.share">{{ t().share }}</p>
+              <app-battle-map-copy-link [url]="shareUrl()" />
+            </section>
+          </aside>
+        </main>
+      }
+    </div>
+  } @else {
+    <main [class]="bm.page" id="main" aria-busy="true"><p [class]="bm.loading"><span appSpinner></span> {{ t().loading }}</p></main>
+  }
+}

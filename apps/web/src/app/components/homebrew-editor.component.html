@@ -1,0 +1,98 @@
+<form class="editor" (submit)="submit($event)" [attr.aria-label]="initial() ? t().editTitle : t().newTitle">
+  <h3 [style.margin.px]="0">{{ initial() ? t().editTitle : t().newTitle }}</h3>
+  <div class="editorGrid">
+    <div class="form">
+      <fieldset class="group"><legend>{{ t().basics }}</legend>
+        <label class="homebrewField" for="hb-name">{{ t().name }}<input #name id="hb-name" [value]="draft().name" (input)="set('name', name.value)" required maxlength="80" /></label>
+        <div class="cols">
+          <label class="homebrewField" for="hb-size">{{ t().size }}<select #size id="hb-size" (change)="set('size', size.value)">@for (option of sizes; track option) {<option [value]="option" [selected]="option === draft().size">{{ term("size", option) }}</option>}</select></label>
+          <label class="homebrewField" for="hb-type">{{ t().type }}<input #type id="hb-type" [value]="draft().type" (input)="set('type', type.value)" maxlength="40" [placeholder]="t().typeHint" /></label>
+          <label class="homebrewField" for="hb-alignment">{{ t().alignment }}<input #alignment id="hb-alignment" [value]="draft().alignment" (input)="set('alignment', alignment.value)" maxlength="60" /></label>
+        </div>
+        <label class="homebrewField" for="hb-cr">{{ t().cr }}<select #cr id="hb-cr" (change)="set('cr', cr.value)">@for (value of challengeRatings; track value) {<option [value]="'' + value" [selected]="'' + value === draft().cr">{{ ratingLabel(value) }}</option>}</select></label>
+        @if (crHint(); as hint) { <p class="hint">{{ hint }}</p> }
+      </fieldset>
+
+      <fieldset class="group"><legend>{{ t().defense }}</legend>
+        <div class="cols">
+          <label class="homebrewField" for="hb-ac">{{ t().ac }}<input #ac id="hb-ac" [value]="draft().armorClass" (input)="set('armorClass', ac.value)" required inputmode="numeric" /></label>
+          <label class="homebrewField" for="hb-armor">{{ t().armorType }}<input #armor id="hb-armor" [value]="draft().armorType" (input)="set('armorType', armor.value)" maxlength="60" /></label>
+          <label class="homebrewField" for="hb-hp">{{ t().hp }}<input #hp id="hb-hp" [value]="draft().hitPoints" (input)="set('hitPoints', hp.value)" required inputmode="numeric" /></label>
+          <label class="homebrewField" for="hb-dice">{{ t().hitDice }}<input #dice id="hb-dice" [value]="draft().hitDice" (input)="set('hitDice', dice.value)" maxlength="40" [placeholder]="t().hitDiceHint" /></label>
+        </div>
+        <div class="cols">
+          <label class="homebrewField" for="hb-vuln">{{ t().vulnerabilities }}<input #vuln id="hb-vuln" [value]="draft().vulnerabilities" (input)="set('vulnerabilities', vuln.value)" /></label>
+          <label class="homebrewField" for="hb-res">{{ t().resistances }}<input #res id="hb-res" [value]="draft().resistances" (input)="set('resistances', res.value)" /></label>
+          <label class="homebrewField" for="hb-imm">{{ t().immunities }}<input #imm id="hb-imm" [value]="draft().immunities" (input)="set('immunities', imm.value)" /></label>
+          <label class="homebrewField" for="hb-cond">{{ t().conditionImmunities }}<input #cond id="hb-cond" [value]="draft().conditionImmunities" (input)="set('conditionImmunities', cond.value)" /></label>
+        </div>
+        <p class="hint">{{ t().listHint }}</p>
+      </fieldset>
+
+      <fieldset class="group"><legend>{{ t().abilities }}</legend>
+        <div class="abilities">@for (key of abilityFields; track key) {
+          <label class="homebrewField" [attr.for]="'hb-' + key">{{ t().ability[key] }}<input #score [id]="'hb-' + key" inputmode="numeric" [value]="draft().abilities[key]" (input)="setIn('abilities', key, score.value)" /></label>
+        }</div>
+      </fieldset>
+
+      <fieldset class="group"><legend>{{ t().movement }}</legend>
+        <div class="cols">@for (key of speedKinds; track key) {
+          <label class="homebrewField" [attr.for]="'hb-speed-' + key">{{ t().speed[key] }}<input #speed [id]="'hb-speed-' + key" [value]="draft().speed[key]" (input)="setIn('speed', key, speed.value)" maxlength="20" /></label>
+        }</div>
+        <div class="cols">
+          @for (key of senseKinds; track key) {
+            <label class="homebrewField" [attr.for]="'hb-sense-' + key">{{ t().sense[key] }}<input #sense [id]="'hb-sense-' + key" [value]="draft().senses[key]" (input)="setIn('senses', key, sense.value)" maxlength="20" /></label>
+          }
+          <label class="homebrewField" for="hb-passive">{{ t().passive }}<input #passive id="hb-passive" [value]="draft().passivePerception" (input)="set('passivePerception', passive.value)" inputmode="numeric" /></label>
+        </div>
+        <label class="homebrewField" for="hb-languages">{{ t().languages }}<input #languages id="hb-languages" [value]="draft().languages" (input)="set('languages', languages.value)" maxlength="200" /></label>
+      </fieldset>
+
+      @for (kind of entryKinds; track kind) {
+        <fieldset class="group"><legend>{{ t().entries[kind] }}</legend>
+          @for (row of draft()[kind]; track $index; let index = $index) {
+            <div class="entry">
+              <div class="entryHead">
+                <label class="homebrewField" [attr.for]="'hb-' + kind + '-' + index + '-name'">{{ t().entryName }}<input #entryName [id]="'hb-' + kind + '-' + index + '-name'" [value]="row.name" (input)="setEntry(kind, index, 'name', entryName.value)" maxlength="80" [attr.aria-label]="t().entries[kind] + ' ' + (index + 1) + ': ' + t().entryName" /></label>
+                <button type="button" class="button button-quiet" (click)="removeEntry(kind, index)" [attr.aria-label]="t().removeEntry + ': ' + (row.name || t().entries[kind])">{{ t().removeEntry }}</button>
+              </div>
+              <label class="homebrewField" [attr.for]="'hb-' + kind + '-' + index + '-desc'">{{ t().entryDesc }}<textarea #entryDesc [id]="'hb-' + kind + '-' + index + '-desc'" [attr.aria-label]="t().entries[kind] + ' ' + (index + 1) + ': ' + t().entryDesc" [value]="row.desc" maxlength="2000" (input)="setEntry(kind, index, 'desc', entryDesc.value)"></textarea></label>
+            </div>
+          }
+          @if (draft()[kind].length < maxEntries) { <div><button type="button" class="button button-quiet" (click)="addEntry(kind)">+ {{ t().addEntry }}</button></div> }
+        </fieldset>
+      }
+
+      <fieldset class="group"><legend>{{ t().sharing }}</legend>
+        @if (locked()) { <p class="notice" role="status">{{ t().locked }}</p> }
+        @for (value of visibilities; track value) {
+          @let disabled = locked() && value !== "private";
+          <label class="radio" [class.radioOn]="draft().visibility === value" [style.opacity]="disabled ? 0.55 : null" [style.cursor]="disabled ? 'not-allowed' : null">
+            <input type="radio" name="hb-visibility" [value]="value" [checked]="draft().visibility === value" [disabled]="disabled" (change)="set('visibility', value)" />
+            <span>{{ t().visibility[value][0] }}<small>{{ t().visibility[value][1] }}</small></span>
+          </label>
+        }
+        @if (draft().visibility === "campaign") {
+          @if (campaigns().length) {
+            <div role="group" [attr.aria-label]="t().pickCampaigns" [style.display]="'grid'" [style.gap.px]="6">@for (campaign of campaigns(); track campaign.id) {
+              <label class="radio"><input type="checkbox" [checked]="draft().campaignIds.includes(campaign.id)" (change)="toggleCampaign(campaign.id)" /><span>{{ campaign.name }}</span></label>
+            }</div>
+          } @else {
+            <p class="hint">{{ t().noCampaigns }}</p>
+          }
+        }
+      </fieldset>
+    </div>
+
+    <aside class="preview" [attr.aria-label]="t().preview">
+      <h3>{{ t().preview }}</h3>
+      <app-monster-sheet [monster]="preview()" />
+    </aside>
+  </div>
+
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+  <div class="footer">
+    <button type="button" class="button button-quiet" (click)="onCancel()()">{{ t().cancel }}</button>
+    <button type="submit" class="button button-primary" [disabled]="busy()">{{ busy() ? t().saving : "✦ " + t().save }}</button>
+  </div>
+</form>

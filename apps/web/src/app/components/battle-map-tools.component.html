@@ -1,0 +1,122 @@
+<section>
+  <h2>{{ t().monsters }}</h2>
+  <form [class]="bm.form" (submit)="addMonster($event)">
+    <label [class]="bm.grow">{{ t().monsterName }}<input #nameField required [class]="bm.field" [attr.maxlength]="tokenLabelMax" [value]="name()" autocomplete="off" (input)="name.set(nameField.value)" /></label>
+    <label>{{ t().count }}<input #countField type="number" [class]="bm.number" min="1" [attr.max]="maxPerAdd" [value]="count()" (input)="setCount(countField)" /></label>
+    <label>{{ t().size }}<select #sizeField [class]="bm.field" (change)="chooseSize(sizeField.value)">
+      @for (value of tokenSizes; track value) { <option [value]="value" [selected]="value === size()">{{ t().sizes[value] }}</option> }
+    </select></label>
+    <button type="submit" class="button button-primary" [disabled]="adding()">{{ t().add }}</button>
+  </form>
+  @if (chosen(); as chosen) {
+    <p [class]="bm.empty">✓ {{ t().linked(chosen.name, chosen.source) }}</p>
+  } @else if (suggestions()?.length) {
+    <ul [class]="bm.list" [attr.aria-label]="t().suggestions">
+      @for (choice of suggestions(); track choice.slug) {
+        <li [class]="bm.listItem()">
+          <button type="button" [class]="bm.itemName" (click)="pick(choice)">{{ choice.name }}@if (choice.source) {<small>{{ choice.source }}</small>}</button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <p [class]="bm.empty">{{ t().autoLinkHint }}</p>
+  }
+  <label [class]="bm.check"><input #hiddenField type="checkbox" [checked]="hidden()" (change)="hidden.set(hiddenField.checked)" />{{ t().hiddenNew }}</label>
+  <div [class]="bm.form">
+    <label [class]="bm.grow">{{ t().fromJournal }}
+      <select #encounterField [class]="bm.field" [disabled]="!encounters()?.length" (change)="encounterId.set(encounterField.value)">
+        <option value="" [selected]="encounterId() === ''">{{ encounters() && !encounters()?.length ? t().noEncounters : t().pickEncounter }}</option>
+        @for (encounter of encounters(); track encounter.id) { <option [value]="encounter.id" [selected]="encounter.id === encounterId()">{{ encounter.title }}</option> }
+      </select>
+    </label>
+    <button type="button" class="button button-quiet" [disabled]="!encounterId() || adding()" (click)="addEncounter()">{{ t().addEncounter }}</button>
+  </div>
+</section>
+
+<section>
+  <h2>{{ t().onBoard }}</h2>
+  @if (monsterRows().length) {
+    <ul [class]="bm.list">
+      @for (row of monsterRows(); track row.token.id) {
+        <li [class]="bm.listItem(row.hidden)">
+          <span [class]="bm.legendDot" [style.background]="row.color" aria-hidden="true"></span>
+          <button type="button" [class]="bm.itemName" (click)="onSelect()(row.token.id)">{{ row.token.label }}<small>{{ row.note }}</small></button>
+          <button type="button" [class]="bm.smallButton" (click)="toggleHidden(row.token)">{{ row.token.hidden ? t().reveal : t().hide }}</button>
+          <button type="button" [class]="bm.smallButton" (click)="toggleDefeated(row.token)">{{ row.token.defeated ? t().revive : t().defeat }}</button>
+          <select #monsterSize [class]="bm.sizeSelect" [attr.aria-label]="t().size + ': ' + row.token.label" (change)="setMonsterSize(row.token.id, monsterSize.value)">
+            @for (value of tokenSizes; track value) { <option [value]="value" [selected]="value === row.token.size">{{ t().sizes[value] }}</option> }
+          </select>
+          <button type="button" [class]="bm.smallButton" [attr.aria-label]="t().remove + ': ' + row.token.label" (click)="removeToken(row.token)">×</button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <p [class]="bm.empty">{{ t().noMonsters }}</p>
+  }
+  @if (unlinked().length > 0) {
+    <button type="button" class="button button-quiet" [disabled]="linking()" (click)="linkAll()">{{ linking() ? t().linking : t().linkAll }}</button>
+  }
+  @if (monsterRows().length > 0) {
+    <button type="button" class="button button-quiet" (click)="clearMonsters()">{{ t().clearMonsters }}</button>
+  }
+</section>
+
+<section>
+  <h2>{{ t().grid }}</h2>
+  <form [class]="bm.form" (submit)="resize($event)">
+    <label>{{ t().columns }}<input #colsField type="number" [class]="bm.number" [attr.min]="minSize" [attr.max]="maxSize" [value]="cols()" (input)="setGrid('cols', colsField)" /></label>
+    <label>{{ t().rows }}<input #rowsField type="number" [class]="bm.number" [attr.min]="minSize" [attr.max]="maxSize" [value]="rows()" (input)="setGrid('rows', rowsField)" /></label>
+    <button type="submit" class="button button-quiet" [disabled]="cols() === map().state.cols && rows() === map().state.rows">{{ t().resize }}</button>
+  </form>
+  <label [class]="bm.check"><input #gridField type="checkbox" [checked]="!map().state.gridHidden" (change)="setGridHidden(gridField.checked)" />{{ t().gridLines }}</label>
+  <label [class]="bm.check"><input #fogField type="checkbox" [checked]="map().state.fog === true" (change)="setFog(fogField.checked)" />{{ t().fog }}</label>
+  <p [class]="bm.empty">{{ t().fogHint }}</p>
+  @if (map().state.fog && map().state.explored) {
+    <button type="button" class="button button-quiet" (click)="forgetExplored()">{{ t().forgetExplored }}</button>
+  }
+</section>
+
+<section>
+  <h2>{{ t().walls }}</h2>
+  <div [class]="bm.tools" role="group" [attr.aria-label]="t().wallTool">
+    @for (tool of wallTools; track tool) {
+      <button type="button" [class]="bm.smallButton" [attr.aria-pressed]="wallTool() === tool" (click)="onWallTool()(wallTool() === tool ? null : tool)">{{ toolLabel(tool) }}</button>
+    }
+    @if (wallTool()) {
+      <button type="button" [class]="bm.smallButton" (click)="onWallTool()(null)">{{ t().toolOff }}</button>
+    }
+    @if (wallCount() > 0) {
+      <small>{{ t().wallCount(wallCount()) }}</small>
+    }
+  </div>
+  @if (wallTool(); as tool) {
+    <p [class]="bm.empty">{{ tool === "erase" ? t().eraseHint : t().wallHint }}</p>
+  }
+  @if (wallCount() > 0) {
+    <button type="button" class="button button-quiet" (click)="clearWalls()">{{ t().clearWalls }}</button>
+  }
+</section>
+
+<section>
+  <h2>{{ t().background }}</h2>
+  @if (backgroundSrc(); as src) {
+    <img [class]="bm.backgroundPreview" [src]="src" alt="" />
+  }
+  <input #file class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" tabindex="-1" aria-hidden="true" (change)="fileChosen(file)" />
+  <div [class]="bm.form">
+    <button type="button" class="button button-quiet" [disabled]="uploading()" (click)="pickFile()">{{ uploading() ? t().uploading : backgroundKey() ? t().replaceBackground : t().uploadBackground }}</button>
+    @if (backgroundKey()) {
+      <button type="button" class="button button-quiet" [disabled]="uploading()" (click)="changeBackground(null)">{{ t().removeBackground }}</button>
+    }
+  </div>
+  @let fitted = fittedRows();
+  @if (fitted !== null && fitted !== map().state.rows) {
+    <button type="button" class="button button-quiet" (click)="fitRows(fitted)">{{ t().fitRows(fitted) }}</button>
+  }
+  @if (uploadError()) {
+    <p [class]="bm.error" role="alert">{{ t().uploadError }}</p>
+  }
+  <p [class]="bm.empty">{{ t().backgroundHint }}</p>
+</section>
+
+<app-battle-map-saved-maps [map]="map()" [onLoaded]="onSaved()" [playersAudience]="playersAudience()" />

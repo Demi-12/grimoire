@@ -1,0 +1,58 @@
+@if (editing(); as edit) {
+  <section class="homebrewPanel" aria-labelledby="homebrew-heading">
+    <h2 id="homebrew-heading" class="sr-only">{{ t().title }}</h2>
+    <app-homebrew-editor [campaigns]="campaigns()" [initial]="edit.monster" [ownerName]="me().name" [onCancel]="cancelEditing" [onSaved]="saved" />
+  </section>
+} @else {
+  <section class="homebrewPanel" aria-labelledby="homebrew-heading">
+    <div class="head">
+      <div><h2 id="homebrew-heading" [style.margin.px]="0">{{ t().title }}</h2><p>{{ t().intro }}</p></div>
+      <button type="button" class="button button-primary" (click)="editing.set({ monster: null })">✦ {{ t().create }}</button>
+    </div>
+
+    <div class="toolbar">
+      <label class="search">{{ t().search }}<input #search type="search" [value]="query()" (input)="query.set(search.value)" /></label>
+      <div class="chips" role="group" [attr.aria-label]="t().scopesLabel">
+        @for (key of scopes; track key) { <button type="button" class="chip" [attr.aria-pressed]="scope() === key" (click)="scope.set(key)">{{ t().scopes[key] }}</button> }
+      </div>
+    </div>
+
+    @if (loadError()) {
+      <div class="error" role="alert">{{ t().loadError }} <button type="button" class="button button-quiet" (click)="retry()">{{ t().retry }}</button></div>
+    } @else if (monsters() === null) {
+      <div appSkeletonRegion [label]="t().loading"><div class="list">@for (item of [0, 1, 2]; track item) { <span appSkeleton [height]="52"></span> }</div></div>
+    } @else if (visible().length === 0) {
+      <div class="empty">{{ scope() === "mine" && noneOfMine() ? t().emptyMine : t().empty }}</div>
+    } @else {
+      <div class="list">@for (monster of visible(); track monster.id) {
+        <button type="button" class="row" [attr.aria-pressed]="selectedId() === monster.id" (click)="selectedId.set(monster.id)">
+          <span><span class="rowName">{{ monster.name }}</span>
+            <span class="rowMeta"><span>{{ t().cr }} {{ ratingLabel(monster.cr) }}</span>@if (monster.type) {<span>{{ monster.type }}</span>}@if (!monster.mine) {<span>{{ t().by(monster.ownerName) }}</span>}</span></span>
+          <span class="badges">
+            <span class="badge">{{ t().visibility[monster.visibility] }}</span>
+            @if (monster.locked) { <span class="badge badgeWarn">{{ t().locked }}</span> }
+          </span>
+        </button>
+      }</div>
+    }
+
+    @if (selected(); as selected) {
+      <div class="detail">
+        @if (selected.locked) { <p class="notice" role="status">{{ t().lockedNote }}</p> }
+        <app-monster-sheet [monsterSlug]="homebrewSlug(selected.id)" />
+        <div class="actions">
+          @if (onAddCreature()) { <button type="button" class="button button-primary" [disabled]="addedId() === selected.id" (click)="addToEncounters(selected)">{{ addedId() === selected.id ? t().added : t().add }}</button> }
+          @if (selected.mine) { <button type="button" class="button button-quiet" [disabled]="busy()" (click)="editing.set({ monster: selected })">{{ t().edit }}</button> }
+          @if (selected.mine || (me().role === "admin" && selected.visibility !== "private")) { <button type="button" class="button button-quiet" [disabled]="busy()" (click)="remove(selected)">{{ t().remove }}</button> }
+          @if (me().role === "admin" && !selected.mine) {
+            @if (selected.locked) {
+              <button type="button" class="button button-quiet" [disabled]="busy()" (click)="setLocked(selected, false)">{{ t().unlock }}</button>
+            } @else {
+              <button type="button" class="button button-quiet" [disabled]="busy()" (click)="setLocked(selected, true)">{{ t().lock }}</button>
+            }
+          }
+        </div>
+      </div>
+    }
+  </section>
+}

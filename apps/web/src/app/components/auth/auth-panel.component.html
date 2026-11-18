@@ -1,0 +1,92 @@
+@if (session.data()?.user; as user) {
+  <app-account-security [email]="user.email" [onSignOut]="signOut" />
+} @else {
+  <section class="auth-panel" aria-labelledby="auth-title" [attr.data-mode]="mode()">
+    <header class="auth-head">
+      <p class="eyebrow"><span></span>{{ kicker() }}</p>
+      <h1 id="auth-title" class="auth-title">{{ title() }}</h1>
+      @if (lede()) { <p class="auth-lede" id="auth-lede">{{ lede() }}</p> }
+    </header>
+    <!-- Live regions stay mounted across steps so a message set while switching step is still announced. -->
+    <div class="auth-feedback" role="status" aria-live="polite">@if (message()) { <p class="auth-notice auth-notice-ok">{{ message() }}</p> }</div>
+    <div class="auth-feedback" role="alert">@if (error()) { <p class="auth-notice auth-notice-error">{{ error() }}</p> }</div>
+    <!-- One form per step (created anew for each mode): password managers see a fresh form with the right
+         autocomplete tokens instead of one form whose fields change meaning under them. -->
+    @for (step of [mode()]; track step) {
+      <form [id]="'auth-' + step" [attr.name]="'auth-' + step" class="auth-form" method="post" (submit)="handleSubmit($event)" [attr.aria-describedby]="lede() ? 'auth-lede' : null">
+        @if (step === "two-factor" && email()) {
+          <div class="auth-account">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
+            <label class="sr-only" for="auth-account">{{ t().account }}</label>
+            <!-- The account this code is for, as `username`, so managers offer the TOTP saved with that login. -->
+            <input id="auth-account" name="username" class="auth-account-input" type="email" autocomplete="username" [value]="email()" readonly tabindex="-1" />
+          </div>
+        }
+        @if (step === "sign-up") {
+          <div class="auth-field">
+            <label class="auth-label" for="auth-name">{{ t().name }}</label>
+            <div class="auth-control">
+              <input #nameField id="auth-name" name="name" class="auth-input" autocomplete="nickname" autocapitalize="words" maxlength="100" required [value]="name()" (input)="name.set(nameField.value)" />
+            </div>
+          </div>
+        }
+        @if (step === "sign-in" || step === "sign-up" || step === "forgot-password") {
+          <div class="auth-field">
+            <label class="auth-label" for="auth-email">{{ t().email }}</label>
+            <div class="auth-control">
+              <input #emailField id="auth-email" name="email" class="auth-input" type="email" inputmode="email" [attr.autocomplete]="step === 'sign-up' ? 'email' : 'username'" autocapitalize="none" autocorrect="off" spellcheck="false"
+                maxlength="254" required [value]="email()" (input)="email.set(emailField.value)" />
+            </div>
+          </div>
+        }
+        @if (step === "sign-in") {
+          <div class="auth-field">
+            <label class="auth-label" for="auth-password">{{ t().password }}</label>
+            <div appPasswordInput [inputId]="'auth-password'" [inputName]="'password'" [showLabel]="t().showPassword" [autocomplete]="'current-password webauthn'" [maxLength]="128" [required]="true" [(value)]="password"></div>
+            <button type="button" class="auth-link auth-field-aside" (click)="goTo('forgot-password')">{{ t().forgot }}</button>
+          </div>
+        }
+        @if (step === "sign-up" || step === "reset-password") {
+          <div class="auth-field">
+            <label class="auth-label" for="auth-new-password">{{ step === "reset-password" ? t().newPassword : t().password }}</label>
+            <div appPasswordInput [inputId]="'auth-new-password'" [inputName]="'new-password'" [showLabel]="t().showPassword" [hint]="true" [autocomplete]="'new-password'"
+              [minLength]="12" [maxLength]="128" [required]="true" [(value)]="password"></div>
+            <p class="auth-hint" id="auth-new-password-hint">{{ t().passwordHint }}</p>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="auth-confirm-password">{{ t().confirm }}</label>
+            <div appPasswordInput [inputId]="'auth-confirm-password'" [inputName]="'confirm-password'" [showLabel]="t().showPassword" [autocomplete]="'new-password'"
+              [minLength]="12" [maxLength]="128" [required]="true" [(value)]="confirmation"></div>
+          </div>
+        }
+        @if (step === "two-factor") {
+          <div class="auth-field auth-field-code">
+            <label class="auth-label" for="auth-code">{{ backupMode() ? t().backupLabel : t().twoFactor }}</label>
+            <div class="auth-control">
+              <!-- A single input so OTP autofill (managers, SMS, iOS) can fill all six digits at once. -->
+              <input #codeInput id="auth-code" name="code" [class]="'auth-input auth-code ' + (backupMode() ? 'is-backup' : 'is-totp')" [attr.inputmode]="backupMode() ? 'text' : 'numeric'"
+                autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required
+                [attr.minlength]="backupMode() ? null : 6" [attr.maxlength]="backupMode() ? 64 : null" [value]="code()" (input)="changeCode(codeInput)" />
+            </div>
+          </div>
+        }
+        <button class="button button-primary auth-submit" type="submit" [disabled]="busy()" [attr.aria-busy]="busy()">
+          @if (busy()) { <span appSpinner></span> }{{ busy() ? t().processing : submitLabel() }}</button>
+      </form>
+    }
+    @if (mode() === "sign-in") {
+      <div class="auth-divider" aria-hidden="true"><span>{{ t().or }}</span></div>
+      <button type="button" class="button button-quiet auth-alt" (click)="signInWithPasskey()" [disabled]="busy()">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="4.5" /><path d="M11.2 11.8 20 3M16.5 6.5l3 3M18.5 4.5l2 2" /></svg>{{ t().passkey }}</button>
+    }
+    <footer class="auth-foot">
+      @if (mode() === "sign-in") { <p>{{ t().newHere }} <button type="button" class="auth-link" (click)="goTo('sign-up')">{{ t().createAccount }}</button></p> }
+      @if (mode() === "sign-up") { <p>{{ t().haveAccount }} <button type="button" class="auth-link" (click)="mode.set('sign-in')">{{ t().signIn }}</button></p> }
+      @if (mode() === "two-factor") { <button type="button" class="auth-link" (click)="toggleBackupMode()">{{ backupMode() ? t().useTotp : t().backup }}</button> }
+      @if (mode() === "forgot-password" || mode() === "reset-password" || mode() === "two-factor") {
+        <button type="button" class="auth-link auth-back" (click)="goTo('sign-in')">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>{{ t().backToSignIn }}</button>
+      }
+    </footer>
+  </section>
+}

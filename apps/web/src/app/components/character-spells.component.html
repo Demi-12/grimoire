@@ -1,0 +1,72 @@
+@if (visible()) {
+  <section [class]="panel" aria-labelledby="sheet-spells">
+    <div class="head">
+      <h3 id="sheet-spells" [class]="panelTitle">{{ c().title }}</h3>
+      @if (onSave()) { <button type="button" class="button button-quiet" (click)="openManager()">{{ groups().length ? c().manage : c().add }}</button> }
+    </div>
+
+    @if (casting(); as casting) {
+      @if (numbers(); as numbers) {
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
+          <div [class]="statBox"><span [class]="statLabel">{{ c().ability }}</span><b class="font-display text-[17px] leading-8 font-bold text-ink">{{ translate("ability." + casting.ability) }}</b></div>
+          <div [class]="statBox"><span [class]="statLabel">{{ c().dc }}</span><b [class]="statValue">{{ numbers.dc }}</b></div>
+          <div [class]="statBox"><span [class]="statLabel">{{ c().attack }}</span><b [class]="statValue">{{ signed(numbers.attack) }}</b></div>
+        </div>
+      }
+    }
+
+    @if (slots().length > 0) {
+      <div class="slots">
+        <div class="slotsHead"><h4>{{ casting()?.pact ? c().pact : c().slots }}</h4>
+          @if (onSave() && anySpent()) { <button type="button" class="link" (click)="recoverAll()">{{ c().rest }}</button> }</div>
+        <ul>
+          @for (row of slots(); track row.level) {
+            <li>
+              <span>{{ levelName(row.level) }}</span>
+              <span class="pips">
+                @for (index of row.pips; track index) {
+                  @if (onSave()) {
+                    <button type="button" class="pip" [class.spent]="index < row.used" [attr.aria-pressed]="index < row.used"
+                      [attr.aria-label]="c().slot(row.level, index + 1, index < row.used)" (click)="spend(row.level, index, row.used)"></button>
+                  } @else {
+                    <i class="pip" [class.spent]="index < row.used" aria-hidden="true"></i>
+                  }
+                }
+                @if (!onSave()) { <span class="sr-only">{{ c().readOnlySlot(row.level, row.total - row.used, row.total) }}</span> }
+              </span>
+              <small>{{ c().left }} {{ row.total - row.used }}/{{ row.total }}</small>
+            </li>
+          }
+        </ul>
+        <p class="help">{{ slotsHelp() }}</p>
+      </div>
+    }
+
+    @if (groups().length === 0) { <p class="help">{{ c().none }}</p> }
+    @for (group of groups(); track group.level) {
+      <div class="group">
+        <h4>{{ levelName(group.level) }}</h4>
+        <ul>
+          @for (entry of group.spells; track entry.key) { <li appSpellRow [entry]="entry"></li> }
+        </ul>
+      </div>
+    }
+    @if (onSave() && casting() && (missing().cantrips > 0 || missing().prepared > 0)) { <p class="help" role="note">{{ c().missing(missing().cantrips, missing().prepared) }}</p> }
+
+    @if (draft(); as current) {
+      @if (build(); as build) {
+        <dialog #dialog class="dialog" aria-labelledby="spell-dialog-title" (close)="draft.set(null)">
+          <div class="dialogBox">
+            <header><h3 id="spell-dialog-title">{{ c().manage }} · {{ character().name }}</h3>
+              <button type="button" class="close" [attr.aria-label]="c().close" (click)="closeDialog()">×</button></header>
+            <div class="dialogBody"><app-spell-manager [build]="build" [level]="character().level" [value]="current.spells" [onChange]="changeDraft" /></div>
+            <footer>
+              <button type="button" class="button button-quiet" (click)="closeDialog()">{{ c().cancel }}</button>
+              <button type="button" class="button button-primary" [disabled]="saving()" (click)="saveDraft()">{{ c().save }}</button>
+            </footer>
+          </div>
+        </dialog>
+      }
+    }
+  </section>
+}

@@ -37,7 +37,7 @@ jobs:
           cache: true
           require-lockfile: true
 
-      - name: Run security configuration tests
+      - name: Run unit tests
         run: pnpm test
 
       - name: Lint

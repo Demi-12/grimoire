@@ -1,0 +1,53 @@
+@if (loadFailed()) {
+  <div class="journal"><p class="error" role="alert">{{ t().loadError }} <button type="button" class="btn" (click)="load()">{{ t().retry }}</button></p></div>
+} @else if (!items()) {
+  <div class="journal">
+    <div appSkeletonRegion [label]="t().loading" class="skeleton-grid">
+      @for (item of [0, 1]; track item) {
+        <div class="skeleton-card"><span appSkeleton width="40%" [height]="16"></span><span appSkeletonText [lines]="2"></span></div>
+      }
+    </div>
+  </div>
+} @else {
+  <div class="journal">
+    <p class="note">{{ t().dmOnly }}</p>
+    @if (!items()!.length) { <p class="empty">{{ t().empty }}</p> }
+    @for (group of groups(); track group.key) {
+      <section [attr.aria-label]="group.label">
+        <h4 class="group">{{ group.label }} · {{ group.list.length }}</h4>
+        <ul class="list">
+          @for (item of group.list; track item.id) {
+            @let busy = busyId() === item.id;
+            @let draft = drafts()[item.id] ?? item.notes;
+            <li class="item" [class.played]="item.status === 'played'">
+              <div class="top">
+                <div>
+                  <h5 class="title">{{ item.title }}</h5>
+                  <p class="meta">{{ meta(item) }}</p>
+                </div>
+              </div>
+              <ul class="lines">
+                @for (line of item.lines; track line.name + '-' + $index) {
+                  <li><b>×{{ line.count }}</b><span>{{ line.name }}<small>{{ lineDetail(line) }}</small></span></li>
+                }
+              </ul>
+              <label class="notesLabel" [attr.for]="'journal-notes-' + item.id">{{ t().notes }}</label>
+              <textarea #notes [id]="'journal-notes-' + item.id" class="notes" rows="2" maxlength="2000" [value]="draft"
+                (input)="setDraft(item.id, notes.value)"></textarea>
+              <div class="actions">
+                @if (draft !== item.notes) { <button type="button" class="btn" [disabled]="busy" (click)="patch(item, { notes: draft })">{{ t().saveNotes }}</button> }
+                <button type="button" class="btn" [class.primary]="item.status === 'planned'" [disabled]="busy"
+                  (click)="patch(item, { status: item.status === 'planned' ? 'played' : 'planned' })">
+                  {{ item.status === "planned" ? t().markPlayed : t().markPlanned }}
+                </button>
+                <button type="button" class="btn danger" [disabled]="busy" (click)="remove(item)">
+                  {{ t().remove }}
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  </div>
+}

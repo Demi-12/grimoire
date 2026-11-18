@@ -1,0 +1,348 @@
+<section [class]="styles.wizard" aria-labelledby="wizard-title">
+  <header [class]="styles.head">
+    <div><p [class]="styles.kicker">✦ {{ c().kicker }}</p><h2 id="wizard-title">{{ title() }}</h2></div>
+    <button type="button" [class]="styles.close" (click)="cancel()" [attr.aria-label]="c().close">×</button>
+  </header>
+
+  @if (!quick()) {
+    <nav [class]="styles.steps" [attr.aria-label]="c().stepOf(step() + 1, c().steps.length)">
+      @for (item of stepItems(); track item.label) {
+        <button type="button" [class]="styles.step" [attr.data-state]="item.state" [attr.aria-current]="item.index === step() ? 'step' : null" (click)="go(item.index)">
+          <span>{{ item.mark }}</span>{{ item.label }}</button>
+      }
+    </nav>
+  }
+
+  <div [class]="styles.body">
+    @if (show(0)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[0] }}</h3> }
+      <p [class]="styles.intro">{{ c().classIntro }}</p>
+      @if (quick()) {
+        <label [class]="styles.field"><select #classSelect [attr.aria-label]="c().steps[0]" (change)="pickClass(classSelect.value)">
+          @for (item of classCards(); track item.id) { <option [value]="item.id" [selected]="item.id === build().classId">{{ item.name }}</option> }
+        </select></label>
+      } @else {
+        <div [class]="styles.cardGrid">
+          @for (item of classCards(); track item.id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="item.id === build().classId" (click)="chooseClass(item.id)">
+              <strong>{{ item.name }}</strong><small>{{ item.small }}</small><em>{{ item.summary }}</em>
+            </button>
+          }
+        </div>
+      }
+      @if (levelUpsSaved()) { <p [class]="styles.note">{{ c().classChangeWarning }}</p> }
+      <div [class]="styles.detail">
+        @let facts = classFacts();
+        <h3>{{ facts.name }}</h3>
+        <dl [class]="styles.facts">
+          <div><dt>{{ c().hitDie }}</dt><dd>d{{ cls().hitDie }}</dd></div>
+          <div><dt>{{ c().primary }}</dt><dd>{{ facts.primary }}</dd></div>
+          <div><dt>{{ c().saves }}</dt><dd>{{ facts.saves }}</dd></div>
+          <div><dt>{{ c().armor }}</dt><dd>{{ facts.armor }}</dd></div>
+          <div><dt>{{ c().weapons }}</dt><dd>{{ facts.weapons }}</dd></div>
+          @if (facts.tools) { <div><dt>{{ c().tools }}</dt><dd>{{ facts.tools }}</dd></div> }
+          <div><dt>{{ c().skillsPick(cls().skillCount) }}</dt><dd>{{ facts.skills }}</dd></div>
+          <div><dt>{{ c().features }}</dt><dd>{{ facts.features }}</dd></div>
+          @if (facts.spellcasting) { <div><dt>{{ c().spellcasting }}</dt><dd>{{ facts.spellcasting }}</dd></div> }
+        </dl>
+        <div [class]="styles.inline">
+          <label [class]="styles.field">{{ c().level }}<input #levelInput type="number" min="1" max="20" [value]="level()" (input)="setLevel(levelInput)" /></label>
+          @if (level() >= 3) {
+            <label [class]="styles.field">{{ c().subclass }}<select #subclassSelect (change)="pickSubclass(subclassSelect.value)">
+              @if (!chosenSubclass()) { <option value="" disabled [selected]="true">{{ c().pickSubclass }}</option> }
+              @for (entry of subclassOptions(); track entry.id) { <option [value]="entry.id" [selected]="entry.id === chosenSubclass()">{{ entry.label }}</option> }
+            </select></label>
+          }
+        </div>
+      </div>
+    }
+
+    @if (show(1)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[1] }}</h3> }
+      <p [class]="styles.intro">{{ c().backgroundIntro }}</p>
+      @if (quick()) {
+        <label [class]="styles.field"><select #backgroundSelect [attr.aria-label]="c().steps[0]" (change)="pickBackground(backgroundSelect.value)">
+          @for (item of backgroundCards(); track item.id) { <option [value]="item.id" [selected]="item.id === build().backgroundId">{{ item.name }}</option> }
+        </select></label>
+      } @else {
+        <div [class]="styles.cardGrid">
+          @for (item of backgroundCards(); track item.id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="item.id === build().backgroundId" (click)="chooseBackground(item.id)">
+              <strong>{{ item.name }}</strong><small>{{ item.small }}</small><em>{{ item.summary }}</em>
+            </button>
+          }
+        </div>
+      }
+      <div [class]="styles.detail">
+        @let facts = backgroundFacts();
+        <h3>{{ facts.name }}</h3>
+        <dl [class]="styles.facts">
+          <div><dt>{{ c().abilitiesLabel }}</dt><dd>{{ facts.abilities }}</dd></div>
+          <div><dt>{{ c().feat }}</dt><dd>{{ facts.feat }}</dd></div>
+          <div><dt>{{ c().skills }}</dt><dd>{{ facts.skills }}</dd></div>
+          <div><dt>{{ c().tool }}</dt><dd>{{ facts.tool }}</dd></div>
+        </dl>
+      </div>
+    }
+
+    @if (show(2)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[2] }}</h3> }
+      <p [class]="styles.intro">{{ c().speciesIntro }}</p>
+      @if (quick()) {
+        <label [class]="styles.field"><select #speciesSelect [attr.aria-label]="c().steps[0]" (change)="pickSpecies(speciesSelect.value)">
+          @for (item of speciesCards(); track item.id) { <option [value]="item.id" [selected]="item.id === build().speciesId">{{ item.name }}</option> }
+        </select></label>
+      } @else {
+        <div [class]="styles.cardGrid">
+          @for (item of speciesCards(); track item.id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="item.id === build().speciesId" (click)="chooseSpecies(item.id)">
+              <strong>{{ item.name }}</strong><small>{{ item.small }}</small><em>{{ item.traits }}</em><small>{{ item.source }}</small>
+            </button>
+          }
+        </div>
+      }
+      <div [class]="styles.detail">
+        @let current = sp();
+        <h3>{{ say(current.name) }}</h3>
+        <dl [class]="styles.facts">
+          <div><dt>{{ c().source }}</dt><dd>{{ say(speciesSources[current.source]) }}</dd></div>
+          @if (current.creatureType) { <div><dt>{{ c().creatureType }}</dt><dd>{{ say(current.creatureType) }}</dd></div> }
+          <div><dt>{{ c().size }}</dt><dd>{{ say(current.size) }}</dd></div>
+          <div><dt>{{ c().speed }}</dt><dd>{{ current.speed }} {{ c().ft }}</dd></div>
+          @if (current.darkvision) { <div><dt>{{ c().darkvision }}</dt><dd>{{ current.darkvision }} {{ c().ft }}</dd></div> }
+          @if (speciesSkillNames()) { <div><dt>{{ c().speciesSkills }}</dt><dd>{{ speciesSkillNames() }}</dd></div> }
+        </dl>
+        <h4 [class]="styles.subhead">{{ c().traits }}</h4>
+        <dl [class]="styles.traitList">
+          @for (trait of current.traits; track trait.name.en) { <div><dt>{{ say(trait.name) }}</dt><dd>{{ say(trait.tip) }}</dd></div> }
+        </dl>
+        @if (current.lineages; as lineages) {
+          <fieldset [class]="styles.group"><legend>{{ say(current.lineageLabel) }}</legend><div [class]="styles.pills">
+            @for (lineage of lineages; track lineage.id) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="lineage.id === build().lineageId" (click)="setLineage(lineage.id)">
+                <strong>{{ say(lineage.name) }}</strong>@if (lineage.detail) {<small>{{ say(lineage.detail) }}</small>}
+              </button>
+            }
+          </div>
+            @if (chosenLineage()?.description) { <p [class]="styles.lineageText"><b>{{ say(chosenLineage()?.name) }}.</b> {{ say(chosenLineage()?.description) }}</p> }
+          </fieldset>
+        }
+        @if (sizeOptions().length > 0) {
+          <fieldset [class]="styles.group"><legend>{{ c().chooseSize }}</legend><div [class]="styles.pills">
+            @for (size of sizeOptions(); track size) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="chosenSize() === size" (click)="setSize(size)">
+                <strong>{{ say(speciesSizeNames[size]) }}</strong><small>{{ c().sizeHelp[size] }}</small>
+              </button>
+            }
+          </div></fieldset>
+        }
+        @if (needsSpellAbility()) {
+          <fieldset [class]="styles.group"><legend>{{ c().spellAbility }}</legend><div [class]="styles.pills">
+            @for (ability of spellAbilityOptions; track ability) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="build().speciesSpellAbility === ability" (click)="setSpeciesSpellAbility(ability)">
+                <strong>{{ t("ability." + ability) }}</strong>@if (cls().spellcasting?.ability === ability) {<small>✦ {{ c().classCasts }}</small>}
+              </button>
+            }
+          </div><p [class]="styles.note">{{ c().spellAbilityHelp }}</p></fieldset>
+        }
+        @if (current.skillChoice; as skillChoice) {
+          <fieldset [class]="styles.group"><legend>{{ c().chooseSkill(skillChoice.count) }}</legend>
+            <div appSkillPicker [class]="styles.skillGrid" [lockedLabel]="c().already" [options]="speciesSkillOptions()" [chosen]="build().speciesSkills"
+              [limit]="skillChoice.count" [locked]="speciesSkillLocked()" [onChange]="changeSpeciesSkills"></div>
+          </fieldset>
+        }
+        @if (current.originFeat) {
+          <fieldset [class]="styles.group"><legend>{{ c().chooseFeat }}</legend><div [class]="styles.pills">
+            @for (option of originFeatOptions(); track option.feat) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="build().speciesFeat === option.feat" [disabled]="option.disabled" [attr.title]="option.title"
+                (click)="pickSpeciesFeat(option.feat)">
+                <strong>{{ option.name }}</strong><small>{{ option.summary }}</small>
+              </button>
+            }
+          </div>
+            @if (build().speciesFeat === "magicInitiate") {
+              <label [class]="styles.field">{{ c().spellList }}<select #listSelect (change)="setMagicInitiateList(listSelect.value)">
+                @for (list of magicInitiateListIds; track list) { <option [value]="list" [selected]="(build().magicInitiateList ?? 'wizard') === list">{{ say(magicInitiateLists[list]) }}</option> }
+              </select></label>
+            }
+          </fieldset>
+        }
+      </div>
+    }
+
+    @if (show(3)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[3] }}</h3> }
+      <p [class]="styles.intro">{{ c().abilitiesIntro }}</p>
+      <div [class]="styles.tabs" role="radiogroup">
+        @for (method of methods; track method) {
+          <button type="button" [class]="styles.choice" [attr.aria-pressed]="build().abilityMethod === method" (click)="setMethod(method)"><strong>{{ c().methods[method] }}</strong><small>{{ c().methodHelp[method] }}</small></button>
+        }
+      </div>
+      <div [class]="styles.toolbar">
+        @if (build().abilityMethod !== "pointBuy" && pool().length === 6) { <button type="button" [class]="styles.link" (click)="suggest()">✧ {{ c().suggest }}</button> }
+        @if (awaitingRoll()) { <button type="button" class="button button-primary" (click)="rollScores()">⚄︎ {{ c().roll }}</button> }
+        @if (build().abilityMethod === "rolled" && pool().length === 6) {
+          <ol [class]="styles.rolls" [attr.aria-label]="c().methods['rolled']">
+            @for (roll of rolls(); track $index) { <li [attr.title]="roll.title" [attr.aria-label]="roll.label">{{ roll.value }}</li> }
+          </ol>
+        }
+        @if (build().abilityMethod === "pointBuy") { <span [class]="styles.pool" [attr.data-bad]="pointsSpent() > pointBudget ? 'true' : null">{{ c().points(pointsSpent()) }}</span> }
+      </div>
+      @if (build().abilityMethod === "rolled") { <p [class]="styles.note">{{ awaitingRoll() ? c().rollOnce : c().rollLocked }}</p> }
+      <div [class]="styles.abilityTable">
+        <div [class]="styles.abilityHead"><span></span><span>{{ c().base }}</span><span>{{ c().bonus }}</span><span>{{ c().final }}</span><span>{{ c().mod }}</span></div>
+        @for (row of abilityRows(); track row.key) {
+          <div [class]="styles.abilityRow">
+            <b>{{ row.name }}@if (row.primary) {<i [title]="c().primary"> ★︎</i>}</b>
+            <span>
+              @if (build().abilityMethod === "pointBuy") {
+                <span [class]="styles.stepper">
+                  <button type="button" (click)="adjust(row.key, -1)" [disabled]="row.lowerDisabled" [attr.aria-label]="row.lowerLabel">−</button>
+                  <output>{{ row.base }}</output>
+                  <button type="button" (click)="adjust(row.key, 1)" [disabled]="row.raiseDisabled" [attr.aria-label]="row.raiseLabel">+</button>
+                  <small>{{ row.cost }}</small>
+                </span>
+              } @else if (awaitingRoll()) {
+                <span aria-hidden="true">—</span>
+              } @else {
+                <select #scoreSelect (change)="assign(row.key, +scoreSelect.value)" [attr.aria-label]="row.name">
+                  @for (value of poolOptions(); track value) { <option [value]="value" [selected]="value === row.base">{{ value }}</option> }
+                </select>
+              }
+            </span>
+            <span [class]="styles.bonusCell">{{ row.bonus }}</span>
+            <strong>{{ row.final }}</strong>
+            <span [class]="styles.mod">{{ row.mod }}</span>
+          </div>
+        }
+      </div>
+      <fieldset [class]="styles.group"><legend>{{ c().bonusMode }} · {{ say(bg().name) }}</legend>
+        <div [class]="styles.inline">
+          <label [class]="styles.check"><input type="radio" name="bonus-mode" [checked]="build().bonusMode === 'plus2plus1'" (change)="setBonusMode('plus2plus1')" />{{ c().plus2plus1 }}</label>
+          <label [class]="styles.check"><input type="radio" name="bonus-mode" [checked]="build().bonusMode === 'plus1x3'" (change)="setBonusMode('plus1x3')" />{{ c().plus1x3 }}</label>
+        </div>
+        @if (build().bonusMode === "plus2plus1") {
+          <div [class]="styles.inline">
+            @for (slot of bonusSlots; track slot) {
+              <label [class]="styles.field">{{ slot === 0 ? c().plusTwo : c().plusOne }}<select #bonusSelect (change)="setBonusAbility(slot, bonusSelect.value)">
+                  @for (key of bg().abilities; track key) { <option [value]="key" [selected]="build().bonusAbilities[slot] === key">{{ t("ability." + key) }}</option> }
+                </select>
+              </label>
+            }
+          </div>
+        }
+      </fieldset>
+      @if (!awaitingRoll() && !validScores()) { <p [class]="styles.warning" role="alert">{{ c().issues["scores"] }}</p> }
+    }
+
+    @if (show(4)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[4] }}</h3> }
+      <p [class]="styles.intro">{{ c().profIntro }}</p>
+      <fieldset [class]="styles.group"><legend>{{ say(cls().name) }} · {{ c().skillsPick(cls().skillCount) }}</legend>
+        <div appSkillPicker [class]="styles.skillGrid" [lockedLabel]="c().already" [options]="classOptions()" [chosen]="build().classSkills" [limit]="cls().skillCount"
+          [locked]="beforeClass()" [onChange]="changeClassSkills"></div>
+      </fieldset>
+      @if (feats().includes("skilled")) {
+        <fieldset [class]="styles.group"><legend>{{ c().skilled }}</legend>
+          <div appSkillPicker [class]="styles.skillGrid" [lockedLabel]="c().already" [options]="allSkills" [chosen]="build().featSkills" [limit]="3"
+            [locked]="featSkillLocked()" [onChange]="changeFeatSkills"></div>
+        </fieldset>
+      }
+      @if (cls().expertiseAtLevel1; as expertiseCount) {
+        <fieldset [class]="styles.group"><legend>{{ c().expertise(expertiseCount) }}</legend>
+          <div appSkillPicker [class]="styles.skillGrid" lockedLabel="" [options]="proficientForExpertise()" [chosen]="build().expertise" [limit]="expertiseCount"
+            [locked]="noLocks" [onChange]="changeExpertise"></div>
+        </fieldset>
+      }
+    }
+
+    @if (show(spellsStep)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[spellsStep] }}</h3> }
+      @if (casting()) { <p [class]="styles.intro">{{ c().spellsIntro }}</p> }
+      <app-spell-manager [build]="build()" [level]="level()" [value]="build().spells" [onChange]="changeSpells" />
+      @if (spellsMissing(); as text) { <p [class]="styles.note" role="status">{{ text }}</p> }
+    }
+
+    @if (show(6)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[6] }}</h3> }
+      <p [class]="styles.intro">{{ c().equipmentIntro }}</p>
+      @for (group of kitGroups(); track group.title) {
+        <fieldset [class]="styles.group"><legend>{{ group.title }}</legend><div [class]="styles.kitGrid">
+          @for (option of group.options; track option.id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="group.value === option.id" (click)="setKit(group.kind, option.id)">
+              <strong>{{ option.label }}</strong><ul>@for (item of option.items; track item.key) {<li>{{ item.text }}</li>}</ul>
+            </button>
+          }
+        </div></fieldset>
+      }
+      <p [class]="styles.gold">{{ c().totalGold }}: <b>{{ gold() }}</b></p>
+    }
+
+    @if (show(7)) {
+      @if (quick()) { <h3 [class]="styles.sectionTitle">{{ c().steps[7] }}</h3> }
+      <p [class]="styles.intro">{{ c().detailsIntro }}</p>
+      <div [class]="styles.formGrid">
+        <label [class]="styles.field">{{ c().name }}<input #nameInput required maxlength="50" [value]="name()" (input)="name.set(nameInput.value)" [placeholder]="c().namePlaceholder" /></label>
+        <label [class]="styles.field">{{ c().alignment }}<select #alignmentSelect (change)="setAlignment(alignmentSelect.value)">
+          @for (item of alignments; track item.en; let index = $index) { <option [value]="index" [selected]="build().alignment === index">{{ say(item) }}</option> }
+        </select></label>
+      </div>
+      <fieldset [class]="styles.group"><legend>{{ c().languages }}</legend><p [class]="styles.note">{{ c().languagesHelp }}</p><div [class]="styles.skillGrid">
+        @for (language of languageOptions(); track language.key) {
+          <label [class]="styles.skill" [attr.data-on]="language.chosen ? 'true' : null">
+            <input #languageBox type="checkbox" [checked]="language.chosen" [disabled]="language.disabled" (change)="toggleLanguage(language.index, languageBox.checked)" />
+            <span>{{ language.name }}</span>
+          </label>
+        }
+      </div></fieldset>
+      <label [class]="styles.field">{{ c().appearance }}<textarea #appearanceInput rows="3" maxlength="600" [value]="build().appearance" (input)="setAppearance(appearanceInput.value)"></textarea></label>
+      <label [class]="styles.field">{{ c().notes }}<textarea #notesInput rows="3" maxlength="500" [value]="notes()" (input)="notes.set(notesInput.value)"></textarea></label>
+    }
+
+    @if (show(8)) {
+      @if (summary(); as view) {
+        <p [class]="styles.intro">{{ c().summaryIntro }}</p>
+        <article [class]="styles.summary">
+          <header><h3>{{ view.name }}</h3><p>{{ view.identity }}</p>
+            <p>{{ view.origin }}</p></header>
+          <div [class]="styles.vitals">
+            @for (vital of view.vitals; track vital.label) { <div><span>{{ vital.label }}</span><b>{{ vital.value }}</b></div> }
+          </div>
+          <div [class]="styles.abilityStrip">
+            @for (ability of view.abilities; track ability.key) {
+              <div>
+                <span>{{ ability.short }}</span><b>{{ ability.mod }}</b><small>{{ ability.score }}</small>
+                <em [class]="ability.saveProficient ? styles.prof : ''">{{ ability.save }}</em>
+              </div>
+            }
+          </div>
+          <div [class]="styles.twoCol">
+            <section><h4>{{ c().skills }}</h4><ul [class]="styles.skillList">
+              @for (skill of view.skills; track skill.skill) { <li [class]="skill.proficient ? styles.prof : ''"><i>{{ skill.mark }}</i>{{ skill.name }}<b>{{ skill.bonus }}</b></li> }
+            </ul></section>
+            <section>
+              <h4>{{ c().features }}</h4><p>{{ view.features }}</p>
+              <h4>{{ c().traits }}</h4><p>{{ view.traits }}</p>
+              <h4>{{ c().feat }}</h4><p>{{ view.feats }}</p>
+              @if (view.spellcasting) { <h4>{{ c().spellcasting }}</h4><p>{{ view.spellcasting }}</p> }
+              @for (group of view.spellGroups; track group.level) { <p><b>{{ group.name }}:</b> {{ group.spells }}</p> }
+              <h4>{{ c().languages }}</h4><p>{{ view.languages }}</p>
+              <h4>{{ c().totalGold }}</h4><p>{{ view.gold }}</p>
+            </section>
+          </div>
+        </article>
+      }
+    }
+  </div>
+
+  <footer [class]="styles.foot">
+    <span [class]="styles.issues" role="status">{{ issueText() }}</span>
+    <button type="button" class="button button-quiet" (click)="back()">{{ !quick() && step() ? "‹ " + c().back : c().cancel }}</button>
+    @if (!quick() && step() < last()) {
+      <button type="button" class="button button-primary" (click)="go(step() + 1)" [disabled]="issues().length > 0">{{ c().next }} ›</button>
+    } @else {
+      <button type="button" class="button button-primary" (click)="finish()" [disabled]="quick() && issues().length > 0">✦ {{ c().save }}</button>
+    }
+  </footer>
+  <p [class]="styles.srd">{{ c().srd }}</p>
+</section>

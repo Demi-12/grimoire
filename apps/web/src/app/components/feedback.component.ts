@@ -21,7 +21,8 @@ const labels = {
   host: { class: "contents" },
   template: `
     <!-- Escape fires "cancel"; the service stays in charge of closing so the promise always settles.
-         A click on the backdrop lands on the <dialog> element itself. -->
+         A click on the backdrop lands on the <dialog> element itself; its keyboard twin is Escape. -->
+    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
     <dialog #dialog class="dialog" [attr.aria-labelledby]="titleId()" [attr.aria-describedby]="hasMessage() ? messageId() : null"
       (cancel)="$event.preventDefault(); feedback.answer(false)" (click)="$event.target === dialog && feedback.answer(false)">
       <div class="card" [class.cardDanger]="danger()">

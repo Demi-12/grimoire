@@ -13,13 +13,15 @@ export default defineConfig({
     // Set PLAYWRIGHT_CHROMIUM_PATH to use a preinstalled Chromium instead of the one `playwright install` downloads.
     launchOptions: process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {},
   },
-  // Serves the production build (run `pnpm build` first). All API calls are mocked in the tests, so no database is needed.
+  // Serves the production build (run `pnpm build` first) from the API server. All API calls are mocked in the
+  // tests, so no database is needed: the server only hands out the web app's files.
   webServer: {
-    command: `pnpm start --port ${port}`,
+    command: "node apps/api/dist/main.js",
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
     env: {
+      PORT: String(port),
       BETTER_AUTH_SECRET: "e2e-placeholder-not-a-secret-0123456789",
       BETTER_AUTH_URL: `http://localhost:${port}`,
     },

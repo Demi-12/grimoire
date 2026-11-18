@@ -1,0 +1,84 @@
+<div class="manager">
+  @if (casting(); as casting) {
+    <div class="summary">
+      <span class="counter">{{ c().ability }}: <b>{{ t("ability." + casting.ability) }}</b></span>
+      @for (counter of counters(); track counter.label) {
+        <span class="counter" [class.bad]="counter.state === 'bad'" [class.complete]="counter.state === 'complete'">{{ counter.label }} <b>{{ counter.have }}</b> {{ c().of }} {{ counter.limit }}</span>
+      }
+    </div>
+  } @else {
+    <p class="help">{{ c().noCasting }}</p>
+  }
+  @if (over()) { <p class="warning" role="alert">{{ c().over }}</p> }
+
+  @if (tabs().length > 1) {
+    <div class="spellTabs" role="group">
+      @for (item of tabs(); track item.tab) {
+        <button type="button" class="tab" [class.tabOn]="active() === item.tab" [attr.aria-pressed]="active() === item.tab" (click)="pickTab(item.tab)">{{ item.label }}</button>
+      }
+    </div>
+  }
+  <p class="help">{{ help() }}</p>
+
+  @if (chosenNames()) { <p class="chosen"><b>{{ c().chosen }}:</b> {{ chosenNames() }}</p> }
+
+  <div class="filters">
+    <input #search type="search" [value]="query()" (input)="query.set(search.value)" [placeholder]="c().search" [attr.aria-label]="c().search" />
+    <select #levelFilter (change)="filter.set(levelFilter.value)" [attr.aria-label]="c().level">
+      <option value="all" [selected]="filter() === 'all'">{{ c().all }}</option>
+      @for (option of levels(); track option.level) {
+        <option [value]="option.level" [selected]="filter() === '' + option.level">{{ option.name }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="list">
+    @if (visibleCount() === 0) { <p class="muted">{{ c().empty }}</p> }
+    @for (group of groups(); track group.level) {
+      <section [attr.aria-label]="group.name">
+        <h4>{{ group.name }}</h4>
+        <ul>
+          @for (row of group.rows; track row.spell.id) {
+            <li [class.picked]="row.isOn">
+              <div class="row">
+                <label [attr.title]="row.blocked ? c().full : null">
+                  <input #box type="checkbox" [checked]="row.isOn" [disabled]="row.blocked" (change)="toggle(row.spell, box.checked)" />
+                  <span><b>{{ row.name }}</b><small>{{ row.meta }}</small></span>
+                </label>
+                <button type="button" class="info" [attr.aria-expanded]="open() === row.spell.id" [attr.aria-label]="c().details(row.name)" (click)="toggleOpen(row.spell.id)">{{ open() === row.spell.id ? "−" : "i" }}</button>
+              </div>
+              @if (open() === row.spell.id) { <app-spell-details [spell]="row.spell" /> }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  </div>
+
+  @if (active() !== "book") {
+    <fieldset class="custom">
+      <legend>{{ c().customTitle }}</legend>
+      <p class="help">{{ active() === "class" ? c().customHelp : c().customHelpOther }}</p>
+      <div class="filters">
+        <input #customInput [value]="customName()" [attr.maxlength]="maxSpellName" (input)="customName.set(customInput.value)" [placeholder]="c().customName" [attr.aria-label]="c().customName"
+          (keydown)="customKeydown($event)" />
+        <select #customLevelSelect (change)="customLevel.set(+customLevelSelect.value)" [attr.aria-label]="c().level">
+          @for (spellLevel of customLevels; track spellLevel) {
+            <option [value]="spellLevel" [selected]="customLevel() === spellLevel">{{ levelName(spellLevel) }}</option>
+          }
+        </select>
+        <button type="button" class="button button-quiet" (click)="addCustom()" [disabled]="addDisabled()" [attr.title]="customFull() ? c().full : null">{{ c().add }}</button>
+      </div>
+      @if (customHere().length > 0) {
+        <ul class="customList">
+          @for (item of customHere(); track item.key) {
+            <li>
+              <span>{{ item.entry.name }} <small>{{ item.levelName }}</small></span>
+              <button type="button" class="info" [attr.aria-label]="c().remove(item.entry.name)" (click)="removeCustom(item.index)">×</button>
+            </li>
+          }
+        </ul>
+      }
+    </fieldset>
+  }
+</div>

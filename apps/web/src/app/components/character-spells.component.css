@@ -26,7 +26,8 @@ button.pip:hover::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent
 .spell small { font-size: var(--text-xs); color: var(--muted); text-align: right; }
 .spell i { flex: none; width: 18px; text-align: center; font: 700 15px var(--font-display); font-style: normal; color: var(--accent); }
 .spell:hover span { color: var(--accent); }
-.group li > div { padding-inline: 0; border-top: 0; padding-top: 0; }
+/* The spell text block of <app-spell-details>, which lives in that component's own template. */
+.group li ::ng-deep app-spell-details > .details { padding-inline: 0; border-top: 0; padding-top: 0; }
 
 /* The desktop layout zooms <html> (--ui-zoom), so viewport units are divided by it to stay inside the window. */
 .dialog { --zoom: var(--ui-zoom, 1); width: min(920px, calc(100vw / var(--zoom) - 24px)); max-width: none; max-height: calc(100dvh / var(--zoom) - 24px); margin: auto; padding: 0; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }

@@ -1,0 +1,65 @@
+<ng-template #ccBy><a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noreferrer">CC-BY-4.0</a></ng-template>
+
+@if (!monster() && !monsterSlug()) {
+  <div class="empty">{{ t().empty }}</div>
+} @else if (error() && !monster()) {
+  <div class="error" role="alert">{{ t().error }}<p>{{ t().errorHint }}</p><button type="button" (click)="retry()">{{ t().retry }}</button></div>
+} @else if (sheet(); as sheet) {
+  <article class="frame" [attr.aria-label]="sheet.monster.name + ' stat block'">
+    <header class="header"><p class="sheetEyebrow">{{ sheet.eyebrow }}</p><h2 class="name">{{ sheet.monster.name }}</h2><p class="kind">{{ sheet.kind }}</p></header>
+    @if (!compact()) {
+      @if (sheet.monster.image && !portraitFailed()) {
+        <figure class="portrait"><img [src]="sheet.monster.image" [alt]="sheet.monster.name" loading="lazy" (error)="portraitFailed.set(true)" /></figure>
+      } @else {
+        <figure class="portrait"><div class="portraitFallback" role="img" [attr.aria-label]="t().noImage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-4.4 0-7 2.9-7 6.5 0 2 .8 3.4 2 4.4V17h2v-1.5h1V17h2v-1.5h1V17h2v-3.1c1.2-1 2-2.4 2-4.4C19 5.9 16.4 3 12 3z" /><circle cx="9.5" cy="10" r="1.2" /><circle cx="14.5" cy="10" r="1.2" /><path d="M9 20h6" /></svg>
+          <span>{{ t().noImage }}</span>
+        </div></figure>
+      }
+    }
+    <div class="quickStats">
+      <div><span>{{ t().ac }}</span><strong>{{ sheet.ac }}</strong></div>
+      <div><span>{{ t().hp }}</span><strong>{{ sheet.monster.hit_points ?? "—" }}</strong>@if (sheet.monster.hit_dice) {<small>({{ sheet.monster.hit_dice }})</small>}</div>
+      <div><span>{{ t().cr }}</span><strong>{{ sheet.monster.challenge_rating ?? "—" }}</strong>@if (sheet.xp) {<small>{{ sheet.xp }}</small>}</div>
+    </div>
+    <section class="section"><h3 class="sectionTitle">{{ t().abilities }}</h3><div class="abilities">
+      @for (ability of sheet.abilities; track ability.key) {
+        <div class="ability"><span>{{ ability.name }}</span><b>{{ ability.score ?? "—" }}</b>@if (ability.modifier) {<small>{{ ability.modifier }}</small>}</div>
+      }
+    </div></section>
+    <div class="facts">
+      @if (sheet.speed) { <p><b>{{ sheet.speedLabel }}</b> {{ sheet.speed }}</p> }
+      @if (sheet.saves) { <p><b>{{ t().saves }}</b> {{ sheet.saves }}</p> }
+      @if (sheet.defenses) { <p><b>{{ t().defenses }}</b> {{ sheet.defenses }}</p> }
+      @if (sheet.senses !== null) { <p><b>{{ t().senses }}</b> {{ sheet.senses }}</p> }
+      @if (sheet.languages) { <p><b>{{ t().languages }}</b> {{ sheet.languages }}</p> }
+      @if ((sheet.monster.proficiency_bonus ?? null) !== null) { <p><b>{{ t().prof }}</b> +{{ sheet.monster.proficiency_bonus }}</p> }
+    </div>
+    @for (list of sheet.traits; track list.title) {
+      <section class="section"><h3 class="sectionTitle">{{ list.title }}</h3>@for (item of list.items; track $index) {<article class="trait"><strong>{{ item.name }}</strong>@if (item.name) {. }@if (item.text) {<p>{{ item.text }}</p>}</article>}</section>
+    }
+    @if (sheet.monster.homebrew) {
+      <p class="legal">{{ sheet.homebrewNote }}</p>
+    } @else {
+      <p class="source">{{ sheet.sourceLine }}</p>
+      <p class="legal">
+        @switch (sheet.notice) {
+          @case ("srd51") {This work includes material from the <a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noreferrer">System Reference Document 5.1 (“SRD 5.1”)</a> by Wizards of the Coast LLC. The SRD 5.1 is licensed under <ng-container [ngTemplateOutlet]="ccBy" />.}
+          @case ("srd52") {This work includes material from the <a href="https://www.dndbeyond.com/srd" target="_blank" rel="noreferrer">System Reference Document 5.2 (“SRD 5.2”)</a> by Wizards of the Coast LLC, available at D&amp;D Beyond. The SRD 5.2 is licensed under <ng-container [ngTemplateOutlet]="ccBy" />.}
+          @default {
+            @if (sheet.book; as book) {Stat block from @if (book.url) {<a [href]="book.url" target="_blank" rel="noreferrer">{{ book.name }}</a>} @else {<ng-container>{{ book.name }}</ng-container>}{{ book.publisher }}, open game content used under @if (book.ccBy) {<ng-container [ngTemplateOutlet]="ccBy" />} @else {the Open Game License v1.0a}, served by <a href="https://open5e.com" target="_blank" rel="noreferrer">Open5e</a>. Not endorsed by Wizards of the Coast.}
+          }
+        }
+      </p>
+    }
+  </article>
+} @else {
+  <div appSkeletonRegion [label]="t().loading" class="loading">
+    <span appSkeleton width="55%" [height]="30"></span>
+    <span appSkeletonText [lines]="2"></span>
+    <div class="skeleton-grid" [style.grid-template-columns]="'repeat(3, 1fr)'" [style.margin]="'14px 0'">
+      @for (item of [0, 1, 2, 3, 4, 5]; track item) { <span appSkeleton [height]="44"></span> }
+    </div>
+    <span appSkeletonText [lines]="4"></span>
+  </div>
+}

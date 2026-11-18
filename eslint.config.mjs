@@ -1,22 +1,33 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import angular from "angular-eslint";
+import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  ...nextVitals,
-  ...nextTs,
+  globalIgnores(["**/dist/**", "**/.angular/**", "**/node_modules/**", "playwright-report/**", "test-results/**", "coverage/**"]),
   {
+    files: ["**/*.ts"],
+    extends: [tseslint.configs.recommended],
     rules: {
       // `const { [id]: _drop, ...rest } = obj` is the idiom for omitting a key.
       "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true }],
-      // The React Compiler rules below (new in eslint-plugin-react-hooks 7) flag patterns that are
-      // used throughout the existing components: loading data / reading localStorage inside effects,
-      // and resetting state when a prop changes. Fixing them means restructuring product code, which
-      // is out of scope for adding the linter, so they are off until those components are reworked.
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/immutability": "off",
-      "react-hooks/preserve-manual-memoization": "off",
     },
   },
-  globalIgnores([".next/**", "out/**", "node_modules/**", "next-env.d.ts", "playwright-report/**", "test-results/**"]),
+  {
+    files: ["apps/web/src/**/*.ts"],
+    extends: [angular.configs.tsRecommended],
+    processor: angular.processInlineTemplates,
+    rules: {
+      // Pages are routed components named after their route (HomePage, MapPage…), not *Component.
+      "@angular-eslint/component-class-suffix": ["error", { suffixes: ["Component", "Page"] }],
+      // Off: besides `app-*` elements, components here sit on the element they draw (`svg[appIcon]`,
+      // `header[appPageHeader]`, `li[appSpellRow]`) so the DOM and the CSS keep their shape, and the rule can
+      // only describe one of the two forms.
+      "@angular-eslint/component-selector": "off",
+      "@angular-eslint/directive-selector": ["error", { type: "attribute", prefix: "app", style: "camelCase" }],
+    },
+  },
+  {
+    files: ["apps/web/src/**/*.html"],
+    extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
+  },
 ]);
