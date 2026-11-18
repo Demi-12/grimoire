@@ -1,6 +1,7 @@
-import { ErrorHandler, type ApplicationConfig } from "@angular/core";
+import { ErrorHandler, provideAppInitializer, type ApplicationConfig } from "@angular/core";
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from "@angular/router";
 import { routes } from "./app.routes";
+import { scrollToAnchors } from "./core/anchor-scrolling";
 import { CrashService } from "./core/crash.service";
 
 export const appConfig: ApplicationConfig = {
@@ -9,7 +10,9 @@ export const appConfig: ApplicationConfig = {
     // (window `error`, unhandled rejections) are reported by installErrorReporting() in main.ts, which leaves out
     // browser extensions and aborted requests; so no provideBrowserGlobalErrorListeners() here.
     { provide: ErrorHandler, useExisting: CrashService },
-    // Route params arrive as component inputs; a new page starts at the top, and `#fragment` links scroll to their target.
-    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: "enabled", anchorScrolling: "enabled" })),
+    // Route params arrive as component inputs and a new page starts at the top. `#fragment` links are handled by
+    // scrollToAnchors(), which scrolls without focusing the target as Angular's anchorScrolling would.
+    provideRouter(routes, withComponentInputBinding(), withInMemoryScrolling({ scrollPositionRestoration: "enabled" })),
+    provideAppInitializer(scrollToAnchors),
   ],
 };
