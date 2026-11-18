@@ -1,6 +1,6 @@
 /**
  * Rules for gaining a level (2024): which choices a level offers, whether they are valid and how to record them.
- * The guide in components/level-up.tsx only collects choices; everything it shows about the result comes from here.
+ * The guide in the web app (level-up.component) only collects choices; everything it shows about the result comes from here.
  */
 import { proficiencyBonus, type AbilityKey } from "./rules.js";
 import { findClass, say, skillKeys, type SkillKey, type Text } from "./dnd2024.js";

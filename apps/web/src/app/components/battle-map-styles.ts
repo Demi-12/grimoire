@@ -1,5 +1,5 @@
 /**
- * Tailwind class lists for the battle map page (battle-map.tsx). The board's colours are theme tokens
+ * Tailwind class lists for the battle map page (battle-map.component). The board's colours are theme tokens
  * (map-floor, map-line, map-coord); the paints on it (walls, doors, fog, token rims) stay fixed in both themes,
  * because they sit on the board, not on the page. States are passed in, so each element gets one set of classes.
  */
@@ -112,7 +112,7 @@ export const bm = {
   tableBoard: "grid min-h-0 flex-1 place-items-center [container-type:size]",
   tableTurn: "flex-none border-2 border-gilt px-2.5 py-0.5 font-label text-base font-bold",
 
-  /* Fights: initiative order, turns and movement (battle-map-combat.tsx). */
+  /* Fights: initiative order, turns and movement (battle-map-combat.component). */
   /** The squares the creature whose turn it is can still reach. */
   reach: "pointer-events-none fill-gilt [fill-opacity:.24]",
   /** A dashed gilt ring turning slowly round the creature whose turn it is. */
@@ -141,7 +141,7 @@ export const bm = {
   /** A row left out of the fight. */
   setupOut: "[&_th]:opacity-55 [&_td:nth-child(3)]:opacity-55",
 
-  /* The sheet of the picked token, next to the board (battle-map-sheet.tsx). */
+  /* The sheet of the picked token, next to the board (battle-map-sheet.component). */
   sheet: "gap-2!",
   sheetHead: "flex items-center gap-2 [&_h2]:min-w-0 [&_h2]:flex-1 [&_h2]:[overflow-wrap:anywhere]",
   sheetBody: "grid max-h-[min(75vh,900px)] gap-2.5 overflow-auto overscroll-contain",

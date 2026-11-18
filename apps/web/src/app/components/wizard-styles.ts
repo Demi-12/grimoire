@@ -1,5 +1,5 @@
 /**
- * Tailwind class lists for the step-by-step creator (character-wizard.tsx) and the level-up dialog (level-up.tsx),
+ * Tailwind class lists for the step-by-step creator (character-wizard.component) and the level-up dialog (level-up.component),
  * which share their frame, step bar, option cards and fields. Keys keep the names the screens already use.
  * States are attributes on the element, not extra classes: data-state="current" | "done" on a step, data-on and
  * data-locked on a skill, data-bad on the point pool. Option cards are the shared .choice (styles/ui.css).

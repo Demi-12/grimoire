@@ -1,5 +1,5 @@
 /**
- * Bodies of the authentication emails. Pure functions (no SMTP, no `server-only`) so they can be unit-tested.
+ * Bodies of the authentication emails. Pure functions (no SMTP) so they can be unit-tested.
  *
  * Email clients ignore external stylesheets, web fonts and SVG, so the HTML uses nested tables, inline styles and
  * `bgcolor` attributes (Outlook), with Georgia standing in for Alegreya. Colours follow src/app/tokens.css.

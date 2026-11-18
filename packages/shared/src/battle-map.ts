@@ -1,7 +1,7 @@
 /**
  * Shared battle map of a campaign: a square grid with hero and monster tokens.
  * Pure rules (validation, permissions, applying changes, what each viewer sees) so they can be unit tested;
- * storage and real-time delivery live in battle-map-data.ts and battle-map-hub.ts.
+ * storage and real-time delivery live in the API (apps/api/src/map: map.service.ts and battle-map-hub.ts).
  */
 
 export const MAP_MIN_SIZE = 4;

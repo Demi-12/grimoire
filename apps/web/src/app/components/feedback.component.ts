@@ -52,7 +52,8 @@ const labels = {
 })
 export class ConfirmDialogComponent implements OnDestroy {
   protected readonly feedback = inject(FeedbackService);
-  private readonly locale = inject(I18nService).locale;
+  /** The buttons keep the language the question was asked in, like its title and message. */
+  private readonly labels = labels[inject(I18nService).locale()];
 
   readonly request = input.required<ConfirmRequest>();
 
@@ -60,7 +61,7 @@ export class ConfirmDialogComponent implements OnDestroy {
   private readonly confirmButton = viewChild.required<ElementRef<HTMLButtonElement>>("confirm");
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>("cancel");
 
-  protected readonly t = computed(() => labels[this.locale()]);
+  protected readonly t = () => this.labels;
   protected readonly danger = computed(() => this.request().tone === "danger");
   protected readonly hasMessage = computed(() => Boolean(this.request().message || this.request().copyField));
   protected readonly titleId = computed(() => `confirm-title-${this.request().id}`);

@@ -6,7 +6,7 @@
   "description": "NestJS API: accounts, campaigns, characters, bestiary and the live battle map. Serves the built web app in production.",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "nest start --watch --env-file ../../.env --env-file dev.env",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"

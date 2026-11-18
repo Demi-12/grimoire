@@ -101,8 +101,11 @@ export function parseTelemetry(body: unknown): ClientEvent | ClientErrorReport |
 
 const EXTENSION_URL = /^(chrome|moz|safari|safari-web)-extension:|^webkit-masked-url:/;
 const URL_IN_TEXT = /\b(?:https?|webkit-masked-url|(?:chrome|moz|safari|safari-web)-extension):\/\/[^\s)]+/g;
-/** Every script this app ships is served from /_next/ (bundled chunks, in development too). */
-const isAppScript = (url: string) => /^https?:\/\/[^/]+\/_next\//.test(url);
+/**
+ * Every script this app ships is an Angular bundle at the site's root: `main-<hash>.js`, `chunk-<hash>.js`,
+ * `polyfills-<hash>.js` (without the hash under `ng serve`). In a stack the URL is followed by `:line:column`.
+ */
+const isAppScript = (url: string) => /^https?:\/\/[^/]+\/(?:main|chunk|polyfills)(?:-[A-Z0-9]{8})?\.js(?:[?#:]|$)/.test(url);
 
 /**
  * Whether an uncaught browser error came from a script that isn't ours: an extension, or code a browser

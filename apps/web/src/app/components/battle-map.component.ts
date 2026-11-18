@@ -135,7 +135,8 @@ export class BattleMapComponent {
       this.campaignId();
       untracked(() => track("page.view", { section: "map" }));
     });
-    useDocumentTitle(() => { const name = this.campaignName(); return name === null ? null : this.t().docTitle(name); });
+    // Until the map (and its campaign's name) arrives, the page's own title, as the server-rendered page had.
+    useDocumentTitle(() => { const name = this.campaignName(); return name === null ? "Battle map · Grimoire" : this.t().docTitle(name); });
 
     effect((onCleanup) => {
       if (this.heroKey() === null) return;

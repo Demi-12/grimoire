@@ -51,7 +51,7 @@ export interface CatalogCreature {
   monsterSlug?: string; cr?: number; type?: string; roleTags?: string[];
 }
 
-/** A homebrew monster as returned by /api/homebrew (mirrors HomebrewView in src/lib/data.ts). */
+/** A homebrew monster as returned by /api/homebrew (mirrors HomebrewView in apps/api/src/homebrew/homebrew.service.ts). */
 export interface HomebrewMonster {
   id: string; ownerId: string; ownerName: string; mine: boolean;
   name: string; cr: number; xp: number; type: string; roleTags: MonsterRole[];

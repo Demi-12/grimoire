@@ -101,22 +101,28 @@ describe("isForeignScriptError", () => {
   it("ignores errors thrown inside extensions, including Safari's masked extension URLs", () => {
     expect(isForeignScriptError({ filename: "chrome-extension://abc/content.js" })).toBe(true);
     expect(isForeignScriptError({
-      stack: "f@webkit-masked-url://hidden/:1:2\nonClick@https://grimoire.demigv.dev/_next/static/chunks/app.js:1:2",
+      stack: "f@webkit-masked-url://hidden/:1:2\nonClick@https://grimoire.demigv.dev/main-K3J5QW2A.js:1:2",
     })).toBe(true);
   });
 
   it("keeps the app's own errors even when an extension sits lower in the stack", () => {
     expect(isForeignScriptError({
-      stack: "onClick@https://grimoire.demigv.dev/_next/static/chunks/app.js:1:2\nwrapped@chrome-extension://abc/hook.js:3:4",
+      stack: "onClick@https://grimoire.demigv.dev/main-K3J5QW2A.js:1:2\nwrapped@chrome-extension://abc/hook.js:3:4",
     })).toBe(false);
   });
 
   it("keeps errors from the app's own chunks", () => {
     expect(isForeignScriptError({
-      filename: "https://grimoire.demigv.dev/_next/static/chunks/123.js",
-      stack: "TypeError: x is undefined\n    at render (https://grimoire.demigv.dev/_next/static/chunks/123.js:4:56)",
+      filename: "https://grimoire.demigv.dev/chunk-7XQ2LM4B.js",
+      stack: "TypeError: x is undefined\n    at render (https://grimoire.demigv.dev/chunk-7XQ2LM4B.js:4:56)",
     })).toBe(false);
-    expect(isForeignScriptError({ stack: "save@http://localhost:3000/_next/static/chunks/src_abc.js:10:2" })).toBe(false);
+    // `ng serve` names its bundles without a hash.
+    expect(isForeignScriptError({ stack: "save@http://localhost:3000/main.js:10:2" })).toBe(false);
+  });
+
+  it("does not mistake other scripts at the root for the app's bundles", () => {
+    expect(isForeignScriptError({ stack: "x@https://grimoire.demigv.dev/main-extension.js:1:1" })).toBe(true);
+    expect(isForeignScriptError({ stack: "x@https://grimoire.demigv.dev/assets/chunk-7XQ2LM4B.js:1:1" })).toBe(true);
   });
 
   it("keeps errors with no location, since they can't be ruled out", () => {

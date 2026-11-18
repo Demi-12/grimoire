@@ -1,10 +1,10 @@
 /**
  * Account backup format (JSON, versioned) shared by the export route, the restore route and tests.
- * Nothing here touches the database: the data layer (backup-data.ts) plugs its queries into the
+ * Nothing here touches the database: the API (apps/api/src/backup/backup.service.ts) plugs its queries into the
  * `SectionStore` interface and `runRestore` does the orchestration, so idempotence is testable.
  *
  * To add a new kind of data (e.g. homebrew monsters) register one `BackupSection` in `backupSections`
- * and one store in backup-data.ts: parsing, size limits, export, restore and de-duplication all
+ * and one store in backup.service.ts: parsing, size limits, export, restore and de-duplication all
  * iterate the registry, so nothing else needs to change.
  *
  * Restore strategy (documented in docs/data-backup.md): restoring never deletes or overwrites.

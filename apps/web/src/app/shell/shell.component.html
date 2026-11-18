@@ -24,11 +24,7 @@
 <ng-template #navLink let-item>
   <a [routerLink]="item.href" [class]="item.className" [attr.aria-current]="ariaCurrent(item)">
     <span class="nav-icon" aria-hidden="true"><svg [appIcon]="item.icon"></svg></span>
-    @if (item.short) {
-      <span class="nav-label-long">{{ item.label }}</span><span class="nav-label-short">{{ item.short }}</span>
-    } @else {
-      {{ item.label }}
-    }
+    @if (item.short) {<span class="nav-label-long">{{ item.label }}</span><span class="nav-label-short">{{ item.short }}</span>} @else {<ng-container>{{ item.label }}</ng-container>}
     @if (item.count !== undefined) { <small>{{ item.count }}</small> }
     @if (item.target === "admin" && store.pendingCount() > 0) {
       <small class="nav-alert" [attr.aria-label]="t('admin.pendingAria', { count: store.pendingCount() })">{{ store.pendingCount() }}</small>
@@ -94,15 +90,14 @@
           @for (item of runLinks(); track item.target) { <ng-container [ngTemplateOutlet]="navLink" [ngTemplateOutletContext]="{ $implicit: item }" /> }
         </nav>
         <div class="sidebar-bottom">
-          <span class="edition-dot"></span>{{ t("common.rulesLabel") }}
-          <p>{{ t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name }) }}</p>
+          <span class="edition-dot"></span>{{ t("common.rulesLabel") }}<p>{{ t(me.role === "admin" ? "nav.signedInAsAdmin" : "nav.signedInAs", { name: me.name }) }}</p>
           <button type="button" class="sidebar-signout" (click)="store.signOut()">{{ t("gate.signOut") }}</button>
         </div>
       </aside>
 
       <div class="workspace">
         <header class="workspace-header">
-          <div class="mobile-brand"><svg appBrandMark [size]="20"></svg> <span class="brand-word">GRIMOIRE</span></div>
+          <div class="mobile-brand"><svg appBrandMark [size]="20"></svg>&ngsp;<span class="brand-word">GRIMOIRE</span></div>
           <ng-container [ngTemplateOutlet]="controls" />
           <a class="header-control header-account" [class.active]="view() === 'account'" [routerLink]="accountPath" [attr.aria-label]="t('header.accountAria', { name: me.name })"
             [attr.aria-current]="view() === 'account' ? 'page' : null">{{ t("header.account") }}</a>

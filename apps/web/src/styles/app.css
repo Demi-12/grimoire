@@ -1812,7 +1812,7 @@ body {
   }
 }
 
-/* ───────────── Sign-in gate and account panel (auth-panel.tsx, the gate in toolkit.tsx) ───────────── */
+/* ───────────── Sign-in gate and account panel (auth-panel.component, the gate in shell.component) ───────────── */
 :root {
   --auth-surface: var(--surface);
   --auth-border: var(--line);
@@ -2045,7 +2045,7 @@ body {
   }
 }
 
-/* Brand mark (BrandMark in brand.tsx): the favicon's drawing next to the wordmark. */
+/* Brand mark (BrandMarkComponent in brand.component.ts): the favicon's drawing next to the wordmark. */
 .brand-mark {
   flex: none;
   display: block;
@@ -2058,7 +2058,7 @@ body {
   margin-right: 4px;
 }
 
-/* Arcane backdrop (ArcaneBackdrop in brand.tsx): violet glows, a slowly turning arcane circle and gilt motes.
+/* Arcane backdrop (ArcaneBackdropComponent in brand.component.ts): violet glows, a slowly turning arcane circle and gilt motes.
    The gate centres it behind the sign-in card; the app tucks a quieter one into the bottom corner. */
 .gate-shell,
 .app-shell {
@@ -2841,7 +2841,7 @@ body {
   display: grid;
   gap: 12px;
 }
-/* Loading shells (components/loading-shell.tsx): real layout classes with placeholders inside, so nothing moves when content lands. */
+/* Loading shells (components/loading-shell.component): real layout classes with placeholders inside, so nothing moves when content lands. */
 /* One line of the surrounding text tall; clip-path draws the visible bar (and its shimmer) thinner and rounded. */
 .skeleton-lh {
   height: 1.2em;
@@ -3644,7 +3644,7 @@ body {
   }
 }
 
-/* SVG nav icons (components/icons.tsx) size to the glyph slot they replace. */
+/* SVG nav icons (components/icons.component.ts) size to the glyph slot they replace. */
 .icon {
   display: block;
   flex: none;
@@ -3681,7 +3681,7 @@ body {
   }
 }
 
-/* Main navigation (components/toolkit.tsx): links in two groups, "Play" and "Run the game".
+/* Main navigation (shell/shell.component.html): links in two groups, "Play" and "Run the game".
    Every section is open to everyone; the groups only say what each one is for. */
 .side-nav {
   display: flex;
