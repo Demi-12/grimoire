@@ -176,7 +176,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 
 ## Infraestructura
 
-- `Dockerfile` (dependencias con red; build de shared, API y web **sin red**; `pnpm deploy --legacy --prod` de la API; imagen final con `dist/`, `node_modules` de producción y la web en `/app/web`) · `compose.yaml` (producción: `app`, `db`, `tunnel` de Cloudflare; PostgreSQL sin puertos) · `compose.dev.yaml` (PostgreSQL local + `migrate`) · `compose.liquibase.yaml` (migración del deploy).
+- `Dockerfile` (dependencias con red; build de shared, API y web **sin red**; `pnpm deploy --legacy --prod` de la API en una etapa con red, porque necesita metadatos del registro que la instalación no guardó; imagen final con `dist/`, `node_modules` de producción y la web en `/app/web`) · `compose.yaml` (producción: `app`, `db`, `tunnel` de Cloudflare; PostgreSQL sin puertos) · `compose.dev.yaml` (PostgreSQL local + `migrate`) · `compose.liquibase.yaml` (migración del deploy).
 - `.github/workflows/ci.yml` (gitleaks, test, lint, typecheck, build, compose, imagen, e2e) · `deploy.yml` (runner self-hosted en el servidor de casa tras un CI verde en `main`: escribe `.env`, migra y levanta) · `liquibase-pr.yml`.
 - Variables: `.env.example`. Nunca secretos en Git, logs ni argumentos.
 
