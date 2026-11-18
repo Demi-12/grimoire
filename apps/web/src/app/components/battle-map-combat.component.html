@@ -1,0 +1,81 @@
+@if (combat(); as combat) {
+  <section [class]="styles.combat" [attr.aria-label]="t().combat">
+    <div [class]="styles.combatHead">
+      <h2>{{ t().combat }} · {{ t().round(combat.round) }}</h2>
+      @if (isDm()) {
+        <button type="button" [class]="styles.smallButton" [attr.aria-label]="t().prev" [title]="t().prev" (click)="turn(-1)">◀</button>
+      }
+      @if (mayEnd()) {
+        <button type="button" class="button button-primary" (click)="turn(1)">{{ isDm() ? t().next : t().endTurn }} ▶</button>
+      }
+    </div>
+    <div [class]="styles.turnBanner" aria-live="polite">
+      @if (active(); as active) {
+        <b>{{ t().turnOf(active.label) }}</b>
+        @if (activeEntry(); as activeEntry) {
+          <app-movement [entry]="activeEntry" />
+          @if (mayTool()) {
+            <span [class]="styles.turnTools">
+              <button type="button" [class]="styles.smallButton" [attr.aria-pressed]="activeEntry.dash === true" [title]="t().dashOn" (click)="toggleDash(active, activeEntry)">{{ t().dash }}</button>
+              @if (isDm() && (activeEntry.moved ?? 0) > 0) {
+                <button type="button" [class]="styles.smallButton" (click)="resetMove(active)">{{ t().resetMove }}</button>
+              }
+              @if (isDm()) {
+                <label [class]="styles.inlineField">{{ t().speed }}<input appSpeedInput [entry]="activeEntry" [label]="t().speedOf(active.label)" [onChange]="setActiveSpeed" /><small>{{ t().speedUnit }}</small></label>
+              }
+            </span>
+          }
+        }
+      } @else {
+        <span [class]="styles.empty">{{ t().hiddenTurn }}</span>
+      }
+    </div>
+    <ol [class]="styles.order">
+      @for (row of order(); track row.entry.tokenId) {
+        <li [class]="row.className" [attr.aria-current]="row.isActive ? 'step' : null">
+          @if (isDm()) {
+            <input appInitiativeInput [value]="row.entry.initiative" [label]="t().initiativeOf(row.token.label)" [onChange]="row.setInitiative" />
+          } @else {
+            <span [class]="styles.initiative">{{ row.entry.initiative }}</span>
+          }
+          <span [class]="styles.legendDot" [style.background]="row.color" aria-hidden="true"></span>
+          <button type="button" [class]="styles.itemName" [attr.aria-pressed]="row.token.id === selectedId()" (click)="onSelect()(row.token.id)">{{ row.token.label }}@if (row.isActive) {<span class="sr-only"> ({{ t().current }})</span>}<small>{{ row.detail }}</small></button>
+          @if (isDm() && !row.isActive) {
+            <button type="button" [class]="styles.smallButton" [attr.aria-label]="t().jumpTo(row.token.label)" [title]="t().jumpTo(row.token.label)" (click)="jumpTo(row.token)">▸</button>
+          }
+          @if (isDm()) {
+            <button type="button" [class]="styles.smallButton" [attr.aria-label]="t().removeFrom(row.token.label)" [title]="t().removeFrom(row.token.label)" (click)="leave(row.token)">×</button>
+          }
+        </li>
+      }
+    </ol>
+    @if (isDm() && outside().length > 0) {
+      <div [class]="styles.form">
+        <label [class]="styles.grow">{{ t().join }}<select #joinSelect [class]="styles.field" (change)="joinId.set(joinSelect.value)">
+          <option value="" [selected]="joinId() === ''">{{ t().pickToken }}</option>
+          @for (token of outside(); track token.id) {
+            <option [value]="token.id" [selected]="token.id === joinId()">{{ token.label }}</option>
+          }
+        </select></label>
+        <label>{{ t().initiative }}<input #joinRoll type="number" [attr.min]="min" [attr.max]="max" [value]="joinInitiative()" placeholder="d20" (input)="joinInitiative.set(joinRoll.value)" /></label>
+        <button type="button" class="button button-quiet" [disabled]="!joinId()" (click)="join()">{{ joinInitiative().trim() ? t().add : t().roll }}</button>
+      </div>
+    }
+    @if (isDm()) {
+      <button type="button" class="button button-quiet" (click)="endCombat()">{{ t().endCombat }}</button>
+    }
+  </section>
+} @else if (isDm()) {
+  <section [class]="styles.combat">
+    <h2>{{ t().combat }}</h2>
+    @if (setup()) {
+      <app-combat-setup [state]="state()" [colorOf]="colorOf()" [send]="send()" [infoFor]="infoFor()" [onCancel]="cancelSetup" />
+    } @else {
+      <p [class]="styles.empty">{{ t().noCombat }}</p>
+      <button type="button" class="button button-primary" [disabled]="!state().tokens.length" (click)="setup.set(true)">⚔ {{ t().startCombat }}</button>
+      @if (!state().tokens.length) {
+        <p [class]="styles.empty">{{ t().noOne }}</p>
+      }
+    }
+  </section>
+}

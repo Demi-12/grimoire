@@ -1,25 +1,37 @@
+# Dependencies: the only stage that may use the network (npm registry, and corepack fetching pnpm).
 FROM node:22-alpine AS dependencies
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --prod=false
 
-FROM node:22-alpine AS builder
-WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=dependencies /app/node_modules ./node_modules
+# Build: shared rules, the NestJS API and the Angular app. None of it may touch the network (fonts are
+# self-hosted in apps/web/public/fonts), so anything that tries to download fails here every time instead of
+# breaking CI or a deploy now and then.
+FROM dependencies AS builder
+ENV NG_CLI_ANALYTICS=false
 COPY . .
-# The build must not touch the network (fonts are self-hosted in src/app/fonts), so anything that tries to
-# download during the build fails here every time instead of breaking CI or a deploy now and then.
-# Calls next directly: through pnpm, corepack would first try to download pnpm itself.
-RUN --network=none node_modules/.bin/next build
+RUN --network=none pnpm --filter @grimoire/shared build \
+  && pnpm --filter @grimoire/api build \
+  && pnpm --filter @grimoire/web build
+
+# A production-only copy of the API: its build, its runtime dependencies and the built shared rules. Like the
+# dependencies stage it may reach the registry, for the metadata of packages the install above didn't need
+# to fetch (pg's optional pg-cloudflare, for one).
+FROM builder AS production
+RUN pnpm --filter @grimoire/api deploy --legacy --prod /out
 
 FROM node:22-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-USER nextjs
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 WEB_DIST=/app/web
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 grimoire
+COPY --from=production --chown=grimoire:nodejs /out/package.json ./
+COPY --from=production --chown=grimoire:nodejs /out/node_modules ./node_modules
+COPY --from=production --chown=grimoire:nodejs /out/dist ./dist
+COPY --from=builder --chown=grimoire:nodejs /app/apps/web/dist/web/browser ./web
+USER grimoire
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "dist/main.js"]

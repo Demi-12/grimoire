@@ -2,6 +2,8 @@
 
 Toolkit autohospedado para preparar partidas de Dungeons & Dragons 5e (2024). Incluye un creador inicial de personajes y un generador de encuentros basado en el presupuesto de XP de las reglas de 2024.
 
+**Stack:** monorepo de pnpm con una web en **Angular** (`apps/web`), una API en **NestJS** (`apps/api`) y las reglas compartidas en TypeScript puro (`packages/shared`), sobre **PostgreSQL** con el esquema en Liquibase. En producción, el mismo proceso de NestJS sirve la API en `/api` y la web compilada. El mapa del código está en [`CLAUDE.md`](CLAUDE.md).
+
 ## Desarrollo local
 
 La app necesita PostgreSQL (cuentas, personajes y campañas viven allí), así que para verla funcionando en tu máquina hacen falta tres cosas: una base de datos, un `.env` y `pnpm dev`.
@@ -44,36 +46,38 @@ pnpm install
 pnpm dev
 ```
 
-Abre http://localhost:3000, crea una cuenta con el correo de `GRIMOIRE_ADMIN_EMAILS` y entrarás como admin. El registro no pide verificar el correo y la recuperación de contraseña por correo no funciona sin SMTP (ver `.env.example`).
+`pnpm dev` compila las reglas compartidas y arranca tres procesos en modo vigilancia: las reglas (`packages/shared`), la API de NestJS en el puerto 3001 (lee el `.env` de la raíz) y el servidor de desarrollo de Angular en el 3000, que sirve la web y reenvía `/api` a la API (`apps/web/proxy.conf.json`). Abre http://localhost:3000, crea una cuenta con el correo de `GRIMOIRE_ADMIN_EMAILS` y entrarás como admin. El registro no pide verificar el correo y la recuperación de contraseña por correo no funciona sin SMTP (ver `.env.example`).
 
 ### 4. Comprobaciones antes de abrir un PR
 
 ```sh
+pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 ```
 
-Son las mismas que ejecuta el CI.
+Son las mismas que ejecuta el CI. Con `TEST_DATABASE_URL` apuntando a un PostgreSQL desechable con el esquema aplicado, `pnpm test` también ejecuta las pruebas de integración de la API (`apps/api/test`).
 
 ### Problemas habituales
 
 - **`npm` o `pnpm` no se reconocen en Windows:** instala o repara Node.js 22 desde el instalador oficial (npm viene incluido), abre una terminal nueva y comprueba `node -v`. Después `corepack enable` habilita pnpm.
 - **`Could not validate the database schema` en la consola:** la base de datos no está levantada o falta el paso `migrate`.
 - **`port is already allocated` al levantar la base de datos:** ya hay un PostgreSQL usando el puerto 5432. Páralo o cambia el puerto publicado en `compose.dev.yaml`, y usa ese mismo puerto en `DATABASE_URL`.
+- **`EADDRINUSE` al arrancar:** `pnpm dev` usa los puertos 3000 (web) y 3001 (API); cierra lo que los ocupe.
 - **No puedo iniciar sesión tras cambiar de puerto o de dirección:** actualiza `BETTER_AUTH_URL` y reinicia `pnpm dev`; si abres la app desde otra URL (por ejemplo, la IP de tu LAN), añádela a `BETTER_AUTH_TRUSTED_ORIGINS`.
 
 ## Lint y pruebas
 
 ```sh
-pnpm lint        # ESLint (eslint-config-next)
-pnpm typecheck
-pnpm test        # pruebas unitarias (vitest)
+pnpm lint        # ESLint (typescript-eslint y angular-eslint, plantillas incluidas)
+pnpm typecheck   # tsc en las reglas y la API, ngc (con las plantillas) en la web
+pnpm test        # pruebas unitarias (vitest) de reglas, API y configuración
 ```
 
 ### Pruebas e2e de interfaz (Playwright)
 
-Las pruebas de `e2e/` abren la app compilada en Chromium, simulan toda la API con `page.route('**/api/**')` (no hace falta base de datos) y, para cada ruta (`/`, `/characters`, `/campaigns`, `/encounters`, `/account`, `/admin`), en anchos de 320, 360, 390 y 1280 px, en tema claro y oscuro y con un usuario admin, comprueban: sin scroll horizontal, cabecera sin desbordes, icono del botón de tema visible, ningún texto por debajo de 12 px y accesibilidad con axe (contraste de color y landmarks).
+Las pruebas de `e2e/` abren la app compilada en Chromium, simulan toda la API con `page.route('**/api/**')` (no hace falta base de datos) y, para cada ruta (`/`, `/characters`, `/characters/<id>`, `/characters/new`, `/map`, `/campaigns`, `/encounters`, `/bestiary`, `/dm`, `/account`, `/admin`, `/admin/analytics`), en anchos de 320, 360, 390 y 1280 px, en tema claro y oscuro y con un usuario admin, comprueban: sin scroll horizontal, cabecera sin desbordes, icono del botón de tema visible, ningún texto por debajo de 12 px y accesibilidad con axe (contraste de color y landmarks).
 
 ```sh
 pnpm build
@@ -81,7 +85,7 @@ pnpm exec playwright install chromium   # solo la primera vez
 pnpm test:e2e
 ```
 
-Si ya tienes un Chromium instalado, usa `PLAYWRIGHT_CHROMIUM_PATH=/ruta/a/chromium pnpm test:e2e` en lugar de instalar el navegador. Playwright arranca `pnpm start` en el puerto 3100 con un `BETTER_AUTH_SECRET` ficticio (si ya hay algo escuchando ahí, lo reutiliza; recuerda recompilar con `pnpm build` tras tocar el código). El informe HTML de un fallo en CI se descarga como artefacto del job.
+Si ya tienes un Chromium instalado, usa `PLAYWRIGHT_CHROMIUM_PATH=/ruta/a/chromium pnpm test:e2e` en lugar de instalar el navegador. Playwright arranca el servidor compilado (`node apps/api/dist/main.js`, que sirve también la web) en el puerto 3100 con un `BETTER_AUTH_SECRET` ficticio (si ya hay algo escuchando ahí, lo reutiliza; recuerda recompilar con `pnpm build` tras tocar el código). El informe HTML de un fallo en CI se descarga como artefacto del job.
 
 Las violaciones de accesibilidad que ya existían están listadas en `e2e/known-a11y.ts`; el test solo falla con violaciones nuevas. Corrige una en la app y borra su línea de esa lista.
 
@@ -114,10 +118,10 @@ El token del túnel es un secreto: guárdalo como GitHub Secret o en el `.env` d
 
 ## Cabeceras de seguridad y límites de uso
 
-- **CSP** (`src/proxy.ts`, `src/lib/security-headers.ts`): se genera por petición con un nonce para los scripts de Next y el hash del script del tema; no se usa `'unsafe-inline'` en scripts. Los estilos sí lo permiten porque la UI usa atributos `style`. Las ilustraciones de monstruos se permiten desde `api.open5e.com`. No se activa `upgrade-insecure-requests` porque la app también se abre por `http://` en la LAN.
-- **Resto de cabeceras** (`next.config.ts`): `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y `X-Frame-Options` (más `frame-ancestors 'none'` en la CSP).
+- **CSP** (`apps/api/src/common/security-headers.ts`, aplicada a toda respuesta en `security.middleware.ts`): los scripts solo pueden venir del propio sitio (los paquetes de Angular) más el script del tema de `index.html`, permitido por su hash; no se usa `'unsafe-inline'` ni `'unsafe-eval'` en scripts. Por eso el build de Angular no inserta CSS crítico en línea (`inlineCritical: false`), que necesita manejadores `onload`. Los estilos sí permiten `'unsafe-inline'` porque Angular añade los estilos de cada componente con `<style>` y la UI usa atributos `style`. Las ilustraciones de monstruos se permiten desde `api.open5e.com`. No se activa `upgrade-insecure-requests` porque la app también se abre por `http://` en la LAN.
+- **Resto de cabeceras** (el mismo middleware): `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y `X-Frame-Options` (más `frame-ancestors 'none'` en la CSP).
 - **HSTS**: solo se envía si `BETTER_AUTH_URL` empieza por `https://`, y se lee al arrancar el servidor (la imagen se construye sin `.env`). Sin `includeSubDomains` ni `preload`.
-- **Rate limiting**: better-auth ya limita inicio de sesión, registro y restablecimiento (`auth.ts`). Las rutas de datos tienen un limitador propio en memoria (`src/lib/rate-limit.ts`), por usuario: 60 escrituras/min, 300 cambios del mapa de batalla/min, 30 conexiones al mapa en directo/min, 10 invitaciones/min, 20 altas de miembros/min y 5 importaciones cada 10 min. Los contadores viven en el proceso: con varias réplicas el límite efectivo se multiplica y un reinicio los pone a cero. Hoy `compose.yaml` ejecuta una sola instancia `app`.
+- **Rate limiting**: better-auth ya limita inicio de sesión, registro y restablecimiento (`apps/api/src/auth/auth.ts`). Las rutas de datos tienen un limitador propio en memoria (`apps/api/src/common/rate-limit.ts`, aplicado con el decorador `@RateLimit`), por usuario: 60 escrituras/min, 300 cambios del mapa de batalla/min, 30 conexiones al mapa en directo/min, 10 invitaciones/min, 20 altas de miembros/min y 5 importaciones cada 10 min. Los contadores viven en el proceso: con varias réplicas el límite efectivo se multiplica y un reinicio los pone a cero. Hoy `compose.yaml` ejecuta una sola instancia `app`.
 - **Tamaño de cuerpo**: las rutas JSON rechazan cuerpos de más de 64 KB (4 MB en `/api/import`, 16 KB en `/api/telemetry`).
 - **Telemetría** (`/api/telemetry`): 120 eventos/min por cuenta y 20 informes de error/min por cuenta (o por IP antes de iniciar sesión). Solo acepta `Content-Type: application/json`, así que un envío desde otro sitio necesita un *preflight* CORS que la app nunca concede.
 
@@ -132,9 +136,9 @@ Los admins tienen en **Usuarios → Analíticas** (`/admin/analytics`) un panel 
 Cómo se recoge (todo queda en el PostgreSQL de la app; no hay servicios de terceros ni scripts externos, así que la CSP no cambia):
 
 - **Eventos de servidor:** las rutas de la API registran `character.created`, `character.deleted`, `campaign.created`, `campaign.joined`, `encounter.saved` y `homebrew.created` al terminar bien. El navegador no puede enviar estos nombres.
-- **Eventos del navegador** (`src/lib/telemetry-client.ts` → `/api/telemetry`): `page.view` (sección visitada), `character.wizard_started`, `character.level_up` y `encounter.generated`. Solo cuentan para cuentas aprobadas y solo con los nombres y propiedades permitidos en `src/lib/analytics.ts`.
-- **Errores de servidor:** `src/instrumentation.ts` (`onRequestError` de Next) guarda toda excepción no capturada en rutas de la API, renderizado y *proxy*.
-- **Errores del navegador:** `error` y `unhandledrejection` de `window`, más las pantallas de error de React (`src/app/error.tsx` y `src/app/global-error.tsx`). Como mucho 10 por carga de página, sin repetir el mismo mensaje.
+- **Eventos del navegador** (`apps/web/src/app/core/telemetry-client.ts` → `/api/telemetry`): `page.view` (sección visitada), `character.wizard_started`, `character.level_up` y `encounter.generated`. Solo cuentan para cuentas aprobadas y solo con los nombres y propiedades permitidos en `packages/shared/src/analytics.ts`.
+- **Errores de servidor:** el filtro de excepciones de la API (`apps/api/src/common/api-exception.filter.ts`) guarda toda excepción no prevista de una ruta y responde con un 500 genérico.
+- **Errores del navegador:** `error` y `unhandledrejection` de `window` (salvo los de extensiones y scripts ajenos), más los errores que Angular captura al pintar (`apps/web/src/app/core/crash.service.ts`, que muestra la pantalla de error si la vista quedó a medias). Como mucho 10 por carga de página, sin repetir el mismo mensaje.
 
 Privacidad: los eventos no llevan nombres, notas ni texto libre; las rutas se guardan como patrón (`/characters/:id`, sin parámetros, así que tampoco tokens de invitación); los mensajes y trazas ocultan correos, UUID y tokens largos, y del navegador solo se guarda «Navegador versión · Sistema». Las filas se borran a los 90 días (la app lo hace sola, como mucho una vez por hora). Al eliminar una cuenta, sus filas se quedan pero pierden el vínculo con ella. Las tablas son `usage_event` y `app_error` (migración `data-009-usage-analytics`) y no entran en la copia de seguridad.
 
@@ -177,7 +181,7 @@ Personajes (incluidas las elecciones del creador paso a paso) y campañas viven 
 ## Primera versión
 
 - El creador de personajes guía paso a paso con las reglas de 2024 (SRD 5.2): clase, trasfondo (aumentos de característica, dote de origen, habilidades), especie, características (matriz estándar, compra por 27 puntos o 4d6), competencias, equipo inicial y detalles. La ficha calcula PG, CA, iniciativa, salvaciones, habilidades con pericia, percepción pasiva, CD de conjuros y oro, y se imprime con esos valores. Los personajes antiguos siguen editándose con la edición rápida.
-- El creador incluye los 16 trasfondos del Manual del Jugador 2024, sus 10 dotes de origen y 40 especies: las 10 del Manual del Jugador 2024, las 5 de *Eberron: Forge of the Artificer* (2025; cambiante, kalashtar, khoravar, cambiaformas y forjado) y las 25 de *Mordenkainen Presents: Monsters of the Multiverse* (2022) que no repiten una del manual (compatibles con 2024: los aumentos de característica vienen del trasfondo). Cada especie indica su libro de origen; la subclase se elige siempre de la lista de las 48 del Manual del Jugador 2024, todas con sus rasgos nivel a nivel (ver [docs/subclass-features.md](docs/subclass-features.md)). Al subir de nivel se ofrecen todas las dotes generales, estilos de combate y dones épicos del manual, con sus requisitos de característica, armadura y lanzamiento de conjuros. Los rasgos y dotes fuera del SRD están resumidos con nuestras palabras: si algo no cuadra con el libro, se corrige en `src/lib/subclass-features.ts` o `src/lib/general-feats.ts`. Las mecánicas de rasgos, dotes y especies (PG extra, CA sin armadura, salvaciones, habilidades, pericia, estilos de combate) se describen como efectos en `src/lib/effects.ts` y las aplica un único motor en la ficha y en la subida de nivel.
+- El creador incluye los 16 trasfondos del Manual del Jugador 2024, sus 10 dotes de origen y 40 especies: las 10 del Manual del Jugador 2024, las 5 de *Eberron: Forge of the Artificer* (2025; cambiante, kalashtar, khoravar, cambiaformas y forjado) y las 25 de *Mordenkainen Presents: Monsters of the Multiverse* (2022) que no repiten una del manual (compatibles con 2024: los aumentos de característica vienen del trasfondo). Cada especie indica su libro de origen; la subclase se elige siempre de la lista de las 48 del Manual del Jugador 2024, todas con sus rasgos nivel a nivel (ver [docs/subclass-features.md](docs/subclass-features.md)). Al subir de nivel se ofrecen todas las dotes generales, estilos de combate y dones épicos del manual, con sus requisitos de característica, armadura y lanzamiento de conjuros. Los rasgos y dotes fuera del SRD están resumidos con nuestras palabras: si algo no cuadra con el libro, se corrige en `packages/shared/src/subclass-features.ts` o `packages/shared/src/general-feats.ts`. Las mecánicas de rasgos, dotes y especies (PG extra, CA sin armadura, salvaciones, habilidades, pericia, estilos de combate) se describen como efectos en `packages/shared/src/effects.ts` y las aplica un único motor en la ficha y en la subida de nivel.
 - **Ficha completa en la web:** cada tarjeta tiene un botón *Ver ficha* que abre `/characters/<id>` con todo lo del personaje: características, tiradas de salvación, las 18 habilidades con competencia y pericia, CA, PG, iniciativa, velocidad, percepción pasiva, ataques, rasgos de clase y de especie, dotes, competencias, lenguas, equipo, oro, historia y notas. Los personajes hechos con el creador paso a paso muestran todos los cálculos; los de edición rápida solo características y notas. El DM y los jugadores de una campaña pueden abrir la ficha de los demás miembros (en solo lectura) desde la lista de héroes de la campaña. *Exportar hoja · PDF* sigue imprimiendo la hoja de 2 páginas.
 - El generador usa presupuestos por personaje de dificultad baja, moderada y alta; suma el presupuesto según el nivel de cada aventurero y propone combinaciones que no exceden el total.
 - El generador puede usar todos los monstruos de [Open5e](https://open5e.com) (unos 3.500 de todos los libros de 5e con licencia libre), filtrar por libro y por tipo de criatura y limitar cada encuentro a 1-3 tipos de criatura. El servidor descarga el catálogo la primera vez (unos segundos) y lo guarda en memoria un día; necesita salida a Internet hacia `api.open5e.com`.

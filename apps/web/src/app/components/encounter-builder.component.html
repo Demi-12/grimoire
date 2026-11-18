@@ -1,0 +1,112 @@
+<section class="encounter-layout" [attr.aria-label]="t('encounter.generatorAria')">
+  <section class="encounter-controls">
+    <div class="control-section">
+      <div class="control-heading"><span class="step-number">01</span><div><h2>{{ t("encounter.party.title") }}</h2><p>{{ t("encounter.party.description") }}</p></div></div>
+      @if (fixedParty()) {
+        <p class="selected-party-note">{{ t("encounter.party.levelSummary", { count: partyLevelList().length, levels: partyLevelList().join(", ") }) }}</p>
+      } @else {
+        @if (savedCharacters().length > 0) {
+          <p class="title-description">{{ t("encounter.party.savedDescription") }}</p>
+          @if (campaignList().length > 0) {
+            <label class="party-campaign-select">{{ t("encounter.party.fromCampaign") }}
+              <select #campaignSelect (change)="pickCampaign(campaignSelect)">
+                <option value="" selected>{{ t("encounter.party.fromCampaignPlaceholder") }}</option>
+                @for (campaign of campaignList(); track campaign.id) { <option [value]="campaign.id">{{ campaign.name }}</option> }
+              </select>
+            </label>
+          }
+          <div class="party-select-list" role="group" [attr.aria-label]="t('encounter.party.savedAria')">
+            @for (character of savedCharacters(); track character.id) {
+              <label class="party-select">
+                <input
+                  #box
+                  type="checkbox"
+                  [checked]="isSelected(character.id)"
+                  [attr.aria-label]="t('encounter.party.characterAria', { name: character.name, level: character.level })"
+                  (change)="toggleCharacter(character.id, box.checked)"
+                />
+                <span>{{ character.name }}<small>{{ t("encounter.party.level", { level: character.level }) }}{{ character.ownerName && !character.editable ? " · " + character.ownerName : "" }}</small></span>
+              </label>
+            }
+          </div>
+        }
+        @if (hasSelection()) {
+          <p class="selected-party-note" aria-live="polite">{{ t("encounter.party.selectedSummary", { count: partyLevelList().length, levels: partyLevelList().join(", ") }) }}</p>
+        } @else {
+          <div class="manual-party">
+            <label>{{ t("encounter.party.size") }}<input #sizeInput [attr.aria-label]="t('encounter.party.sizeAria')" type="number" min="1" max="12" [value]="partySizeText()" (input)="partySizeText.set(sizeInput.value)" (blur)="normalizePartySize()" /></label>
+            <label>{{ t("encounter.party.levelLabel") }}<input #levelInput [attr.aria-label]="t('encounter.party.levelAria')" type="number" min="1" max="20" [value]="partyLevelText()" (input)="partyLevelText.set(levelInput.value)" (blur)="normalizePartyLevel()" /></label>
+          </div>
+        }
+      }
+    </div>
+    <div class="control-section">
+      <div class="control-heading"><span class="step-number">02</span><div><h2>{{ t("encounter.difficulty.title") }}</h2><p>{{ t("encounter.difficulty.description") }}</p></div></div>
+      <div class="difficulty-options">
+        @for (item of difficulties; track item) {
+          <button type="button" [attr.aria-pressed]="difficulty() === item" class="choice difficulty-option" (click)="difficulty.set(item)">
+            <span [class]="'difficulty-dot ' + item"></span><b>{{ t("encounter.difficulty." + item) }}</b>
+            <small>{{ t("encounter.difficulty.description." + item) }}</small>
+          </button>
+        }
+      </div>
+    </div>
+    <div class="control-section">
+      <div class="control-heading"><span class="step-number">03</span><div><h2>{{ t("encounter.monsters.title") }}</h2><p>{{ t("encounter.monsters.description") }}</p></div></div>
+      <div class="difficulty-options source-options">
+        @for (item of sources; track item) {
+          <button type="button" [attr.aria-pressed]="source() === item" class="choice difficulty-option" (click)="source.set(item)">
+            <b>{{ t("encounter.monsters.source." + item) }}</b>
+            <small>{{ sourceNote(item) }}</small>
+          </button>
+        }
+      </div>
+      @if (usesSrd() && !srd() && !srdError()) {
+        <div appSkeletonRegion [label]="t('encounter.monsters.loading')"><p class="encounter-footnote" aria-hidden="true"><span appSpinner></span>{{ t("encounter.monsters.loading") }}</p><div class="type-chips">@for (width of skeletonChips; track width) {<span appSkeleton [width]="width" [height]="30" [style.border-radius.px]="999"></span>}</div></div>
+      }
+      @if (usesSrd() && srdError()) {
+        <p class="encounter-footnote monster-error" role="alert">{{ t("encounter.monsters.error") }} {{ t("encounter.monsters.errorHint") }} <button type="button" class="small-action" (click)="retrySrd()">{{ t("encounter.monsters.retry") }}</button></p>
+      }
+      @if (usesSrd() && srd(); as catalog) {
+        <p class="filter-label">{{ t("encounter.monsters.books") }}</p>
+        <div class="type-chips" role="group" [attr.aria-label]="t('encounter.monsters.books')">
+          <button type="button" class="type-chip" [class.on]="!books().length" [attr.aria-pressed]="!books().length" (click)="books.set([])">{{ t("encounter.monsters.allBooks") }}</button>
+          @for (book of catalog.sources; track book.key) {
+            <button type="button" [attr.aria-pressed]="books().includes(book.key)" class="type-chip" [class.on]="books().includes(book.key)"
+              (click)="toggleBook(book.key)">{{ book.name }} <small>{{ book.count }}</small></button>
+          }
+        </div>
+        <p class="filter-label">{{ t("encounter.monsters.types") }}</p>
+        <div class="type-chips" role="group" [attr.aria-label]="t('encounter.monsters.types')">
+          <button type="button" class="type-chip" [class.on]="!types().length" [attr.aria-pressed]="!types().length" (click)="types.set([])">{{ t("encounter.monsters.allTypes") }}</button>
+          @for (entry of typeCounts(); track entry[0]) {
+            <button type="button" [attr.aria-pressed]="types().includes(entry[0])" class="type-chip" [class.on]="types().includes(entry[0])"
+              (click)="toggleType(entry[0])">{{ typeLabel(entry[0]) }} <small>{{ entry[1] }}</small></button>
+          }
+        </div>
+        <label class="kinds-field">{{ t("encounter.monsters.kinds") }}
+          <select #kindsSelect (change)="maxKinds.set(+kindsSelect.value)">
+            @for (value of kindOptions; track value) { <option [value]="value" [selected]="value === maxKinds()">{{ t("encounter.monsters.kinds." + value) }}</option> }
+          </select>
+        </label>
+      }
+    </div>
+    <div class="budget-summary"><span>{{ t("encounter.budget.title") }}</span><strong>{{ formatNumber(budget()) }} <small>{{ t("encounter.xp") }}</small></strong><p>{{ t("encounter.budget.partyRules", { count: partyLevelList().length }) }}</p></div>
+    <button class="button button-primary generate-button" type="button" (click)="generate()" [disabled]="!pool().length">
+      {{ roll() ? "↻ " + t("encounter.regenerate") : "✦ " + t("encounter.generate") }}
+    </button>
+  </section>
+  <section #results class="encounter-results scroll-mt-4" aria-live="polite" [attr.aria-label]="t('encounter.resultsAria')">
+    <div class="results-heading"><div><p class="eyebrow">{{ t("encounter.proposals") }}{{ roll() > 1 ? " · " + t("encounter.roll", { number: roll() }) : "" }}</p><h2>{{ suggestions().length ? t("encounter.optionsReady", { count: suggestions().length }) : t("encounter.optionsWaiting") }}</h2></div><span class="result-sigil" aria-hidden="true">✳︎</span></div>
+    @if (!suggestions().length) {
+      <div class="results-empty"><div class="empty-orbit" aria-hidden="true">⚔︎</div><p>{{ t("encounter.empty.prompt") }}<br /><b>{{ t("encounter.empty.action") }}</b> {{ t("encounter.empty.detail") }}</p></div>
+    } @else {
+      <div class="encounter-card-list">
+        @for (option of options(); track option.key) {
+          <app-encounter-option [suggestion]="option.suggestion" [index]="option.index" [roles]="partyRoles()" [partyLevels]="partyLevelList()" [campaigns]="managedCampaigns()" />
+        }
+      </div>
+    }
+    <p class="rules-source">{{ t("encounter.rulesNote") }}</p>
+  </section>
+</section>

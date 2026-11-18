@@ -1,0 +1,166 @@
+<ng-template #featureList let-items>
+  <dl class="m-0 grid">
+    @for (item of items; track $index) {
+      <div class="border-b border-dotted border-line py-2 first:pt-0 last:border-b-0 last:pb-0">
+        <dt class="font-display text-[15px] font-semibold text-ink">{{ say(item.name) }}</dt>@if (say(item.tip)) {<dd class="m-0 mt-0.5 text-[14px] leading-normal text-muted">{{ say(item.tip) }}</dd>}
+      </div>
+    }
+  </dl>
+</ng-template>
+
+<article class="grid gap-4.5 print:hidden!" aria-labelledby="sheet-title">
+  <div class="flex flex-wrap items-center justify-between gap-2.5">
+    <button type="button" class="button button-quiet" (click)="onBack()()">‹ {{ t("character.backToList") }}</button>
+    <div class="flex flex-wrap gap-2">
+      @if (onExport(); as onExport) { <button type="button" class="button button-quiet" (click)="onExport()" [title]="t('character.printHint')">{{ t("character.exportPdf") }}</button> }
+      @if (canLevelUp()) { <button type="button" class="button button-quiet" (click)="onLevelUp()?.()">{{ t("character.levelUp") }}</button> }
+      @if (onEdit(); as onEdit) { <button type="button" class="button button-primary" (click)="onEdit()">{{ t("character.edit") }}</button> }
+    </div>
+  </div>
+
+  <header class="panel grid grid-cols-[auto_1fr] items-center gap-4 px-5 py-4.5 max-[650px]:grid-cols-1 max-[650px]:justify-items-start">
+    <span class="grid size-16 place-items-center rounded-full bg-sunken font-display text-3xl font-medium text-accent max-[650px]:size-13 max-[650px]:text-2xl" aria-hidden="true">{{ initial() }}</span>
+    <div>
+      <h2 id="sheet-title" class="m-0 font-display text-[clamp(26px,4vw,36px)] leading-[1.1] font-medium [overflow-wrap:anywhere] text-ink">{{ character().name }}</h2>
+      <p class="mt-1 mb-0 text-[15px] text-muted">{{ subtitle() }}</p>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <span [class]="chip">{{ t("character.levelPill", { level: character().level }) }}</span>
+        @if (campaignName()) { <span [class]="chip">⚑ {{ campaignName() }}</span> }
+        @if (!character().editable) { <span [class]="chip">{{ t("character.ownedBy", { name: character().ownerName }) }}</span> }
+      </div>
+    </div>
+  </header>
+
+  @if (!sheet()) { <p class="m-0 rounded-card border border-dashed border-control-line px-3.5 py-3 text-[14px] text-muted" role="note">{{ t("character.quickNote") }}</p> }
+
+  <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-start gap-4.5 max-[900px]:grid-cols-1">
+    <div class="grid min-w-0 gap-4.5">
+      <section [class]="panel" aria-labelledby="sheet-abilities">
+        <h3 id="sheet-abilities" [class]="panelTitle">{{ t("character.scoresTitle") }}</h3>
+        <div class="grid grid-cols-3 gap-2">
+          @for (tile of abilityTiles(); track tile.key) {
+            <div [class]="statBox"><span [class]="statLabel"><abbr class="no-underline" [title]="tile.name" aria-hidden="true">{{ tile.short }}</abbr><span class="sr-only">{{ tile.name }}</span></span><b [class]="statValue">{{ tile.score }}</b><small class="font-body text-[14px] font-semibold text-accent">{{ tile.modifier }}</small></div>
+          }
+        </div>
+      </section>
+
+      @if (sheet(); as sheet) {
+        <section [class]="panel" aria-labelledby="sheet-saves">
+          <h3 id="sheet-saves" [class]="panelTitle">{{ t("character.sheetSavingThrows") }}</h3>
+          <ul [class]="lineList">
+            @for (ability of abilities; track ability.key) {
+              <li [class]="lineItem">
+                <i [class]="dot(sheet.saves[ability.key].proficient ? 'on' : 'none')" aria-hidden="true"></i>
+                <span>{{ t("ability." + ability.key) }}@if (sheet.saves[ability.key].proficient) {<span class="sr-only"> ({{ t("character.legendProficient") }})</span>}</span>
+                <b class="font-display text-[15px] font-bold">{{ signed(sheet.saves[ability.key].bonus) }}</b>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section [class]="panel" aria-labelledby="sheet-skills">
+          <h3 id="sheet-skills" [class]="panelTitle">{{ t("character.sheetSkills") }}</h3>
+          <ul [class]="lineList">
+            @for (skill of skillKeys; track skill) {
+              @let entry = sheet.skills[skill];
+              <li [class]="lineItem">
+                <i [class]="dot(entry.expertise ? 'expert' : entry.proficient ? 'on' : 'none')" aria-hidden="true"></i>
+                <span>{{ t("skill." + skill) }}@if (entry.expertise) {<span class="sr-only"> ({{ t("character.legendExpertise") }})</span>} @else if (entry.proficient) {<span class="sr-only"> ({{ t("character.legendProficient") }})</span>}</span>
+                <b class="font-display text-[15px] font-bold">{{ signed(entry.bonus) }}</b>
+              </li>
+            }
+          </ul>
+          <p class="mt-2 mb-0 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted">
+            <span class="inline-flex items-center gap-1.5"><i [class]="dot('on')" aria-hidden="true"></i>{{ t("character.legendProficient") }}</span>
+            <span class="inline-flex items-center gap-1.5"><i [class]="dot('expert')" aria-hidden="true"></i>{{ t("character.legendExpertise") }}</span>
+          </p>
+        </section>
+      }
+    </div>
+
+    <div class="grid min-w-0 gap-4.5">
+      <section [class]="panel" aria-labelledby="sheet-combat">
+        <h3 id="sheet-combat" [class]="panelTitle">{{ t("character.combatTitle") }}</h3>
+        @if (sheet(); as sheet) {
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.armorClass") }}</span><b [class]="statValue">{{ sheet.armorClass }}</b>@if (sheet.armorSource) {<small class="text-xs text-muted">{{ say(sheet.armorSource) }}</small>}</div>
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.hitPoints") }}</span><b [class]="statValue">{{ sheet.hitPoints }}</b><small class="text-xs text-muted">{{ sheet.hitDice }}</small></div>
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.initiative") }}</span><b [class]="statValue">{{ signed(sheet.initiative) }}</b></div>
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.speed") }}</span><b [class]="statValue">{{ sheet.speed }}</b></div>
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.proficiencyLabel") }}</span><b [class]="statValue">{{ signed(sheet.proficiency) }}</b></div>
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.passivePerception") }}</span><b [class]="statValue">{{ sheet.passivePerception }}</b></div>
+            @if (sheet.darkvision) { <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.darkvision") }}</span><b [class]="statValue">{{ sheet.darkvision }}</b></div> }
+          </div>
+        } @else {
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
+            <div [class]="statBox + ' gap-0.5'"><span [class]="statLabel + ' uppercase'">{{ t("character.proficiencyLabel") }}</span><b [class]="statValue">{{ signed(bonus()) }}</b></div>
+          </div>
+        }
+      </section>
+
+      @if (attacks().length > 0) {
+        <section [class]="panel" aria-labelledby="sheet-attacks">
+          <h3 id="sheet-attacks" [class]="panelTitle">{{ t("character.sheetAttacks") }}</h3>
+          <ul [class]="lineList">
+            @for (attack of attacks(); track $index) {
+              <li class="grid grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1.4fr)] items-baseline gap-x-3 gap-y-1 border-b border-dotted border-line py-1.75 text-[15px] text-ink last:border-b-0 max-[650px]:grid-cols-[1fr_auto]">
+                <span>{{ attack.name }}</span>
+                <b class="font-display text-[15px] font-bold" [title]="t('character.sheetAttackBonus')">{{ attack.bonus }}</b>
+                <span class="text-muted max-[650px]:col-span-full">{{ attack.damage }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (build()) { <app-character-spells [character]="character()" [scores]="sheet()?.scores ?? character().scores" [onSave]="onSpells()" /> }
+
+      @if (features().length > 0) {
+        <section [class]="panel" aria-labelledby="sheet-features">
+          <h3 id="sheet-features" [class]="panelTitle">{{ t("character.sheetFeatures") }}</h3>
+          <ng-container [ngTemplateOutlet]="featureList" [ngTemplateOutletContext]="{ $implicit: features() }" />
+        </section>
+      }
+
+      @if (traits().length > 0) {
+        <section [class]="panel" aria-labelledby="sheet-traits">
+          <h3 id="sheet-traits" [class]="panelTitle">{{ t("character.sheetSpeciesTraits") }}</h3>
+          <ng-container [ngTemplateOutlet]="featureList" [ngTemplateOutletContext]="{ $implicit: traits() }" />
+          @if (sheet()?.speciesSpells; as speciesSpells) { <p [class]="prose"><b>{{ t("character.speciesSpells") }}:</b> {{ t("character.spellDc") }} {{ speciesSpells.saveDc }} · {{ t("character.spellAttack") }} {{ signed(speciesSpells.attack) }}</p> }
+        </section>
+      }
+
+      @if (cls()) {
+        <section [class]="panel" aria-labelledby="sheet-proficiencies">
+          <h3 id="sheet-proficiencies" [class]="panelTitle">{{ t("character.sheetProficiencies") }}</h3>
+          <p [class]="prose">{{ proficiencies() }}</p>
+          @if (languages().length > 0) { <p [class]="prose + ' mt-2'"><b>{{ t("character.languagesLabel") }}:</b> {{ languages().join(", ") }}</p> }
+        </section>
+      }
+
+      @if (gear().length > 0 || sheet()) {
+        <section [class]="panel" aria-labelledby="sheet-gear">
+          <h3 id="sheet-gear" [class]="panelTitle">{{ t("character.sheetEquipment") }}</h3>
+          @if (gear().length > 0) {
+            <ul class="m-0 grid gap-0.75 pl-4.5 text-[15px] text-ink">
+              @for (item of gear(); track $index) { <li>{{ item }}</li> }
+            </ul>
+          }
+          @if (sheet(); as sheet) { <p [class]="prose + (gear().length ? ' mt-2.5' : '')"><b>{{ t("character.sheetTreasure") }}:</b> {{ sheet.gold }} {{ i18n.locale() === "es" ? "po" : "GP" }}</p> }
+        </section>
+      }
+
+      @if (build()?.appearance) {
+        <section [class]="panel" aria-labelledby="sheet-story">
+          <h3 id="sheet-story" [class]="panelTitle">{{ t("character.sheetStory") }}</h3>
+          <p [class]="prose">{{ build()?.appearance }}</p>
+        </section>
+      }
+
+      <section [class]="panel" aria-labelledby="sheet-notes">
+        <h3 id="sheet-notes" [class]="panelTitle">{{ t("character.notes") }}</h3>
+        @if (character().notes) { <p [class]="prose">{{ character().notes }}</p> } @else { <p [class]="prose + ' text-muted'">{{ t("character.noData") }}</p> }
+      </section>
+    </div>
+  </div>
+</article>

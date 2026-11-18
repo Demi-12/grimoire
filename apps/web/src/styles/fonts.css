@@ -1,0 +1,32 @@
+/*
+ * Self-hosted Alegreya faces (Latin + Latin Extended subsets, OFL: see public/fonts/OFL.txt). Kept in the repo
+ * so neither the build (CI, the Docker image, the home server) nor a page load depends on Google Fonts.
+ * The --f-* variables are what styles.css maps into Tailwind's font families.
+ */
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya"; src: url("/fonts/alegreya-700-italic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+
+@font-face { font-family: "Alegreya SC"; src: url("/fonts/alegreya-sc-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya SC"; src: url("/fonts/alegreya-sc-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya SC"; src: url("/fonts/alegreya-sc-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya Sans"; src: url("/fonts/alegreya-sans-700-italic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+
+@font-face { font-family: "Alegreya Sans SC"; src: url("/fonts/alegreya-sans-sc-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Alegreya Sans SC"; src: url("/fonts/alegreya-sans-sc-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  --f-alegreya: "Alegreya";
+  --f-alegreya-sc: "Alegreya SC";
+  --f-alegreya-sans: "Alegreya Sans";
+  --f-alegreya-sans-sc: "Alegreya Sans SC";
+}

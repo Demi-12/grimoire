@@ -1,0 +1,88 @@
+/*
+ * Grimoire styles: Tailwind with the app's own theme.
+ *
+ *   styles/fonts.css    the self-hosted Alegreya faces and their --f-* variables
+ *   styles/tokens.css   colour variables, switched by <html data-theme="dark">
+ *   @theme below        maps them into Tailwind (bg-surface, text-accent, border-line, font-display, rounded-card…)
+ *   styles/ui.css       shared components (button, card, page header, tabs, choice, segmented…) in the components layer
+ *   styles/app.css      the rest of the screens' class-based styles, also in the components layer
+ *
+ * Everything custom lives in a layer, so a Tailwind utility in a className always wins over it.
+ * Dark mode: the `dark:` variant follows the theme toggle (data-theme), not only the OS setting.
+ */
+@import "tailwindcss";
+@import "./styles/fonts.css";
+@import "./styles/tokens.css";
+@import "./styles/app.css" layer(components);
+@import "./styles/ui.css" layer(components);
+
+/* Class names live in the templates and in the *-styles.ts class lists. */
+@source "./app";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-control-line: var(--control-line);
+  --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-gilt: var(--gilt);
+  --color-gilt-text: var(--gilt-text);
+  --color-leather: var(--leather);
+  --color-danger: var(--danger);
+  --color-field: var(--field);
+  --color-good: var(--good-text);
+  --color-bad: var(--bad-text);
+  --color-critical: var(--status-critical);
+  --color-warn: var(--warn-text);
+  --color-map-floor: var(--map-floor);
+  --color-map-line: var(--map-line);
+  --color-map-coord: var(--map-coord);
+}
+
+@theme {
+  /* Alegreya (self-hosted: styles/fonts.css declares the faces and sets the --f-* variables). */
+  --font-display: var(--f-alegreya-sc), var(--f-alegreya), Georgia, serif;
+  --font-body: var(--f-alegreya), Georgia, serif;
+  --font-label: var(--f-alegreya-sans-sc), var(--f-alegreya-sans), sans-serif;
+  --font-statblock: var(--f-alegreya-sans), "Trebuchet MS", sans-serif;
+
+  /* Type scale. Alegreya runs small, so nothing on screen goes below text-xs (the e2e suite checks it). */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 40px;
+
+  /* Corners: one radius for controls, one for cards and panels. */
+  --radius-control: 6px;
+  --radius-card: 10px;
+
+  --shadow-card: 0 1px 2px rgb(31 23 49 / 0.06), 0 4px 14px rgb(31 23 49 / 0.06);
+  --shadow-card-dark: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
+
+  /* The battle map's "reconnecting" dot and turn ring. */
+  --animate-blink: blink 1.2s ease-in-out infinite;
+  /* The ring round the creature whose turn it is. */
+  --animate-orbit: orbit 6s linear infinite;
+  @keyframes orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+}

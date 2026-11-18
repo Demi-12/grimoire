@@ -1,0 +1,71 @@
+<section [class]="styles.sheet" [attr.aria-label]="t().sheet + ': ' + token().label">
+  <div [class]="styles.sheetHead">
+    <h2>{{ t().sheet }} · {{ token().label }}</h2>
+    <button type="button" [class]="styles.smallButton" [attr.aria-label]="t().close" [title]="t().close" (click)="onClose()()">×</button>
+  </div>
+  <div [class]="styles.sheetBody">
+    @if (token().kind === "hero") {
+      @if (hero(); as hero) {
+        <div [class]="styles.heroSheet">
+          <p [class]="styles.heroSub">{{ hero.subtitle }}<small>{{ t().owner(hero.character.ownerName) }}</small></p>
+          @if (hero.vitals.length > 0) {
+            <dl [class]="styles.vitals">
+              @for (vital of hero.vitals; track vital.label) {
+                <div><dt>{{ vital.label }}</dt><dd>{{ vital.value }}</dd></div>
+              }
+            </dl>
+          }
+          <dl [class]="styles.scores">
+            @for (ability of hero.scores; track ability.key) {
+              <div><dt><abbr [title]="ability.name">{{ ability.short }}</abbr></dt><dd>{{ ability.modifier }}<small>{{ ability.score }}</small></dd></div>
+            }
+          </dl>
+          @if (hero.attacks.length > 0) {
+            <h3>{{ tr("character.sheetAttacks") }}</h3>
+            <ul [class]="styles.attacks">
+              @for (attack of hero.attacks; track $index) {
+                <li>
+                  <b>{{ attack.name }}</b>&ngsp;<span>{{ attack.bonus }}</span>
+                  <small>{{ attack.detail }}</small>
+                </li>
+              }
+            </ul>
+          }
+          @if (hero.saves !== null) {
+            <p [class]="styles.heroLine"><b>{{ t().saves }}:</b> {{ hero.saves }}</p>
+          }
+          @for (block of hero.featureBlocks; track block.title) {
+            <details [class]="styles.sheetDetails">
+              <summary>{{ block.title }} <small>({{ block.items.length }})</small></summary>
+              <dl>
+                @for (item of block.items; track $index) {
+                  <div><dt>{{ item.name }}</dt>@if (item.tip) {<dd>{{ item.tip }}</dd>}</div>
+                }
+              </dl>
+            </details>
+          }
+          @if (hero.character.notes) {
+            <p [class]="styles.heroLine"><b>{{ t().notes }}:</b> {{ hero.character.notes }}</p>
+          }
+          <a [class]="styles.sheetFull" [routerLink]="['/characters', hero.character.id]">{{ t().fullSheet }} →</a>
+        </div>
+      } @else if (charactersLoaded()) {
+        <p [class]="styles.empty">{{ t().noCharacter }}</p>
+      } @else {
+        <p [class]="styles.empty"><span appSpinner></span> {{ t().loading }}</p>
+      }
+    } @else if (shownSlug(); as slug) {
+      <div [class]="styles.monsterSheet"><app-monster-sheet [monsterSlug]="slug" [compact]="true" /></div>
+      @if (isDm()) {
+        <button type="button" [class]="styles.smallButton" (click)="relinking.set(true)">{{ t().unlink }}</button>
+      }
+    } @else {
+      @if (!token().monsterSlug) {
+        <p [class]="styles.empty">{{ t().noStatBlock }}</p>
+      }
+      @if (isDm()) {
+        <app-bestiary-link [token]="token()" [onPick]="pick" />
+      }
+    }
+  </div>
+</section>

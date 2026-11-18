@@ -1,0 +1,63 @@
+@if (!users()) {
+  @if (error()) {
+    <p role="alert" class="admin-error">{{ error() }}</p>
+  } @else {
+    <div appSkeletonRegion [label]="t().loading" class="skeleton-grid">
+      @for (item of placeholders; track item) {
+        <div class="skeleton-row">
+          <span appSkeleton [width]="36" [height]="36" class="skeleton-circle"></span>
+          <div class="skeleton-grow"><span appSkeleton width="35%" [height]="14"></span><span appSkeleton width="55%" [height]="10" [style.margin-top.px]="8"></span></div>
+          <span appSkeleton [width]="90" [height]="32"></span>
+        </div>
+      }
+    </div>
+  }
+} @else {
+  <div class="admin-users">
+    <p class="admin-help">{{ t().roleHelp }}</p>
+    @for (group of groups(); track group.status) {
+      <section [class]="'admin-group admin-group-' + group.status" [attr.aria-labelledby]="'admin-' + group.status">
+        <h2 [id]="'admin-' + group.status">{{ group.title }} <small>{{ group.members.length }}</small></h2>
+        @if (!group.members.length) {
+          <p class="admin-empty">{{ t().noPending }}</p>
+        } @else {
+          <ul>
+            @for (row of group.members; track row.user.id) {
+              <li class="admin-user">
+                <span class="admin-seal" aria-hidden="true">{{ row.seal }}</span>
+                <div class="admin-identity">
+                  <b>{{ row.user.name }}@if (row.isMe) {<em> · {{ t().you }}</em>}</b>
+                  <span>{{ row.user.email }}</span>
+                  <small>{{ row.meta }}@if (row.user.twoFactorEnabled) { · {{ t().twoFactor }}}</small>
+                </div>
+                <div class="admin-actions">
+                  <label><span class="sr-only">{{ t().role }}</span>
+                    <select #roleSelect [attr.aria-label]="t().role + ': ' + row.user.name" [disabled]="row.isMe || row.busy" (change)="changeRole(row.user, roleSelect)">
+                      @for (role of roles; track role) {
+                        <option [value]="role" [selected]="role === row.user.role">{{ t().roles[role] }}</option>
+                      }
+                    </select>
+                  </label>
+                  @if (!row.isMe && group.status === "pending") {
+                    <button type="button" class="button button-primary" [disabled]="row.busy" (click)="change(row.user, { status: 'approved' })">{{ t().approve }}</button>
+                    <button type="button" class="button button-quiet" [disabled]="row.busy" (click)="block(row.user)">{{ t().reject }}</button>
+                  }
+                  @if (!row.isMe && group.status === "approved") {
+                    <button type="button" class="button button-quiet" [disabled]="row.busy" (click)="change(row.user, { revokeSessions: true })">{{ t().signOut }}</button>
+                    <button type="button" class="button button-quiet" [disabled]="row.busy" (click)="block(row.user)">{{ t().block }}</button>
+                  }
+                  @if (!row.isMe && group.status === "blocked") {
+                    <button type="button" class="button button-quiet" [disabled]="row.busy" (click)="change(row.user, { status: 'approved' })">{{ t().unblock }}</button>
+                  }
+                  @if (!row.isMe) {
+                    <button type="button" class="small-action danger-action" [disabled]="row.busy" (click)="remove(row.user)">{{ t().delete }}</button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    }
+  </div>
+}

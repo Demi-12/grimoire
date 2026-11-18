@@ -1,0 +1,124 @@
+<!-- Placeholders the size of the theme toggle and language select (the real ones need the locale and theme). -->
+<ng-template #headerControls>
+  <div class="header-controls">
+    <span class="header-control theme-toggle skeleton-ghost skeleton-theme-control">&nbsp;</span>
+    <span class="header-select"><span class="header-control skeleton-ghost skeleton-select-control">&nbsp;</span></span>
+  </div>
+</ng-template>
+
+@if (variant() === "gate") {
+  <!-- The sign-in gate (shell + auth-panel): same header, stage, cover and panel classes, with the
+       sign-in step's rhythm in placeholders: kicker, title, two labelled fields, submit, passkey, footer link. -->
+  <div class="gate-shell text-ink skeleton-shell" aria-busy="true">
+    <div appArcaneBackdrop></div>
+    <header class="gate-header" aria-hidden="true" inert><span class="gate-brand"><svg appBrandMark [size]="26"></svg>GRIMOIRE</span><ng-container [ngTemplateOutlet]="headerControls" /></header>
+    <main class="gate-main">
+      <div appSkeletonRegion [label]="label()" class="gate-stage">
+        <div class="gate-cover" aria-hidden="true">
+          <span class="gate-seal">✳︎</span>
+          <p class="eyebrow gate-cover-kicker"><span></span><span appSkeletonLine width="13ch"></span></p>
+          <!-- Line counts follow the real copy: the title wraps to three lines beside the form, two when stacked; the intro the other way round. -->
+          <div class="gate-cover-title"><span appSkeletonLine width="100%"></span><span appSkeletonLine width="90%"></span><span appSkeletonLine width="45%" class="skeleton-wide-only"></span></div>
+          <div class="gate-intro"><span appSkeletonLine width="100%"></span><span appSkeletonLine width="100%"></span><span appSkeletonLine width="70%"></span><span appSkeletonLine width="40%" class="skeleton-narrow-only"></span></div>
+          <ul class="gate-features">
+            @for (width of ["9ch", "8ch", "9ch"]; track $index) {
+              <li><span appSkeleton class="skeleton-circle" [width]="17" [height]="17"></span><span appSkeletonLine [width]="width"></span></li>
+            }
+          </ul>
+        </div>
+        <div class="auth-panel" data-mode="sign-in" aria-hidden="true">
+          <div class="auth-head"><p class="eyebrow"><span></span><span appSkeletonLine width="12ch"></span></p><div class="auth-title"><span appSkeletonLine width="9ch"></span></div></div>
+          <div class="auth-form">
+            @for (width of ["14ch", "9ch"]; track $index) {
+              <div class="auth-field">
+                <span class="auth-label"><span appSkeletonLine [width]="width"></span></span>
+                @if ($index === 1) { <span class="auth-link auth-field-aside"><span appSkeletonLine width="12ch"></span></span> }
+                <div class="auth-control"><span class="auth-input skeleton-ghost"></span></div>
+              </div>
+            }
+            <span class="button button-primary auth-submit skeleton-ghost">&nbsp;</span>
+          </div>
+          <div class="auth-divider"><span appSkeletonLine width="2ch"></span></div>
+          <span class="button button-quiet auth-alt skeleton-ghost">&nbsp;</span>
+          <div class="auth-foot"><p><span class="auth-link"><span appSkeletonLine width="22ch"></span></span></p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+} @else {
+  <div class="app-shell text-ink skeleton-shell" aria-busy="true">
+    <div appArcaneBackdrop variant="app"></div>
+    <aside class="sidebar" aria-hidden="true" inert>
+      <div class="brand"><svg appBrandMark [size]="26"></svg><b>GRIMOIRE</b></div>
+      <div class="side-nav">
+        @for (widths of navGroups; track group; let group = $index) {
+          <div class="contents">
+            <p class="nav-group"><span appSkeletonLine width="7ch"></span></p>
+            @for (width of widths; track $index) {
+              <span [class]="navClass(group, $index)"><span class="nav-icon"><span appSkeleton class="skeleton-circle" [width]="16" [height]="16"></span></span><span appSkeletonLine [width]="width"></span></span>
+            }
+          </div>
+        }
+      </div>
+      <div class="sidebar-bottom"><span appSkeletonLine width="13ch"></span><p><span appSkeletonLine width="10ch"></span></p><span class="sidebar-signout skeleton-ghost">&nbsp;</span></div>
+    </aside>
+    <div class="workspace">
+      <header class="workspace-header" aria-hidden="true" inert>
+        <div class="mobile-brand"><svg appBrandMark [size]="20"></svg>&ngsp;<span class="brand-word">GRIMOIRE</span></div>
+        <ng-container [ngTemplateOutlet]="headerControls" />
+        <span class="header-control header-account skeleton-ghost">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span class="header-signout skeleton-ghost skeleton-icon-control">&nbsp;</span>
+      </header>
+      <main class="page-content" aria-busy="true">
+        <div appSkeletonRegion [label]="label()">
+          <div aria-hidden="true">
+            @if (variant() === "home") {
+              <div [class]="sectionStack">
+                <div [class]="pageHeaderClass"><div class="min-w-0 flex-1"><h1 [class]="pageTitleClass"><span appSkeletonLine width="11ch"></span></h1><p [class]="pageDescriptionClass"><span appSkeletonLine width="26ch"></span></p></div></div>
+                <div class="grid grid-cols-2 gap-3 max-[650px]:gap-2 min-[901px]:grid-cols-4">
+                  @for (item of [0, 1, 2, 3]; track item) {
+                    <div [class]="homeTileClass(item)">
+                      <span appSkeleton class="skeleton-circle size-9"></span>
+                      <span class="w-full flex-1"><b class="block"><span appSkeletonLine width="70%"></span></b><small class="block"><span appSkeletonLine width="55%"></span></small></span>
+                    </div>
+                  }
+                </div>
+                <div class="flex flex-wrap items-start gap-6">
+                  <section class="flex min-w-0 flex-[3_1_440px] flex-col gap-3.5">
+                    <h2 [class]="sectionTitle"><span appSkeletonLine width="12ch"></span></h2>
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                      @for (item of [0, 1]; track item) {
+                        <div class="panel flex min-h-50 flex-col gap-3.5 p-4.5">
+                          <div class="flex items-start gap-3"><span appSkeleton class="skeleton-circle size-11"></span><div class="min-w-0 flex-1"><span appSkeletonLine width="60%"></span></div></div>
+                          <span appSkeleton width="100%" [height]="52"></span>
+                        </div>
+                      }
+                    </div>
+                  </section>
+                  <div class="flex min-w-0 flex-[1_1_240px] flex-col gap-3.5">
+                    <h2 [class]="sectionTitle"><span appSkeletonLine width="10ch"></span></h2>
+                    <div class="panel flex min-h-30 flex-col gap-2.5 p-4"><span appSkeletonLine width="50%"></span><span appSkeletonLine width="80%"></span></div>
+                  </div>
+                </div>
+              </div>
+            } @else {
+              <div [class]="pageHeaderClass">
+                <div class="min-w-0 flex-1"><p class="eyebrow"><span appSkeletonLine width="14ch"></span></p><h1 [class]="pageTitleClass"><span appSkeletonLine width="11ch"></span></h1><p [class]="pageDescriptionClass"><span appSkeletonLine width="min(64ch, 100%)"></span></p></div>
+              </div>
+              <div class="skeleton-grid">
+                @for (item of [0, 1, 2]; track item) {
+                  <div class="skeleton-row"><span appSkeleton [width]="36" [height]="36" class="skeleton-circle"></span><div class="skeleton-grow"><span appSkeleton width="45%" [height]="14"></span></div></div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </main>
+      <footer class="app-footer" aria-hidden="true">
+        <!-- On phones both footer notes wrap onto a second line. -->
+        <span><span appSkeletonLine width="min(24ch, 40vw)"></span><span appSkeletonLine width="10ch" class="skeleton-narrow-only"></span></span>
+        <span><span appSkeletonLine width="min(18ch, 40vw)"></span><span appSkeletonLine width="8ch" class="skeleton-narrow-only"></span></span>
+      </footer>
+    </div>
+  </div>
+}

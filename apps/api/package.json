@@ -1,0 +1,43 @@
+{
+  "name": "@grimoire/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NestJS API: accounts, campaigns, characters, bestiary and the live battle map. Serves the built web app in production.",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch --env-file ../../.env --env-file dev.env",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "1.7.10",
+    "@grimoire/shared": "workspace:*",
+    "@nestjs/common": "^12.5.0",
+    "@nestjs/core": "^12.5.0",
+    "@nestjs/platform-express": "^12.5.0",
+    "better-auth": "1.7.10",
+    "compression": "^1.8.2",
+    "express": "^5.3.0",
+    "nodemailer": "^10.1.1",
+    "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.13",
+    "@nestjs/schematics": "^12.0.13",
+    "@nestjs/testing": "^12.5.0",
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.15.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.0.0",
+    "supertest": "^7.0.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.2"
+  }
+}

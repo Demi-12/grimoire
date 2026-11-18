@@ -2,38 +2,25 @@
   "name": "grimoire-dnd-toolkit",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "dev": "pnpm --filter @grimoire/shared build && pnpm -r --parallel dev",
+    "build": "pnpm --filter @grimoire/shared build && pnpm --filter @grimoire/api build && pnpm --filter @grimoire/web build",
+    "start": "node apps/api/dist/main.js",
+    "test": "pnpm --filter @grimoire/shared build && pnpm -r test && vitest run",
+    "typecheck": "pnpm --filter @grimoire/shared build && pnpm -r typecheck && tsc -p tsconfig.json",
     "lint": "eslint .",
     "test:e2e": "playwright test"
-  },
-  "dependencies": {
-    "@better-auth/passkey": "1.7.10",
-    "better-auth": "1.7.10",
-    "next": "16.4.1",
-    "nodemailer": "^10.1.1",
-    "pg": "^8.23.1",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "1.56.1",
-    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.15.0",
-    "@types/nodemailer": "^8.0.2",
-    "@types/pg": "^8.23.1",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
+    "angular-eslint": "^22.6.0",
     "eslint": "^10.13.0",
-    "eslint-config-next": "^16.4.2",
-    "tailwindcss": "^4.3.3",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^4.1.2"
   }
 }

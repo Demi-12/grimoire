@@ -24,3 +24,7 @@ pnpm-debug.log*
 compose.override.yaml
 playwright-report/
 test-results/
+
+# Build output of the workspace packages
+dist/
+.angular/

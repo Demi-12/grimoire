@@ -1,0 +1,264 @@
+<!-- Features a level hands out: name and our one-line tip. -->
+<ng-template #featureList let-items>
+  <ul [class]="own.features">@for (feature of items; track feature.name.en) {<li><b>{{ say(feature.name) }}</b><span>{{ say(feature.tip) }}</span></li>}</ul>
+</ng-template>
+
+<!-- The +1 of a feat or an Epic Boon: one ability among `options`, up to `cap`. -->
+<ng-template #abilityChooser let-options let-cap="cap">
+  <div [class]="own.abilityPick">
+    @for (key of options; track key) {
+      @let score = scoreOf(key);
+      <button type="button" [class]="styles.choice" [attr.aria-pressed]="featAbility() === key" [disabled]="score >= cap" (click)="featAbility.set(key)">
+        <strong>{{ abilityName(key) }}</strong><small>{{ score }} → {{ raised(score, cap) }}</small>@if (score >= cap) {<em>{{ t().capped }}</em>}
+      </button>
+    }
+  </div>
+</ng-template>
+
+<!-- Checkboxes for up to `limit` skills, editing the list named by `target`. -->
+<ng-template #skillChecks let-options let-limit="limit" let-target="target">
+  <div [class]="styles.skillGrid">
+    @for (skill of options; track skill) {
+      @let isChosen = skillChosen(target, skill);
+      <label [class]="styles.skill" [attr.data-on]="isChosen || null">
+        <input #box type="checkbox" [checked]="isChosen" [disabled]="!isChosen && skillCount(target) >= limit" (change)="toggleSkill(target, skill, box.checked)" />
+        <span>{{ skillName(skill) }}</span>
+      </label>
+    }
+  </div>
+</ng-template>
+
+<section [class]="styles.wizard" aria-labelledby="levelup-title">
+  <header [class]="styles.head">
+    <div><p [class]="styles.kicker">{{ t().kicker }} · {{ t().stepOf(position() + 1, flow().length) }}</p><h2 id="levelup-title">{{ t().title(name() || "—", next()) }}</h2></div>
+    <button type="button" [class]="styles.close" (click)="onCancel()()" [attr.aria-label]="t().close">×</button>
+  </header>
+  <ol [class]="own.progress" [attr.aria-label]="t().stepOf(position() + 1, flow().length)">
+    @for (step of flow(); track step; let index = $index) {
+      <li [attr.data-state]="stepState(index)" [attr.aria-current]="index === position() ? 'step' : null"><span>{{ position() > index ? "✓" : index + 1 }}</span>{{ t().steps[step] }}</li>
+    }
+  </ol>
+
+  <div [class]="styles.body">
+    @switch (current()) {
+      @case ("overview") {
+        <p [class]="styles.intro">{{ t().reassure }}</p>
+        <div [class]="own.cards">
+          <article [class]="own.card">
+            <h3>{{ t().proficiency }}</h3>
+            @if (gains().proficiency; as proficiency) {
+              <p [class]="own.big">{{ signed(proficiency.from) }} → <b>{{ signed(proficiency.to) }}</b></p>
+            } @else {
+              <p [class]="own.big">{{ proficiencyNow() }}</p>
+            }
+            <p>{{ t().proficiencyHelp }}</p>
+          </article>
+          @if (gains().scaling.length > 0) {
+            <article [class]="own.card">
+              <h3>{{ t().numbers }}</h3>
+              <ul [class]="own.changes">
+                @for (change of gains().scaling; track change.label.en) {
+                  <li><span>{{ say(change.label) }}</span><b>{{ change.from ? change.from + " → " : "" }}{{ change.to }}</b></li>
+                }
+              </ul>
+            </article>
+          }
+          @if (gains().spells; as spells) {
+            <article [class]="own.card">
+              <h3>{{ t().spellsTitle }}</h3>
+              <ul [class]="own.changes">
+                @if (spells.after.cantrips > 0) {
+                  <li><span>{{ t().cantrips }}</span><b>{{ fromText(spells.before?.cantrips, spells.after.cantrips) }}{{ spells.after.cantrips }}</b></li>
+                }
+                <li><span>{{ t().prepared }}</span><b>{{ fromText(spells.before?.prepared, spells.after.prepared) }}{{ spells.after.prepared }}</b></li>
+                <li><span>{{ t().slots }}</span><b>{{ spells.after.pact ? t().pact(spells.after.pact.count, spells.after.pact.level) : slotText(spells.after.slots) }}</b></li>
+              </ul>
+              <p>{{ t().spellHint }}{{ wizard() ? " " + t().spellbookHint : "" }}</p>
+            </article>
+          }
+        </div>
+        <h3 [class]="own.heading">{{ t().newFeatures }}</h3>
+        @if (gains().features.length) {
+          <ng-container [ngTemplateOutlet]="featureList" [ngTemplateOutletContext]="{ $implicit: gains().features }" />
+        } @else {
+          <p [class]="styles.note">{{ t().noFeatures }}</p>
+        }
+        @if (ahead().length) {
+          <p [class]="own.ahead">{{ t().choicesAhead }} {{ ahead().join(", ") }}.</p>
+        }
+      }
+
+      @case ("hp") {
+        <p [class]="styles.intro">{{ t().hpIntro }}</p>
+        <div [class]="styles.cardGrid">
+          <button type="button" [class]="styles.choice" [attr.aria-pressed]="hpMode() === 'average'" (click)="hpMode.set('average')">
+            <strong>{{ t().hpAverage }} · +{{ hpAverageGain() }}</strong><small>{{ t().recommended.toUpperCase() }}</small><em>{{ t().hpAverageHelp }}</em>
+          </button>
+          <button type="button" [class]="styles.choice" [attr.aria-pressed]="hpMode() === 'roll'" (click)="hpMode.set('roll')">
+            <strong>{{ t().hpRoll }} · d{{ cls().hitDie }}</strong><em>{{ t().hpRollHelp }}</em>
+          </button>
+        </div>
+        @if (hpMode() === "roll") {
+          <div [class]="styles.inline">
+            <label [class]="styles.field">{{ t().rollLabel(cls().hitDie) }}<input #rollInput type="number" min="1" [max]="cls().hitDie" [value]="rollText()" (input)="rollText.set(rollInput.value)" /></label>
+            <button type="button" class="button button-quiet" (click)="roll()">🎲 {{ t().rollFor }}</button>
+          </div>
+        }
+        @if (!issues().includes("hp")) {
+          <p [class]="own.callout">{{ t().hpGain(hpGain()) }}</p>
+        }
+      }
+
+      @case ("subclass") {
+        <p [class]="styles.intro">{{ t().subclassIntro }}</p>
+        <div [class]="styles.cardGrid">
+          @for (entry of subclassOptions(); track entry.key) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="subclass() === entry.key" (click)="subclass.set(entry.key)">
+              <strong>{{ entry.name }}</strong><small>{{ entry.tag }}</small><em>{{ entry.pitch }}</em>
+            </button>
+          }
+        </div>
+        @if (pick() && gains().subclassFeatures.length > 0) {
+          <div [class]="styles.detail">
+            <h3>{{ subclassName() }}</h3>
+            @if (pick()?.kind === "srd") {
+              <p [class]="styles.note">{{ t().subclassSrdNote }}</p>
+            }
+            <ng-container [ngTemplateOutlet]="featureList" [ngTemplateOutletContext]="{ $implicit: gains().subclassFeatures }" />
+          </div>
+        }
+        @if (pick()?.kind === "book" && !gains().subclassFeatures.length) {
+          <p [class]="styles.note">{{ t().subclassBookNote }}</p>
+        }
+      }
+
+      @case ("asi") {
+        <p [class]="styles.intro">{{ t().asiIntro }}</p>
+        <div [class]="styles.cardGrid">
+          <button type="button" [class]="styles.choice" [attr.aria-pressed]="asiKind() === 'scores'" (click)="chooseKind('scores')">
+            <strong>{{ t().asiScores }}</strong><small>{{ t().recommended.toUpperCase() }}</small><em>{{ t().asiScoresHelp }}</em>
+          </button>
+          <button type="button" [class]="styles.choice" [attr.aria-pressed]="asiKind() === 'feat'" (click)="chooseKind('feat')">
+            <strong>{{ t().asiFeat }}</strong><em>{{ t().asiFeatHelp }}</em>
+          </button>
+        </div>
+        @if (asiKind() === "scores") {
+          <div [class]="own.tabs">
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="spread() === 'plus2'" (click)="chooseSpread('plus2')"><strong>{{ t().plus2 }}</strong></button>
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="spread() === 'plus1'" (click)="chooseSpread('plus1')"><strong>{{ t().plus1 }}</strong></button>
+          </div>
+          <p [class]="styles.note">{{ spread() === "plus2" ? t().pickOne : t().pickTwo }}</p>
+          <div [class]="own.abilityPick">
+            @for (row of asiAbilities(); track row.key) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="row.chosen" [disabled]="row.full" (click)="toggleAbility(row.key)">
+                <strong>{{ abilityName(row.key) }}</strong><small>{{ row.change }}</small>@if (row.recommended) {<em>{{ t().recommendedAbility }}</em>}@if (row.full) {<em>{{ t().capped }}</em>}
+              </button>
+            }
+          </div>
+        }
+        @if (asiKind() === "feat") {
+          <h3 [class]="own.heading">{{ t().featPick }}</h3>
+          <div [class]="styles.cardGrid">
+            @for (option of featOptions(); track option.id) {
+              <button type="button" [class]="styles.choice" [attr.aria-pressed]="featId() === option.id" [disabled]="option.blocked" (click)="chooseFeat(option.id)">
+                <strong>{{ featName(option.id) }}</strong><em>{{ featSummary(option.id) }}</em>@if (option.blocked) {<small>{{ t().featBlocked }}</small>}
+              </button>
+            }
+          </div>
+          @if (featAbilities(); as options) {
+            <h3 [class]="own.heading">{{ t().pickFeatAbility }}</h3>
+            <ng-container [ngTemplateOutlet]="abilityChooser" [ngTemplateOutletContext]="{ $implicit: options, cap: 20 }" />
+          }
+          @if (featId() === "magicInitiate") {
+            <h3 [class]="own.heading">{{ t().pickList }}</h3>
+            <div [class]="styles.cardGrid">
+              @for (list of magicInitiateListIds; track list) {
+                <button type="button" [class]="styles.choice" [attr.aria-pressed]="featList() === list" (click)="featList.set(list)"><strong>{{ listName(list) }}</strong></button>
+              }
+            </div>
+          }
+          @if (featId() === "skilled") {
+            <h3 [class]="own.heading">{{ t().pickFeatSkills }}</h3>
+            <ng-container [ngTemplateOutlet]="skillChecks" [ngTemplateOutletContext]="{ $implicit: featSkillOptions(), limit: 3, target: 'feat' }" />
+          }
+        }
+      }
+
+      @case ("boon") {
+        <p [class]="styles.intro">{{ t().boonIntro }}</p>
+        <div [class]="styles.cardGrid">
+          @for (id of epicBoons; track id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="featId() === id" (click)="chooseFeat(id)">
+              <strong>{{ featName(id) }}</strong><em>{{ featSummary(id) }}</em>
+            </button>
+          }
+        </div>
+        @if (featId()) {
+          <h3 [class]="own.heading">{{ t().boonAbility }}</h3>
+          <ng-container [ngTemplateOutlet]="abilityChooser" [ngTemplateOutletContext]="{ $implicit: featAbilities() ?? [], cap: 30 }" />
+        }
+      }
+
+      @case ("fightingStyle") {
+        <p [class]="styles.intro">{{ t().styleIntro }}</p>
+        <div [class]="styles.cardGrid">
+          @for (option of styleOptions(); track option.id) {
+            <button type="button" [class]="styles.choice" [attr.aria-pressed]="style() === option.id" [disabled]="option.blocked" (click)="style.set(option.id)">
+              <strong>{{ featName(option.id) }}</strong>@if (option.id === "defense" && !option.blocked) {<small>{{ t().recommended.toUpperCase() }}</small>}<em>{{ featSummary(option.id) }}</em>@if (option.blocked) {<small>{{ t().styleOwned }}</small>}
+            </button>
+          }
+        </div>
+        <p [class]="styles.note">{{ t().styleHint }}</p>
+      }
+
+      @case ("skills") {
+        <p [class]="styles.intro">{{ t().skillsIntro(skillStep().count) }}</p>
+        @if (skillStep().options.length) {
+          <ng-container [ngTemplateOutlet]="skillChecks" [ngTemplateOutletContext]="{ $implicit: skillStep().options, limit: skillStep().count, target: 'new' }" />
+        } @else {
+          <p [class]="styles.note">{{ t().skillsNone }}</p>
+        }
+      }
+
+      @case ("expertise") {
+        <p [class]="styles.intro">{{ t().expertiseIntro(expertiseStep().count) }}</p>
+        @if (expertiseStep().options.length) {
+          <ng-container [ngTemplateOutlet]="skillChecks" [ngTemplateOutletContext]="{ $implicit: expertiseStep().options, limit: expertiseStep().limit, target: 'expertise' }" />
+        } @else {
+          <p [class]="styles.note">{{ t().expertiseNone }}</p>
+        }
+      }
+
+      @case ("spells") {
+        <p [class]="styles.intro">{{ t().spellsIntro }}{{ wizard() ? " " + t().spellbookHint : "" }}</p>
+        <app-spell-manager [build]="target()" [level]="next()" [value]="spellPicks()" [onChange]="setSpellPicks" />
+        @if (missing().cantrips > 0 || missing().prepared > 0) {
+          <p [class]="styles.note" role="status">{{ t().spellsMissing(missing().cantrips, missing().prepared) }}</p>
+        }
+      }
+
+      @case ("review") {
+        <p [class]="styles.intro">{{ t().reviewIntro }}</p>
+        <dl [class]="own.review">
+          @for (row of reviewRows(); track row[0]) {
+            <div><dt>{{ row[0] }}</dt><dd>{{ row[1] }}</dd></div>
+          }
+        </dl>
+        @if (allFeatures().length > 0) {
+          <h3 [class]="own.heading">{{ t().newFeatures }}</h3>
+          <ng-container [ngTemplateOutlet]="featureList" [ngTemplateOutletContext]="{ $implicit: allFeatures() }" />
+        }
+      }
+    }
+  </div>
+
+  <footer [class]="styles.foot">
+    <span [class]="styles.issues" role="status">{{ issueText() }}</span>
+    <button type="button" class="button button-quiet" (click)="goBack()">{{ position() ? "‹ " + t().back : t().cancel }}</button>
+    @if (last()) {
+      <button type="button" class="button button-primary" [disabled]="!result()" (click)="confirm()">✦ {{ t().confirm }}</button>
+    } @else {
+      <button type="button" class="button button-primary" [disabled]="blocked()" (click)="position.set(position() + 1)">{{ t().next }} ›</button>
+    }
+  </footer>
+</section>

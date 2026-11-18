@@ -30,11 +30,11 @@ Si el cuerpo trae `version` se trata como copia de seguridad; si no, como la imp
 
 ## Añadir una sección nueva (p. ej. monstruos homebrew)
 
-1. En `src/lib/backup.ts`, define un `BackupSection` (`parse`, `serialize`, `fingerprint`, `localId` si otras secciones la referencian, `maxItems`) y añádelo a `backupSections` (el orden importa: las referencias van detrás de lo que referencian).
-2. En `src/lib/backup-data.ts`, añade su `SectionStore` (`existing` y `create`) en `createStores` y su lectura en `exportBackup`.
+1. En `packages/shared/src/backup.ts`, define un `BackupSection` (`parse`, `serialize`, `fingerprint`, `localId` si otras secciones la referencian, `maxItems`) y añádelo a `backupSections` (el orden importa: las referencias van detrás de lo que referencian).
+2. En `apps/api/src/backup/backup.service.ts`, añade su `SectionStore` (`existing` y `create`) en `createStores` y su lectura en `exportBackup`.
 
 El validador, los límites, la exportación y la restauración idempotente recorren el registro; no hay que tocar nada más.
 
 ## Pruebas
 
-`src/lib/backup.test.ts` cubre el serializador (sin fugas), el validador y la idempotencia de `runRestore` con una cuenta en memoria. Las consultas SQL se probaron además a mano contra PostgreSQL 16 (ver la descripción del PR).
+`packages/shared/src/backup.test.ts` cubre el serializador (sin fugas), el validador y la idempotencia de `runRestore` con una cuenta en memoria. Las consultas SQL se probaron además a mano contra PostgreSQL 16 (ver la descripción del PR).

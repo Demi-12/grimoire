@@ -1,0 +1,145 @@
+@if (view(); as v) {
+  <div class="dashboard" [attr.aria-busy]="busy()">
+    <div class="filters">
+      <div class="chips" role="group" [attr.aria-label]="t().period">
+        @for (range of ranges; track range) {
+          <button type="button" class="chip" [attr.aria-pressed]="days() === range" (click)="days.set(range)">{{ t().days(range) }}</button>
+        }
+      </div>
+      <button type="button" class="button button-quiet" [disabled]="busy()" (click)="load(days())">@if (busy()) {<span appSpinner></span>}{{ t().refresh }}</button>
+      <p class="updated" role="status">{{ error() ? t().loadError : v.updated }}</p>
+    </div>
+
+    <div class="body" [attr.data-refreshing]="busy() ? true : null">
+      @if (v.nothingYet) {
+        <p class="notice">{{ t().empty }}</p>
+      }
+
+      <section class="kpis" [attr.aria-label]="t().kpis">
+        @for (tile of v.tiles; track tile.label) {
+          <article class="tile" [attr.data-tone]="tile.tone ?? null">
+            <h3>@if (tile.tone === "critical") {<span class="statusIcon" aria-hidden="true">!</span>}{{ tile.label }}</h3>
+            <p class="value">{{ tile.value }}</p>
+            @if (tile.delta.change === null) {
+              <p class="delta">{{ tile.delta.fallback }}</p>
+            } @else {
+              <p class="delta" [attr.data-mood]="tile.delta.mood"><b><span aria-hidden="true">{{ tile.delta.arrow }} </span>{{ tile.delta.change }}</b> {{ tile.delta.versus }}</p>
+            }
+            <app-sparkline [values]="tile.trend" [tone]="tile.tone" />
+            <p class="detail">{{ tile.detail }}</p>
+          </article>
+        }
+      </section>
+
+      <div class="row">
+        <section class="analyticsPanel wide" aria-labelledby="analytics-active">
+          <header><h2 id="analytics-active">{{ t().dailyActive }}</h2><p>{{ t().dailyActiveHelp }}</p></header>
+          <app-time-chart kind="line" [label]="t().dailyActive" [describe]="t().activeOn" [points]="v.activePoints" />
+        </section>
+        <section class="analyticsPanel" aria-labelledby="analytics-wizard">
+          <header><h2 id="analytics-wizard">{{ t().wizard }}</h2><p>{{ t().wizardHelp }}</p></header>
+          @if (v.wizard; as wizard) {
+            <div class="funnel">
+              <p class="rate">{{ wizard.rateText }}</p>
+              <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="wizard.rate" [attr.aria-label]="t().wizard"><span [style.width.%]="wizard.rate"></span></div>
+              <dl>
+                <div><dt>{{ t().wizardStarted }}</dt><dd>{{ wizard.started }}</dd></div>
+                <div><dt>{{ t().wizardCompleted }}</dt><dd>{{ wizard.completed }}</dd></div>
+              </dl>
+            </div>
+          } @else {
+            <p class="empty">{{ t().wizardEmpty }}</p>
+          }
+        </section>
+      </div>
+
+      <div class="row">
+        <section class="analyticsPanel" aria-labelledby="analytics-sections">
+          <header><h2 id="analytics-sections">{{ t().sections }}</h2><p>{{ t().sectionsHelp }}</p></header>
+          @if (v.sections.length) {
+            <app-bar-list [max]="v.maxViews" [rows]="v.sections" />
+          } @else {
+            <p class="empty">{{ t().sectionsEmpty }}</p>
+          }
+        </section>
+        <section class="analyticsPanel" aria-labelledby="analytics-errors-daily">
+          <header><h2 id="analytics-errors-daily"><span class="statusIcon" aria-hidden="true">!</span>{{ t().dailyErrors }}</h2><p>{{ v.errorsDetail }}</p></header>
+          <app-time-chart kind="column" tone="critical" [label]="t().dailyErrors" [describe]="t().errorsOn" [height]="170" [points]="v.errorPoints" />
+        </section>
+      </div>
+
+      <details class="tableView">
+        <summary>{{ t().table }}</summary>
+        <div class="tableScroll">
+          <table>
+            <thead><tr><th scope="col">{{ t().date }}</th><th scope="col">{{ t().tableActive }}</th><th scope="col">{{ t().tableCharacters }}</th><th scope="col">{{ t().tableEncounters }}</th><th scope="col">{{ t().tableCampaigns }}</th><th scope="col">{{ t().tableErrors }}</th></tr></thead>
+            <tbody>
+              @for (day of v.table; track day.date) {
+                <tr><th scope="row">{{ day.label }}</th><td>{{ day.activeUsers }}</td><td>{{ day.characters }}</td><td>{{ day.encounters }}</td><td>{{ day.campaigns }}</td><td>{{ day.errors }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <section class="analyticsPanel" aria-labelledby="analytics-error-log">
+        <header><h2 id="analytics-error-log">{{ t().errorLog }}</h2><p>{{ t().errorLogHelp }}</p></header>
+        @if (!v.errors.length) {
+          <p class="allClear"><span aria-hidden="true">✓</span>{{ t().noErrors }}</p>
+        } @else {
+          <ul class="errorList">
+            @for (entry of v.errors; track entry.item.fingerprint) {
+              <li>
+                <div class="errorHead">
+                  <span class="badge" [attr.data-source]="entry.item.source">{{ entry.source }}</span>
+                  <p class="errorMessage"><b>{{ entry.item.name }}</b> {{ entry.item.message }}</p>
+                </div>
+                <p class="errorMeta">
+                  @if (entry.route) {<code>{{ entry.route }}</code>}
+                  <span>{{ entry.times }}</span>
+                  <span>{{ entry.affected }}</span>
+                  <span>{{ t().lastSeen }} <time [attr.datetime]="entry.item.lastSeen" [title]="entry.lastSeenTitle">{{ entry.lastSeenAgo }}</time></span>
+                </p>
+                <details>
+                  <summary>{{ t().details }}</summary>
+                  <dl class="errorFacts">
+                    <div><dt>{{ t().firstSeen }}</dt><dd>{{ entry.firstSeen }}</dd></div>
+                    @if (entry.item.userAgent) {
+                      <div><dt>{{ t().device }}</dt><dd>{{ entry.item.userAgent }}</dd></div>
+                    }
+                    @if (entry.item.digest) {
+                      <div><dt>{{ t().digest }}</dt><dd><code>{{ entry.item.digest }}</code></dd></div>
+                    }
+                  </dl>
+                  @if (entry.item.stack) {
+                    <pre>{{ entry.item.stack }}</pre>
+                  } @else {
+                    <p class="empty">{{ t().noStack }}</p>
+                  }
+                </details>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <p class="privacy">{{ t().privacy }}</p>
+    </div>
+  </div>
+} @else if (error()) {
+  <div class="failure" role="alert"><p>{{ t().loadError }}</p><button type="button" class="button button-primary" (click)="load(days())">{{ t().retry }}</button></div>
+} @else {
+  <div appSkeletonRegion [label]="t().loading" class="skeletonLayout">
+    <div class="kpis">
+      @for (item of placeholders; track item) {
+        <div class="tile">
+          <span appSkeleton width="60%" [height]="12"></span>
+          <span appSkeleton width="40%" [height]="30" [style.margin-top.px]="10"></span>
+          <span appSkeleton width="80%" [height]="10" [style.margin-top.px]="12"></span>
+          <span appSkeleton width="100%" [height]="32" [style.margin-top.px]="10"></span>
+        </div>
+      }
+    </div>
+    <span appSkeleton width="100%" [height]="240" [style.margin-top.px]="14"></span>
+  </div>
+}
