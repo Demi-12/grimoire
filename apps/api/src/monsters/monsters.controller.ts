@@ -6,6 +6,7 @@
 import { Controller, Get, Param, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { isHomebrewId, parseHomebrewSlug } from "@grimoire/shared/homebrew";
+import { parseMonsterSearch } from "@grimoire/shared/open5e";
 import { ApiError } from "../common/api-error.js";
 import { requireApproved } from "../common/auth.guard.js";
 import type { AppRequest } from "../common/current-user.js";
@@ -13,10 +14,6 @@ import { QueryText } from "../common/params.js";
 import { HomebrewService } from "../homebrew/homebrew.service.js";
 import { upstreamErrorResponse } from "./monster-upstream.js";
 import { MonstersService } from "./monsters.service.js";
-
-const CHALLENGE_RATINGS = new Set([
-  "0", "0.125", "0.25", "0.5", ...Array.from({ length: 30 }, (_, index) => String(index + 1)),
-]);
 
 const SHARED_CACHE = "public, s-maxage=86400, stale-while-revalidate=604800";
 
@@ -36,18 +33,9 @@ export class MonstersController {
     @QueryText("search") searchParam: string | null, @QueryText("page") pageParam: string | null, @QueryText("limit") limitParam: string | null,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const requestedRating = ratingParam?.trim() ?? "";
-    const source = sourceParam?.trim() ?? "";
-    const search = (searchParam ?? "").trim().toLocaleLowerCase("en-US");
-    const page = Number(pageParam ?? "1");
-    const limit = Number(limitParam ?? "12");
-    if (search.length > 100) throw new ApiError(400, "Search text is too long.");
-    if (source.length > 60 || !/^[a-z0-9-]*$/i.test(source)) throw new ApiError(400, "Invalid book filter.");
-    if (requestedRating && !CHALLENGE_RATINGS.has(requestedRating)) throw new ApiError(400, "Invalid challenge rating filter.");
-    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw new ApiError(400, "Invalid pagination values.");
-
-    const found = await this.monsters.search({ rating: requestedRating ? Number(requestedRating) : undefined, source, search, page, limit })
-      .catch((cause: unknown) => { throw upstreamFailure(cause); });
+    const query = parseMonsterSearch({ challenge_rating: ratingParam, source: sourceParam, search: searchParam, page: pageParam, limit: limitParam });
+    if (!query.ok) throw new ApiError(400, query.error);
+    const found = await this.monsters.search(query.value).catch((cause: unknown) => { throw upstreamFailure(cause); });
     // Set only once there is an answer: an error must not be kept by a shared cache.
     response.setHeader("Cache-Control", SHARED_CACHE);
     return found;

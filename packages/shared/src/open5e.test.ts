@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inferMonsterRoles } from "./monster-api.js";
-import { legacySlugCandidates, toStatBlock, withoutSupersededCopies, type Open5eCreature } from "./open5e.js";
+import { legacySlugCandidates, parseMonsterSearch, toStatBlock, withoutSupersededCopies, type Open5eCreature } from "./open5e.js";
 
 /** Shaped like GET https://api.open5e.com/v2/creatures/srd-2024_adult-red-dragon/ (trimmed). */
 const dragon: Open5eCreature = {
@@ -100,5 +100,34 @@ describe("catalog helpers", () => {
   it("resolves old dnd5eapi slugs to the SRD 5.2 first", () => {
     expect(legacySlugCandidates("goblin")).toEqual(["srd-2024_goblin", "srd_goblin"]);
     expect(legacySlugCandidates("tob_aboleth")).toEqual(["tob_aboleth"]);
+  });
+});
+
+describe("parseMonsterSearch", () => {
+  const none: Parameters<typeof parseMonsterSearch>[0] = { challenge_rating: null, source: null, search: null, page: null, limit: null };
+  const parse = (query: Partial<typeof none>) => parseMonsterSearch({ ...none, ...query });
+
+  it("defaults to the first page of twelve, any rating, any book", () => {
+    expect(parse({})).toEqual({ ok: true, value: { rating: undefined, source: "", search: "", page: 1, limit: 12 } });
+  });
+
+  it("trims the filters and lowercases the search text", () => {
+    expect(parse({ challenge_rating: " 0.25 ", source: " srd-2024 ", search: "  Goblin Boss ", page: "2", limit: "50" }))
+      .toEqual({ ok: true, value: { rating: 0.25, source: "srd-2024", search: "goblin boss", page: 2, limit: 50 } });
+  });
+
+  it("rejects ratings that are not standard challenge ratings", () => {
+    expect(parse({ challenge_rating: "2.5" })).toEqual({ ok: false, error: "Invalid challenge rating filter." });
+    expect(parse({ challenge_rating: "31" }).ok).toBe(false);
+    expect(parse({ challenge_rating: "30" }).ok).toBe(true);
+  });
+
+  it("rejects long searches, odd book keys and bad pagination", () => {
+    expect(parse({ search: "a".repeat(101) })).toEqual({ ok: false, error: "Search text is too long." });
+    expect(parse({ source: "srd 2024" })).toEqual({ ok: false, error: "Invalid book filter." });
+    expect(parse({ source: "a".repeat(61) }).ok).toBe(false);
+    for (const [page, limit] of [["0", "12"], ["1.5", "12"], ["1", "0"], ["1", "51"], ["x", "12"]]) {
+      expect(parse({ page, limit })).toEqual({ ok: false, error: "Invalid pagination values." });
+    }
   });
 });

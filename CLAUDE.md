@@ -132,7 +132,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `rules.ts`: `encounterBudget` (tabla de XP del SRD 5.2.1) y `suggestEncounters`. UI: `encounter-builder.component`, que mezcla el catálogo de Open5e, el catálogo propio (`creature`) y homebrew.
 
 ### Bestiario y homebrew
-- Open5e: `apps/api/src/monsters/monster-upstream.ts` (catálogo compacto en memoria durante un día; fichas y textos de conjuros en caché un día), `open5e.ts` (mapeo a nuestra ficha, libros reeditados, slugs antiguos), `monster-api.ts` (tipos y llamadas del navegador, `inferMonsterRoles`), `monster-i18n.ts` (vocabulario en español). El texto de los monstruos llega en inglés.
+- Open5e: `apps/api/src/monsters/monster-upstream.ts` (catálogo compacto en memoria durante un día; fichas y textos de conjuros en caché un día), `open5e.ts` (mapeo a nuestra ficha, libros reeditados, slugs antiguos, `parseMonsterSearch` para la búsqueda de `/api/monsters`), `monster-api.ts` (tipos y llamadas del navegador, `inferMonsterRoles`), `monster-i18n.ts` (vocabulario en español). El texto de los monstruos llega en inglés.
 - Homebrew: `homebrew.ts` (validación, XP por VD, reglas `can*Homebrew`, visibilidad `private`/`campaign`/`instance`, slug `homebrew:<id>`), `homebrew-draft.ts` (estado del formulario ↔ payload ↔ vista previa), `apps/api/src/homebrew/homebrew.service.ts`.
 
 ### Mapa de batalla en directo
