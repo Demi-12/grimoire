@@ -1,6 +1,6 @@
 /** The encounter journal of a campaign: saved encounters, planned or played. DM material, start to finish. */
 import { Injectable } from "@nestjs/common";
-import type { AppUser, EncounterInput, EncounterLineInput, EncounterStatus } from "@grimoire/shared/permissions";
+import type { AppUser, EncounterChange, EncounterInput, EncounterLineInput, EncounterStatus } from "@grimoire/shared/permissions";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, transaction, type Queryable } from "../database/db.js";
 import { CampaignsService } from "./campaigns.service.js";
@@ -67,7 +67,7 @@ export class EncountersService {
 
   /** Title, notes and status can change after saving; the generated creature list stays as saved. */
   async updateEncounter(
-    user: AppUser, id: string, change: { title?: string; notes?: string; status?: EncounterStatus },
+    user: AppUser, id: string, change: EncounterChange,
   ): Promise<DataResult<EncounterView>> {
     const existing = await pool.query<{ campaignId: string }>('SELECT "campaignId" FROM "encounter" WHERE "id" = $1', [id]);
     if (!existing.rows[0]) return fail("not-found");

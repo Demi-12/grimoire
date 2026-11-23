@@ -1,6 +1,6 @@
 /** /api/campaigns/:id/encounters: the campaign's encounter journal, for the people who can manage it. */
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
-import { encounterStatuses, parseEncounterInput, type AppUser, type EncounterStatus } from "@grimoire/shared/permissions";
+import { parseEncounterChange, parseEncounterInput, type AppUser } from "@grimoire/shared/permissions";
 import { ApiError, unwrap } from "../common/api-error.js";
 import { Approved, CurrentUser } from "../common/auth.guard.js";
 import { JsonBody, UuidParam } from "../common/params.js";
@@ -35,15 +35,10 @@ export class EncountersController {
    */
   @Patch(":encounterId")
   @RateLimit(WRITE_LIMIT)
-  async update(@CurrentUser() user: AppUser, @Param("encounterId", UuidParam) encounterId: string, @JsonBody() raw: unknown) {
-    const body = raw as { title?: unknown; notes?: unknown; status?: unknown } | null;
-    if (!body || typeof body !== "object") throw new ApiError(400, "Invalid encounter.");
-    const title = body.title === undefined ? undefined : typeof body.title === "string" ? body.title.trim() : null;
-    const notes = body.notes === undefined ? undefined : typeof body.notes === "string" ? body.notes.trim() : null;
-    const status = body.status === undefined ? undefined : encounterStatuses.includes(body.status as EncounterStatus) ? body.status as EncounterStatus : null;
-    if (title === null || notes === null || status === null || title === "" || (title?.length ?? 0) > 80 || (notes?.length ?? 0) > 2000
-      || (title === undefined && notes === undefined && status === undefined)) throw new ApiError(400, "Invalid encounter.");
-    return { encounter: unwrap(await this.encounters.updateEncounter(user, encounterId, { title, notes, status })) };
+  async update(@CurrentUser() user: AppUser, @Param("encounterId", UuidParam) encounterId: string, @JsonBody() body: unknown) {
+    const change = parseEncounterChange(body);
+    if (!change) throw new ApiError(400, "Invalid encounter.");
+    return { encounter: unwrap(await this.encounters.updateEncounter(user, encounterId, change)) };
   }
 
   @Delete(":encounterId")

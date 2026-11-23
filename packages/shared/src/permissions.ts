@@ -191,12 +191,15 @@ export interface EncounterInput {
   lines: EncounterLineInput[];
 }
 
+const ENCOUNTER_TITLE_MAX = 80;
+const ENCOUNTER_NOTES_MAX = 2000;
+
 /** Validate an encounter payload (a saved suggestion plus title/notes/status). Null when invalid. */
 export function parseEncounterInput(body: unknown): EncounterInput | null {
   if (!body || typeof body !== "object") return null;
   const value = body as Record<string, unknown>;
-  const title = text(value.title, 80);
-  const notes = text(value.notes, 2000);
+  const title = text(value.title, ENCOUNTER_TITLE_MAX);
+  const notes = text(value.notes, ENCOUNTER_NOTES_MAX);
   if (!title || notes === null) return null;
   const status = value.status === undefined ? "planned" : value.status;
   if (!encounterStatuses.includes(status as EncounterStatus)) return null;
@@ -226,6 +229,30 @@ export function parseEncounterInput(body: unknown): EncounterInput | null {
     title, notes, status: status as EncounterStatus, difficulty: value.difficulty as EncounterInput["difficulty"],
     budget: value.budget as number, totalXp: value.totalXp as number, partyLevels: value.partyLevels as number[], lines,
   };
+}
+
+export interface EncounterChange { title?: string; notes?: string; status?: EncounterStatus }
+
+const INVALID = Symbol("invalid");
+
+/** An optional trimmed string: undefined when absent, INVALID when not a string or too long. */
+function optionalText(value: unknown, max: number): string | undefined | typeof INVALID {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") return INVALID;
+  const trimmed = value.trim();
+  return trimmed.length <= max ? trimmed : INVALID;
+}
+
+/** Validate an edit of a saved encounter: at least one of title, notes or status. Null when invalid. */
+export function parseEncounterChange(body: unknown): EncounterChange | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  const title = optionalText(value.title, ENCOUNTER_TITLE_MAX);
+  const notes = optionalText(value.notes, ENCOUNTER_NOTES_MAX);
+  const status = value.status === undefined || encounterStatuses.includes(value.status as EncounterStatus) ? value.status as EncounterStatus | undefined : INVALID;
+  if (title === INVALID || notes === INVALID || status === INVALID || title === "") return null;
+  if (title === undefined && notes === undefined && status === undefined) return null;
+  return { title, notes, status };
 }
 
 export interface PreferencesInput { locale?: "en" | "es"; theme?: "light" | "dark" }
