@@ -681,6 +681,41 @@ export function visibleMapState(state: MapState, showHidden: boolean): MapState 
   return visible;
 }
 
+/** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
+export type MapAudience = "auto" | "players";
+
+/** A campaign's map as stored (the battle_map row); undefined before the campaign has one. */
+export interface StoredMap { state: unknown; version: number; updatedAt: Date }
+
+/** The map as one viewer receives it; the API adds which campaign it belongs to. */
+export interface MapViewerState {
+  version: number;
+  /** Owner, co-DM or site admin: may add monsters, hide/reveal, resize. */
+  isDm: boolean;
+  /** Hidden monsters are included (DM with the DM view). */
+  showsHidden: boolean;
+  heroes: (MapHero & { mine: boolean })[];
+  state: MapState;
+  updatedAt: string;
+}
+
+/**
+ * What one viewer receives of a stored map: the state read safely (an empty map before there is one),
+ * hero tokens in step with the campaign, and only what this viewer and audience may see.
+ */
+export function viewMap(stored: StoredMap | undefined, heroes: MapHero[], viewer: MapActor & { audience: MapAudience }): MapViewerState {
+  const showsHidden = viewer.isDm && viewer.audience !== "players";
+  const state = syncHeroes(normalizeMapState(stored?.state ?? emptyMapState()), heroes);
+  return {
+    version: stored?.version ?? 0,
+    isDm: viewer.isDm,
+    showsHidden,
+    heroes: heroes.map((hero) => ({ ...hero, mine: hero.ownerId === viewer.userId })),
+    state: visibleMapState(state, showsHidden),
+    updatedAt: (stored?.updatedAt ?? new Date(0)).toISOString(),
+  };
+}
+
 /** May a token take one step of (dx, dy) squares? Diagonal steps can't slip past the end or the corner of a wall. */
 function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: number, blocked: Set<string>): boolean {
   for (let i = 0; i < token.size; i++) for (let j = 0; j < token.size; j++) {

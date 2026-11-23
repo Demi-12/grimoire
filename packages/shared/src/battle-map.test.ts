@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map.js";
 
@@ -162,6 +162,44 @@ describe("what each viewer sees", () => {
     expect(state.cols).toBe(8);
     expect(state.rows).toBe(14);
     expect(state.tokens).toEqual([{ id: "ok", kind: "monster", label: "Rat", x: 7, y: 2, size: 1 }]);
+  });
+});
+
+describe("the map as one viewer receives it", () => {
+  const stored = () => ({ state: JSON.parse(JSON.stringify(withParty())), version: 7, updatedAt: new Date("2026-11-20T18:30:00.000Z") });
+
+  it("shows a DM everything, unless they asked for the players' view", () => {
+    const view = viewMap(stored(), heroes, { ...dm, audience: "auto" });
+    expect(view).toMatchObject({ version: 7, isDm: true, showsHidden: true, updatedAt: "2026-11-20T18:30:00.000Z" });
+    expect(view.state.tokens).toHaveLength(5);
+    const table = viewMap(stored(), heroes, { ...dm, audience: "players" });
+    expect(table).toMatchObject({ isDm: true, showsHidden: false });
+    expect(table.state.tokens.map((token) => token.label)).toEqual(["Lia", "Brom", "Goblin 1", "Goblin 2"]);
+  });
+
+  it("never shows a player hidden monsters, whatever they ask for", () => {
+    const view = viewMap(stored(), heroes, { ...alice, audience: "auto" });
+    expect(view).toMatchObject({ isDm: false, showsHidden: false });
+    expect(view.state.tokens.some((token) => token.hidden)).toBe(false);
+  });
+
+  it("marks the viewer's own heroes and keeps hero tokens in step with the campaign", () => {
+    const remaining = [{ ...heroes[0], name: "Lia the Bold" }];
+    const view = viewMap(stored(), remaining, { ...alice, audience: "auto" });
+    expect(view.heroes).toEqual([{ id: aliceHero, name: "Lia the Bold", ownerId: "alice", mine: true }]);
+    expect(view.state.tokens.filter((token) => token.kind === "hero").map((token) => token.label)).toEqual(["Lia the Bold"]);
+    expect(viewMap(stored(), heroes, { ...dm, audience: "auto" }).heroes.map((hero) => hero.mine)).toEqual([false, false]);
+  });
+
+  it("serves an empty map at version 0 to a campaign that has none yet", () => {
+    expect(viewMap(undefined, heroes, { ...dm, audience: "auto" })).toEqual({
+      version: 0, isDm: true, showsHidden: true, heroes: heroes.map((hero) => ({ ...hero, mine: false })),
+      state: emptyMapState(), updatedAt: "1970-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("reads damaged stored state as a valid map", () => {
+    expect(viewMap({ state: "junk", version: 3, updatedAt: new Date(0) }, [], { ...dm, audience: "auto" }).state).toEqual(emptyMapState());
   });
 });
 

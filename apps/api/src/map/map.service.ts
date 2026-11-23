@@ -8,27 +8,19 @@ import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { MapSaveSummary } from "@grimoire/shared/api-types";
 import {
-  applyMapOps, emptyMapState, normalizeMapState, syncHeroes, visibleMapState,
-  type MapHero, type MapImageType, type MapOp, type MapOpError, type MapState,
+  applyMapOps, emptyMapState, normalizeMapState, syncHeroes, viewMap,
+  type MapAudience, type MapHero, type MapImageType, type MapOp, type MapOpError, type MapState, type MapViewerState, type StoredMap,
 } from "@grimoire/shared/battle-map";
 import { canManageCampaign, type AppUser, type CampaignRole } from "@grimoire/shared/permissions";
 import { pool, transaction, type Queryable } from "../database/db.js";
 import { BATTLE_MAP_CHANNEL } from "./battle-map-hub.js";
 
-/** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
-export type MapAudience = "auto" | "players";
+export type { MapAudience } from "@grimoire/shared/battle-map";
 
-export interface BattleMapView {
+/** One viewer's map (see viewMap in @grimoire/shared/battle-map) and the campaign it belongs to. */
+export interface BattleMapView extends MapViewerState {
   campaignId: string;
   campaignName: string;
-  version: number;
-  /** Owner, co-DM or site admin: may add monsters, hide/reveal, resize. */
-  isDm: boolean;
-  /** Hidden monsters are included (DM with the DM view). */
-  showsHidden: boolean;
-  heroes: (MapHero & { mine: boolean })[];
-  state: MapState;
-  updatedAt: string;
 }
 
 export type MapResult<T> = { ok: true; value: T } | { ok: false; error: "not-found" | "limit" | MapOpError };
@@ -52,19 +44,8 @@ async function readContext(db: Queryable, user: AppUser, campaignId: string): Pr
   return { campaignName: row.name, isDm: canManageCampaign(user, row), heroes: heroes.rows };
 }
 
-function toView(user: AppUser, campaignId: string, context: MapContext, row: { state: unknown; version: number; updatedAt: Date } | undefined, audience: MapAudience): BattleMapView {
-  const showsHidden = context.isDm && audience !== "players";
-  const state = syncHeroes(normalizeMapState(row?.state ?? emptyMapState()), context.heroes);
-  return {
-    campaignId,
-    campaignName: context.campaignName,
-    version: row?.version ?? 0,
-    isDm: context.isDm,
-    showsHidden,
-    heroes: context.heroes.map((hero) => ({ ...hero, mine: hero.ownerId === user.id })),
-    state: visibleMapState(state, showsHidden),
-    updatedAt: (row?.updatedAt ?? new Date(0)).toISOString(),
-  };
+function toView(user: AppUser, campaignId: string, context: MapContext, row: StoredMap | undefined, audience: MapAudience): BattleMapView {
+  return { campaignId, campaignName: context.campaignName, ...viewMap(row, context.heroes, { userId: user.id, isDm: context.isDm, audience }) };
 }
 
 const newTokenId = () => randomBytes(9).toString("base64url");
@@ -84,7 +65,7 @@ async function lockMap(client: Queryable, campaignId: string): Promise<MapState>
 
 /** Store a new state, bump the version and tell every open stream. */
 async function writeMap(client: Queryable, user: AppUser, campaignId: string, context: MapContext, state: MapState, audience: MapAudience): Promise<BattleMapView> {
-  const saved = await client.query<{ state: unknown; version: number; updatedAt: Date }>(
+  const saved = await client.query<StoredMap>(
     `UPDATE "battle_map" SET "state" = $2, "version" = "version" + 1, "updatedAt" = now()
       WHERE "campaignId" = $1 RETURNING "state", "version", "updatedAt"`,
     [campaignId, JSON.stringify(state)],
