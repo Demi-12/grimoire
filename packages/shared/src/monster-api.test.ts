@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchMonster, fetchMonsterCatalog, fetchSrdCatalog, formatChallenge, MonsterApiError } from "./monster-api.js";
+import {
+  creatureTypeKey, creatureTypeLabel, fetchMonster, fetchMonsterCatalog, fetchSrdCatalog, formatChallenge, inferMonsterRoles, MonsterApiError,
+  sourceLabel, type MonsterStatBlock,
+} from "./monster-api.js";
 
 /** Answer every fetch with this status and JSON body, and remember the URLs asked for. */
 function serve(status: number, body: unknown) {
@@ -90,5 +93,108 @@ describe("fetchSrdCatalog", () => {
 describe("formatChallenge", () => {
   it("writes fractional ratings as fractions", () => {
     expect([0, 0.125, 0.25, 0.5, 1, 30, undefined].map(formatChallenge)).toEqual(["0", "1/8", "1/4", "1/2", "1", "30", "—"]);
+  });
+});
+
+describe("inferMonsterRoles", () => {
+  const bite = { name: "Bite", desc: "Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2) Piercing damage." };
+  /** A creature with one plain attack, so only the numbers under test decide the roles. */
+  const plain = (stats: Partial<MonsterStatBlock>): MonsterStatBlock => ({ name: "Test creature", actions: [bite], ...stats });
+
+  it("tags a tough melee brute as frontline damage", () => {
+    const ogre = plain({
+      name: "Ogre", challenge_rating: 2, armor_class: 11, hit_points: 68, speed: { walk: "40 ft." },
+      actions: [{ name: "Greatclub", desc: "Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage." }],
+    });
+    expect(inferMonsterRoles(ogre)).toEqual(["frontline", "damage"]);
+  });
+
+  it("puts heavily armoured creatures on the front line from AC 16 up, using the best listed value", () => {
+    const knight = (armor: MonsterStatBlock["armor_class"]) => inferMonsterRoles(plain({ challenge_rating: 3, hit_points: 52, armor_class: armor }));
+    expect(knight([{ type: "armor", value: 16 }])).toEqual(["frontline", "damage"]);
+    expect(knight([{ type: "natural" }, { type: "armor", value: 18 }])).toEqual(["frontline", "damage"]);
+    expect(knight(16)).toEqual(["frontline", "damage"]);
+    expect(knight([{ type: "armor", value: 15 }])).toEqual(["damage"]);
+    expect(knight(undefined)).toEqual(["damage"]);
+  });
+
+  it("asks for 19.2 hit points per challenge rating before HP alone makes a creature frontline", () => {
+    const atCr5 = (hit_points: number) => inferMonsterRoles(plain({ challenge_rating: 5, armor_class: 13, hit_points }));
+    expect(atCr5(96)).toContain("frontline");
+    expect(atCr5(95)).not.toContain("frontline");
+    expect(atCr5(50)).not.toContain("frontline");
+  });
+
+  it("treats a missing rating as CR 1 and gives CR 1/8 and below the smallest HP bar", () => {
+    const roles = (challenge_rating: number | undefined, hit_points: number) =>
+      inferMonsterRoles(plain({ challenge_rating, armor_class: 10, hit_points })).includes("frontline");
+    expect([roles(undefined, 19), roles(undefined, 20)]).toEqual([false, true]);
+    expect([roles(0, 2), roles(0, 3), roles(0.125, 2), roles(0.125, 3)]).toEqual([false, true, false, true]);
+  });
+
+  it("reads a spellcaster's paragraphs and bonus actions: control, damage and a teleport to scout", () => {
+    const mage = plain({
+      name: "Mage", challenge_rating: 6, armor_class: 15, hit_points: 81, speed: { walk: "30 ft." },
+      actions: [
+        { name: "Arcane Burst", desc: "Ranged Attack Roll: +6, range 120 ft. Hit: 19 (3d8 + 6) Force damage." },
+        { name: "Spellcasting", desc: ["The mage casts one of its spells.", "At will: Light, Mage Hand."] },
+      ],
+      bonus_actions: [{ name: "Misty Step", desc: "The mage teleports up to 30 feet to a space it can see." }],
+    });
+    expect(inferMonsterRoles(mage)).toEqual(["control", "damage", "scouting"]);
+  });
+
+  it("calls a healer that helps its allies support, even when the healing is a reaction", () => {
+    const priest = plain({
+      name: "Priest", challenge_rating: 2, armor_class: 13, hit_points: 38, actions: [],
+      reactions: [{ name: "Mending Word", desc: "One creature the priest can see regains 7 hit points." }],
+    });
+    expect(inferMonsterRoles(priest)).toEqual(["support"]);
+  });
+
+  it("finds restraining effects in a creature's traits", () => {
+    const ooze = plain({
+      name: "Ooze", challenge_rating: 2, armor_class: 8, hit_points: 30, actions: [],
+      special_abilities: [{ name: "Sticky Body", desc: "A creature that touches the ooze is Restrained." }],
+    });
+    expect(inferMonsterRoles(ooze)).toEqual(["control"]);
+  });
+
+  it("scouts with any fly speed or a climb or swim speed of 40 ft. or more, not with a fast walk or darkvision", () => {
+    const skirmisher = (speed: Record<string, string>) =>
+      inferMonsterRoles(plain({ challenge_rating: 1, armor_class: 13, hit_points: 11, speed, senses: { darkvision: "60 ft." } }));
+    expect(skirmisher({ walk: "40 ft.", climb: "40 ft." })).toEqual(["damage", "scouting"]);
+    expect(skirmisher({ walk: "30 ft.", swim: "60 ft." })).toEqual(["damage", "scouting"]);
+    expect(skirmisher({ walk: "10 ft.", fly: "30 ft." })).toEqual(["damage", "scouting"]);
+    expect(skirmisher({ walk: "50 ft.", climb: "30 ft." })).toEqual(["damage"]);
+  });
+
+  it("gives no role to a creature with nothing to read", () => {
+    expect(inferMonsterRoles({ name: "Shrub" })).toEqual([]);
+  });
+});
+
+describe("sourceLabel", () => {
+  it("names the book, takes a name as it is, and falls back to Open5e", () => {
+    expect(sourceLabel({ name: "SRD 5.2" })).toBe("SRD 5.2");
+    expect(sourceLabel("Tome of Beasts")).toBe("Tome of Beasts");
+    expect(sourceLabel(undefined)).toBe("Open5e");
+  });
+});
+
+describe("creatureTypeKey and creatureTypeLabel", () => {
+  it("groups variants of a type under one key", () => {
+    expect(["Beast", "  Undead ", "Humanoid (goblinoid)", "swarm of Tiny beasts", "Swarm"].map(creatureTypeKey))
+      .toEqual(["beast", "undead", "humanoid", "swarm", "swarm"]);
+  });
+
+  it("keeps unknown types as they are and files blank ones under other", () => {
+    expect(["Spirit", "", "   "].map(creatureTypeKey)).toEqual(["spirit", "other", "other"]);
+  });
+
+  it("labels known types in both languages and capitalises unknown keys", () => {
+    expect([creatureTypeLabel("dragon", "en"), creatureTypeLabel("dragon", "es")]).toEqual(["Dragon", "Dragón"]);
+    expect([creatureTypeLabel("swarm", "en"), creatureTypeLabel("swarm", "es")]).toEqual(["Swarm", "Enjambre"]);
+    expect([creatureTypeLabel("spirit", "es"), creatureTypeLabel("other", "en")]).toEqual(["Spirit", "Other"]);
   });
 });
