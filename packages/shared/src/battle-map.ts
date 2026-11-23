@@ -207,94 +207,181 @@ function label(value: unknown): string | null {
   return trimmed && trimmed.length <= TOKEN_LABEL_MAX ? trimmed : null;
 }
 
+type MapOpType = MapOp["type"];
+type MapOpOf<K extends MapOpType> = Extract<MapOp, { type: K }>;
+/** A change as it arrives from the browser, before it is checked. */
+type RawOp = Record<string, unknown>;
+type WallSpan = Pick<MapWall, "x1" | "y1" | "x2" | "y2">;
+
+const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isTrue = (value: unknown): value is true => value === true;
+const isUuid = (value: unknown): value is string => typeof value === "string" && uuidPattern.test(value);
+const isSquare = (value: unknown): value is number => isInt(value, 0, MAP_MAX_SIZE - 1);
+const isMoved = (value: unknown): value is number => isInt(value, 0, COMBAT_MAX_MOVED);
+/** A combatant's speed, or null to say it isn't known. */
+const isSpeedOrUnknown = (value: unknown): value is number | null => value === null || isSpeed(value);
+/** Left out, or there and accepted by the guard. */
+const isOptional = <T>(value: unknown, guard: (value: unknown) => value is T): value is T | undefined => value === undefined || guard(value);
+
+/** Reads one optional field of a change: its clean value, or undefined when the field is there but wrong. */
+type FieldReader<T> = (value: unknown) => T | undefined;
+/** A reader for each optional field of a change; the mapped type asks for one per field. */
+type FieldReaders<T> = { [K in keyof T]-?: FieldReader<Exclude<T[K], undefined>> };
+const checked = <T>(guard: (value: unknown) => value is T): FieldReader<T> => (value) => guard(value) ? value : undefined;
+const readLabel: FieldReader<string> = (value) => label(value) ?? undefined;
+const readVision: FieldReader<TokenVision> = (value) => parseVision(value) ?? undefined;
+
+/**
+ * The optional fields of a change that has to carry at least one: fields left out stay out, and one wrong
+ * field, or none at all, rejects the change.
+ */
+function someFields<T extends object>(op: RawOp, readers: FieldReaders<T>): Partial<T> | null {
+  const fields: Partial<T> = {};
+  for (const key in readers) {
+    if (op[key] === undefined) continue;
+    const value = readers[key](op[key]);
+    if (value === undefined) return null;
+    fields[key] = value;
+  }
+  return Object.keys(fields).length ? fields : null;
+}
+
+type FieldsOf<K extends MapOpType, Fixed extends string> = Omit<MapOpOf<K>, "type" | Fixed>;
+const updateFields: FieldReaders<FieldsOf<"update", "tokenId">> = {
+  label: readLabel, hidden: checked(isBoolean), defeated: checked(isBoolean), size: checked(isSize), vision: readVision, monsterSlug: checked(isMonsterSlug),
+};
+const settingsFields: FieldReaders<FieldsOf<"settings", never>> = { fog: checked(isBoolean), gridHidden: checked(isBoolean), resetExplored: checked(isTrue) };
+const combatantFields: FieldReaders<FieldsOf<"combatant", "tokenId">> = { initiative: checked(isInitiative), speed: checked(isSpeedOrUnknown), moved: checked(isMoved) };
+
+/** The wall a change points at, by its two corners in either order. */
+function parseSpan(op: RawOp): WallSpan | null {
+  const wall = parseWall({ x1: op.x1, y1: op.y1, x2: op.x2, y2: op.y2 });
+  return wall && { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+}
+
+function parseMoveOp(op: RawOp): MapOpOf<"move"> | null {
+  return isTokenId(op.tokenId) && isSquare(op.x) && isSquare(op.y) ? { type: "move", tokenId: op.tokenId, x: op.x, y: op.y } : null;
+}
+
+/** Without a square the hero goes to the first free one (or stays where it is). */
+function parsePlaceHeroOp(op: RawOp): MapOpOf<"place-hero"> | null {
+  if (!isUuid(op.characterId)) return null;
+  if (op.x === undefined && op.y === undefined) return { type: "place-hero", characterId: op.characterId };
+  return isSquare(op.x) && isSquare(op.y) ? { type: "place-hero", characterId: op.characterId, x: op.x, y: op.y } : null;
+}
+
+function parseAddMonsterOp(op: RawOp): MapOpOf<"add-monster"> | null {
+  const name = label(op.label);
+  const size = op.size === undefined ? 1 : op.size;
+  if (!name || !isInt(op.count, 1, MAP_MAX_MONSTERS_PER_ADD) || !isSize(size)) return null;
+  if (!isOptional(op.hidden, isBoolean) || !isOptional(op.monsterSlug, isMonsterSlug)) return null;
+  return { type: "add-monster", label: name, count: op.count, size, hidden: op.hidden === true, ...(op.monsterSlug ? { monsterSlug: op.monsterSlug } : {}) };
+}
+
+function parseUpdateOp(op: RawOp): MapOpOf<"update"> | null {
+  if (!isTokenId(op.tokenId)) return null;
+  const fields = someFields(op, updateFields);
+  return fields && { type: "update", tokenId: op.tokenId, ...fields };
+}
+
+function parseFaceOp(op: RawOp): MapOpOf<"face"> | null {
+  return isTokenId(op.tokenId) && isFacing(op.facing) ? { type: "face", tokenId: op.tokenId, facing: op.facing } : null;
+}
+
+function parseSettingsOp(op: RawOp): MapOpOf<"settings"> | null {
+  const fields = someFields(op, settingsFields);
+  return fields && { type: "settings", ...fields };
+}
+
+function parseAddWallsOp(op: RawOp): MapOpOf<"add-walls"> | null {
+  if (!Array.isArray(op.walls) || op.walls.length < 1 || op.walls.length > MAP_MAX_WALLS_PER_ADD) return null;
+  const walls = op.walls.map(parseWall);
+  return walls.every((wall): wall is MapWall => wall !== null) ? { type: "add-walls", walls } : null;
+}
+
+function parseRemoveWallOp(op: RawOp): MapOpOf<"remove-wall"> | null {
+  const span = parseSpan(op);
+  return span && { type: "remove-wall", ...span };
+}
+
+function parseDoorOp(op: RawOp): MapOpOf<"door"> | null {
+  const span = parseSpan(op);
+  return span && isBoolean(op.open) ? { type: "door", ...span, open: op.open } : null;
+}
+
+const parseClearWallsOp = (): MapOpOf<"clear-walls"> => ({ type: "clear-walls" });
+
+function parseRemoveOp(op: RawOp): MapOpOf<"remove"> | null {
+  return isTokenId(op.tokenId) ? { type: "remove", tokenId: op.tokenId } : null;
+}
+
+const parseClearMonstersOp = (): MapOpOf<"clear-monsters"> => ({ type: "clear-monsters" });
+
+function parseResizeOp(op: RawOp): MapOpOf<"resize"> | null {
+  return isInt(op.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) && isInt(op.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? { type: "resize", cols: op.cols, rows: op.rows } : null;
+}
+
+/** Everyone in the fight once, each with a valid initiative. */
+function parseCombatStartOp(op: RawOp): MapOpOf<"combat-start"> | null {
+  if (!Array.isArray(op.entries) || op.entries.length > MAP_MAX_TOKENS) return null;
+  const entries = op.entries.map(parseCombatEntry);
+  if (!entries.every((entry): entry is CombatEntry => entry !== null)) return null;
+  return new Set(entries.map((entry) => entry.tokenId)).size === entries.length ? { type: "combat-start", entries } : null;
+}
+
+function parseCombatantOp(op: RawOp): MapOpOf<"combatant"> | null {
+  if (!isTokenId(op.tokenId)) return null;
+  const fields = someFields(op, combatantFields);
+  return fields && { type: "combatant", tokenId: op.tokenId, ...fields };
+}
+
+function parseCombatLeaveOp(op: RawOp): MapOpOf<"combat-leave"> | null {
+  return isTokenId(op.tokenId) ? { type: "combat-leave", tokenId: op.tokenId } : null;
+}
+
+/** A step (1 or -1) or a creature, never both. */
+function parseTurnOp(op: RawOp): MapOpOf<"turn"> | null {
+  if (op.step === undefined) return isTokenId(op.tokenId) ? { type: "turn", tokenId: op.tokenId } : null;
+  return op.tokenId === undefined && (op.step === 1 || op.step === -1) ? { type: "turn", step: op.step } : null;
+}
+
+function parseDashOp(op: RawOp): MapOpOf<"dash"> | null {
+  return isTokenId(op.tokenId) && isBoolean(op.dash) ? { type: "dash", tokenId: op.tokenId, dash: op.dash } : null;
+}
+
+const parseCombatEndOp = (): MapOpOf<"combat-end"> => ({ type: "combat-end" });
+
+/** One parser per kind of change; the mapped type makes the compiler ask for one with every new variant. */
+const opParsers: { [K in MapOpType]: (op: RawOp) => MapOpOf<K> | null } = {
+  move: parseMoveOp,
+  "place-hero": parsePlaceHeroOp,
+  "add-monster": parseAddMonsterOp,
+  update: parseUpdateOp,
+  face: parseFaceOp,
+  settings: parseSettingsOp,
+  "add-walls": parseAddWallsOp,
+  "remove-wall": parseRemoveWallOp,
+  door: parseDoorOp,
+  "clear-walls": parseClearWallsOp,
+  remove: parseRemoveOp,
+  "clear-monsters": parseClearMonstersOp,
+  resize: parseResizeOp,
+  "combat-start": parseCombatStartOp,
+  combatant: parseCombatantOp,
+  "combat-leave": parseCombatLeaveOp,
+  turn: parseTurnOp,
+  dash: parseDashOp,
+  "combat-end": parseCombatEndOp,
+};
+
+/** A kind of change the map knows (own keys only, so "toString" and the like are not). */
+const isMapOpType = (value: unknown): value is MapOpType => typeof value === "string" && Object.hasOwn(opParsers, value);
+
 /** Validate one change from the browser. Null when anything is out of bounds. */
 export function parseMapOp(raw: unknown): MapOp | null {
   if (!raw || typeof raw !== "object") return null;
-  const op = raw as Record<string, unknown>;
-  switch (op.type) {
-    case "move":
-      return isTokenId(op.tokenId) && isInt(op.x, 0, MAP_MAX_SIZE - 1) && isInt(op.y, 0, MAP_MAX_SIZE - 1)
-        ? { type: "move", tokenId: op.tokenId, x: op.x, y: op.y } : null;
-    case "place-hero": {
-      if (typeof op.characterId !== "string" || !uuidPattern.test(op.characterId)) return null;
-      const hasPosition = op.x !== undefined || op.y !== undefined;
-      if (hasPosition && !(isInt(op.x, 0, MAP_MAX_SIZE - 1) && isInt(op.y, 0, MAP_MAX_SIZE - 1))) return null;
-      return { type: "place-hero", characterId: op.characterId, ...(hasPosition ? { x: op.x as number, y: op.y as number } : {}) };
-    }
-    case "add-monster": {
-      const name = label(op.label);
-      const size = op.size === undefined ? 1 : op.size;
-      if (!name || !isInt(op.count, 1, MAP_MAX_MONSTERS_PER_ADD) || !isSize(size)) return null;
-      if (op.hidden !== undefined && typeof op.hidden !== "boolean") return null;
-      if (op.monsterSlug !== undefined && !isMonsterSlug(op.monsterSlug)) return null;
-      return { type: "add-monster", label: name, count: op.count, size, hidden: op.hidden === true, ...(op.monsterSlug ? { monsterSlug: op.monsterSlug as string } : {}) };
-    }
-    case "update": {
-      if (!isTokenId(op.tokenId)) return null;
-      const result: Extract<MapOp, { type: "update" }> = { type: "update", tokenId: op.tokenId };
-      if (op.label !== undefined) { const name = label(op.label); if (!name) return null; result.label = name; }
-      if (op.hidden !== undefined) { if (typeof op.hidden !== "boolean") return null; result.hidden = op.hidden; }
-      if (op.defeated !== undefined) { if (typeof op.defeated !== "boolean") return null; result.defeated = op.defeated; }
-      if (op.size !== undefined) { if (!isSize(op.size)) return null; result.size = op.size; }
-      if (op.vision !== undefined) { const vision = parseVision(op.vision); if (!vision) return null; result.vision = vision; }
-      if (op.monsterSlug !== undefined) { if (!isMonsterSlug(op.monsterSlug)) return null; result.monsterSlug = op.monsterSlug; }
-      return Object.keys(result).length > 2 ? result : null;
-    }
-    case "face":
-      return isTokenId(op.tokenId) && isFacing(op.facing) ? { type: "face", tokenId: op.tokenId, facing: op.facing } : null;
-    case "settings": {
-      const result: Extract<MapOp, { type: "settings" }> = { type: "settings" };
-      if (op.fog !== undefined) { if (typeof op.fog !== "boolean") return null; result.fog = op.fog; }
-      if (op.gridHidden !== undefined) { if (typeof op.gridHidden !== "boolean") return null; result.gridHidden = op.gridHidden; }
-      if (op.resetExplored !== undefined) { if (op.resetExplored !== true) return null; result.resetExplored = true; }
-      return Object.keys(result).length > 1 ? result : null;
-    }
-    case "add-walls": {
-      if (!Array.isArray(op.walls) || op.walls.length < 1 || op.walls.length > MAP_MAX_WALLS_PER_ADD) return null;
-      const walls = op.walls.map(parseWall);
-      return walls.every((wall): wall is MapWall => wall !== null) ? { type: "add-walls", walls } : null;
-    }
-    case "remove-wall":
-    case "door": {
-      const wall = parseWall({ x1: op.x1, y1: op.y1, x2: op.x2, y2: op.y2 });
-      if (!wall) return null;
-      if (op.type === "remove-wall") return { type: "remove-wall", x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
-      return typeof op.open === "boolean" ? { type: "door", x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, open: op.open } : null;
-    }
-    case "clear-walls":
-      return { type: "clear-walls" };
-    case "remove":
-      return isTokenId(op.tokenId) ? { type: "remove", tokenId: op.tokenId } : null;
-    case "clear-monsters":
-      return { type: "clear-monsters" };
-    case "resize":
-      return isInt(op.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) && isInt(op.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? { type: "resize", cols: op.cols, rows: op.rows } : null;
-    case "combat-start": {
-      if (!Array.isArray(op.entries) || op.entries.length > MAP_MAX_TOKENS) return null;
-      const entries = op.entries.map(parseCombatEntry);
-      if (!entries.every((entry): entry is CombatEntry => entry !== null)) return null;
-      return new Set(entries.map((entry) => entry.tokenId)).size === entries.length ? { type: "combat-start", entries } : null;
-    }
-    case "combatant": {
-      if (!isTokenId(op.tokenId)) return null;
-      const result: Extract<MapOp, { type: "combatant" }> = { type: "combatant", tokenId: op.tokenId };
-      if (op.initiative !== undefined) { if (!isInitiative(op.initiative)) return null; result.initiative = op.initiative; }
-      if (op.speed !== undefined) { if (op.speed !== null && !isSpeed(op.speed)) return null; result.speed = op.speed; }
-      if (op.moved !== undefined) { if (!isInt(op.moved, 0, COMBAT_MAX_MOVED)) return null; result.moved = op.moved; }
-      return Object.keys(result).length > 2 ? result : null;
-    }
-    case "combat-leave":
-      return isTokenId(op.tokenId) ? { type: "combat-leave", tokenId: op.tokenId } : null;
-    case "turn":
-      if (op.step !== undefined) return op.tokenId === undefined && (op.step === 1 || op.step === -1) ? { type: "turn", step: op.step } : null;
-      return isTokenId(op.tokenId) ? { type: "turn", tokenId: op.tokenId } : null;
-    case "dash":
-      return isTokenId(op.tokenId) && typeof op.dash === "boolean" ? { type: "dash", tokenId: op.tokenId, dash: op.dash } : null;
-    case "combat-end":
-      return { type: "combat-end" };
-    default:
-      return null;
-  }
+  const op = raw as RawOp;
+  return isMapOpType(op.type) ? opParsers[op.type](op) : null;
 }
 
 /** Validate a batch of changes (`{ ops: [...] }`). Null when the batch or any change is invalid. */
