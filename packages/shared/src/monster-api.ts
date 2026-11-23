@@ -99,57 +99,46 @@ export class MonsterApiError extends Error {
   }
 }
 
-/** One page of the bestiary, filtered by challenge rating, book and name. */
-export async function fetchMonsterCatalog(
-  options: { challengeRating?: string; source?: string; search?: string; page?: number; limit?: number } = {},
-  signal?: AbortSignal,
-): Promise<MonsterCatalog> {
-  const params = new URLSearchParams();
-  if (options.challengeRating) params.set("challenge_rating", options.challengeRating);
-  if (options.source) params.set("source", options.source);
-  if (options.search?.trim()) params.set("search", options.search.trim());
-  if (options.page) params.set("page", String(options.page));
-  if (options.limit) params.set("limit", String(options.limit));
-  const query = params.size ? `?${params.toString()}` : "";
-  const response = await fetch(`/api/monsters${query}`, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
+/** GET one of our JSON routes; a failed answer raises its `error` text (or `fallback`) with the status. */
+async function getJson(path: string, fallback: string, signal?: AbortSignal): Promise<unknown> {
+  const response = await fetch(path, { headers: { Accept: "application/json" }, signal });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new MonsterApiError(body?.error ?? "Could not load the bestiary.", response.status);
+    throw new MonsterApiError(body?.error ?? fallback, response.status);
   }
+  return response.json();
+}
 
-  const payload: unknown = await response.json();
-  if (!payload || typeof payload !== "object") throw new MonsterApiError("The monster index returned an unexpected response.");
-  const catalog = payload as { count?: unknown; sources?: unknown; results?: unknown };
-  if (!Array.isArray(catalog.results)) throw new MonsterApiError("The monster index returned an unexpected response.");
-  const results = catalog.results.filter((entry): entry is MonsterListEntry =>
-    !!entry && typeof entry === "object"
-    && typeof (entry as MonsterListEntry).index === "string"
-    && typeof (entry as MonsterListEntry).name === "string",
-  );
-  const sources = Array.isArray(catalog.sources) ? catalog.sources.filter((entry): entry is SourceSummary =>
-    !!entry && typeof entry === "object" && typeof (entry as SourceSummary).key === "string" && typeof (entry as SourceSummary).name === "string") : [];
-  return { count: typeof catalog.count === "number" ? catalog.count : results.length, sources, results };
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object";
+const isListEntry = (entry: unknown): entry is MonsterListEntry => isObject(entry) && typeof entry.index === "string" && typeof entry.name === "string";
+const isSourceSummary = (entry: unknown): entry is SourceSummary => isObject(entry) && typeof entry.key === "string" && typeof entry.name === "string";
+
+type CatalogOptions = { challengeRating?: string; source?: string; search?: string; page?: number; limit?: number };
+
+/** The query string parseMonsterSearch (open5e.ts) reads on the server; unset filters are left out. */
+function catalogQuery(options: CatalogOptions): string {
+  const params = new URLSearchParams();
+  const entries: [string, string | number | undefined][] = [
+    ["challenge_rating", options.challengeRating], ["source", options.source], ["search", options.search?.trim()],
+    ["page", options.page], ["limit", options.limit],
+  ];
+  for (const [name, value] of entries) if (value) params.set(name, String(value));
+  return params.size ? `?${params.toString()}` : "";
+}
+
+/** One page of the bestiary, filtered by challenge rating, book and name. */
+export async function fetchMonsterCatalog(options: CatalogOptions = {}, signal?: AbortSignal): Promise<MonsterCatalog> {
+  const payload = await getJson(`/api/monsters${catalogQuery(options)}`, "Could not load the bestiary.", signal);
+  if (!isObject(payload) || !Array.isArray(payload.results)) throw new MonsterApiError("The monster index returned an unexpected response.");
+  const results = payload.results.filter(isListEntry);
+  const sources = Array.isArray(payload.sources) ? payload.sources.filter(isSourceSummary) : [];
+  return { count: typeof payload.count === "number" ? payload.count : results.length, sources, results };
 }
 
 /** Fetches through our same-origin route so browsers do not depend on the provider's CORS policy. */
 export async function fetchMonster(slug: string, signal?: AbortSignal): Promise<MonsterStatBlock> {
-  const response = await fetch(`/api/monsters/${encodeURIComponent(slug)}`, {
-    headers: { Accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new MonsterApiError(body?.error ?? "Could not load this creature.", response.status);
-  }
-
-  const data: unknown = await response.json();
-  if (!data || typeof data !== "object" || typeof (data as { name?: unknown }).name !== "string") {
-    throw new MonsterApiError("The creature API returned an unexpected response.");
-  }
+  const data = await getJson(`/api/monsters/${encodeURIComponent(slug)}`, "Could not load this creature.", signal);
+  if (!isObject(data) || typeof data.name !== "string") throw new MonsterApiError("The creature API returned an unexpected response.");
   return data as MonsterStatBlock;
 }
 
@@ -161,18 +150,14 @@ export function sourceLabel(source?: Pick<MonsterSource, "name"> | string) {
 /** Compact monster entry served by /api/monsters/catalog; `source` is the book's name. */
 export type CatalogMonster = { index: string; name: string; cr: number; xp: number; type: string; size: string; roles: MonsterRole[]; source: string; sourceKey: string };
 
+const isCatalogMonster = (entry: unknown): entry is CatalogMonster =>
+  isObject(entry) && typeof entry.index === "string" && typeof entry.xp === "number" && typeof entry.cr === "number";
+
 export async function fetchSrdCatalog(signal?: AbortSignal): Promise<{ sources: SourceSummary[]; monsters: CatalogMonster[] }> {
-  const response = await fetch("/api/monsters/catalog", { headers: { Accept: "application/json" }, signal });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new MonsterApiError(body?.error ?? "Could not load the bestiary.", response.status);
-  }
-  const payload = (await response.json()) as { sources?: unknown; monsters?: unknown };
-  if (!Array.isArray(payload.monsters)) throw new MonsterApiError("The bestiary returned an unexpected response.");
-  const monsters = payload.monsters.filter((entry): entry is CatalogMonster => !!entry && typeof entry === "object"
-    && typeof (entry as CatalogMonster).index === "string" && typeof (entry as CatalogMonster).xp === "number" && typeof (entry as CatalogMonster).cr === "number");
+  const payload = await getJson("/api/monsters/catalog", "Could not load the bestiary.", signal);
+  if (!isObject(payload) || !Array.isArray(payload.monsters)) throw new MonsterApiError("The bestiary returned an unexpected response.");
   const sources = Array.isArray(payload.sources) ? (payload.sources as SourceSummary[]) : [];
-  return { sources, monsters };
+  return { sources, monsters: payload.monsters.filter(isCatalogMonster) };
 }
 
 export function formatChallenge(cr?: number) {
