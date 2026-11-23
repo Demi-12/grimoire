@@ -1267,6 +1267,20 @@ export function rowsForImage(cols: number, width: number, height: number): numbe
 
 // ---- Saved maps: the decisions behind the saves routes of apps/api/src/map/map.service.ts ----
 
+/** Saved maps a campaign may keep, and the longest name. */
+export const MAP_MAX_SAVES = 20;
+export const MAP_SAVE_NAME_MAX = 60;
+
+/** Does a campaign already keep as many saved maps as it may? `storedCount` is count(*) as PostgreSQL returns it. */
+export const mapSavesFull = (storedCount: string | undefined) => Number(storedCount ?? 0) >= MAP_MAX_SAVES;
+
+/** The state a save keeps: the map as it is, minus the background key (the picture itself is copied next to it). */
+export function mapStateToSave(state: MapState): MapState {
+  const stored: MapState = { ...state };
+  delete stored.background;
+  return stored;
+}
+
 /** DM-only map routes: someone outside the campaign (no viewer) gets not-found, so it doesn't show; a player gets forbidden. */
 export function requireDm<Viewer extends { isDm: boolean }>(viewer: Viewer | null): { ok: true; value: Viewer } | { ok: false; error: "not-found" | "forbidden" } {
   if (!viewer) return { ok: false, error: "not-found" };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave, mapStateToSave, mapSavesFull, MAP_MAX_SAVES,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map.js";
 
@@ -227,6 +227,22 @@ describe("saved maps", () => {
     expect(mapFromSave({ state: saved(), image: null, mimeType: null }, heroes).picture).toBeNull();
     expect(mapFromSave({ state: saved(), image: picture, mimeType: null }, heroes).picture).toBeNull();
     expect(mapFromSave({ state: saved(), image: null, mimeType: "image/png" }, heroes).state.background).toBeUndefined();
+  });
+
+  it("saves a copy of the map without its background key, leaving the map on the table as it was", () => {
+    const onTable: MapState = { ...withParty(), fog: true, background: { key: "current-key" } };
+    const copy = mapStateToSave(onTable);
+    expect(copy.background).toBeUndefined();
+    expect(copy).toEqual({ ...withParty(), fog: true });
+    expect(onTable.background).toEqual({ key: "current-key" });
+  });
+
+  it("keeps up to 20 saved maps per campaign", () => {
+    expect(MAP_MAX_SAVES).toBe(20);
+    expect(mapSavesFull("19")).toBe(false);
+    expect(mapSavesFull("20")).toBe(true);
+    expect(mapSavesFull("21")).toBe(true);
+    expect(mapSavesFull(undefined)).toBe(false);
   });
 
   it("clears the table to an empty map when no save is given, and reads a damaged save safely", () => {

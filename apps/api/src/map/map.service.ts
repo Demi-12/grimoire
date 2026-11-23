@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { MapSaveSummary } from "@grimoire/shared/api-types";
 import {
-  applyMapOps, emptyMapState, mapFromSave, normalizeMapState, requireDm, syncHeroes, viewMap,
+  applyMapOps, emptyMapState, mapFromSave, mapSavesFull, mapStateToSave, normalizeMapState, requireDm, syncHeroes, viewMap,
   type MapAudience, type MapHero, type MapImageType, type MapOp, type MapOpError, type MapSaveRow, type MapState, type MapViewerState, type StoredMap,
 } from "@grimoire/shared/battle-map";
 import { canManageCampaign, type AppUser, type CampaignRole } from "@grimoire/shared/permissions";
@@ -75,10 +75,6 @@ async function writeMap(client: Queryable, user: AppUser, campaignId: string, co
 }
 
 const newBackgroundKey = () => randomBytes(9).toString("base64url");
-
-/** Saved maps a campaign may keep, and the longest name. */
-export const MAP_MAX_SAVES = 20;
-export const MAP_SAVE_NAME_MAX = 60;
 
 export type { MapSaveSummary } from "@grimoire/shared/api-types";
 
@@ -188,19 +184,16 @@ export class MapService {
   /** Keep a copy of the map as it is now, background picture included (DMs only). */
   async createMapSave(user: AppUser, campaignId: string, name: string): Promise<MapResult<MapSaveSummary[]>> {
     const saved = await transaction(async (client) => {
-      const context = await readContext(client, user, campaignId);
-      if (!context) return { ok: false as const, error: "not-found" as const };
-      if (!context.isDm) return { ok: false as const, error: "forbidden" as const };
+      const access = requireDm(await readContext(client, user, campaignId));
+      if (!access.ok) return access;
       const state = await lockMap(client, campaignId); // also keeps two saves from racing past the limit
       const count = await client.query<{ n: string }>('SELECT count(*) AS "n" FROM "battle_map_save" WHERE "campaignId" = $1', [campaignId]);
-      if (Number(count.rows[0]?.n ?? 0) >= MAP_MAX_SAVES) return { ok: false as const, error: "limit" as const };
-      const stored: MapState = { ...state };
-      delete stored.background;
+      if (mapSavesFull(count.rows[0]?.n)) return { ok: false as const, error: "limit" as const };
       await client.query(
         `INSERT INTO "battle_map_save" ("campaignId", "name", "state", "image", "mimeType", "createdBy")
          SELECT $1, $2, $3, b."image", b."mimeType", $4
            FROM (SELECT 1) AS one LEFT JOIN "battle_map_background" b ON b."campaignId" = $1 AND $5::boolean`,
-        [campaignId, name, JSON.stringify(stored), user.id, Boolean(state.background)],
+        [campaignId, name, JSON.stringify(mapStateToSave(state)), user.id, Boolean(state.background)],
       );
       return { ok: true as const };
     });
