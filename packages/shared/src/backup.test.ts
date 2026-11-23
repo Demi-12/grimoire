@@ -12,12 +12,15 @@ import {
   parseLegacyImport,
   restoredCampaignId,
   RestoreQuota,
+  runLegacyImport,
   runRestore,
   serializeBackup,
   storedCharacter,
   type BackupCharacter,
   type BackupEncounter,
   type IdMap,
+  type LegacyImport,
+  type LegacyImportStore,
   type SectionStore,
 } from "./backup.js";
 
@@ -324,6 +327,71 @@ describe("parseLegacyImport", () => {
     expect(errorOf({ characters: [], campaigns: Array(201).fill({ name: "x" }) })).toBe("too-many");
     expect(errorOf({ characters: [], creatures: Array(501).fill({ name: "x", xp: 1 }) })).toBe("too-many");
     expect(errorOf({ characters: Array(200).fill(character), creatures: Array(500).fill({ name: "x", xp: 1 }) })).toBeNull();
+  });
+});
+
+describe("runLegacyImport", () => {
+  const character = (localId: string, name: string) => ({ localId, name, level: 1, className: "", species: "", background: "", scores, notes: "", campaignId: null });
+  const legacy = (): LegacyImport => ({
+    creatures: [{ name: "Troll", xp: 1800, source: "", monsterSlug: null, cr: null, type: null, roleTags: [] }, { name: "Refused", xp: 10, source: "", monsterSlug: null, cr: null, type: null, roleTags: [] }],
+    characters: [character("local-1", "Mira"), character("local-2", "Refused"), character("local-3", "Tor")],
+    campaigns: [
+      { name: "Costa", description: "", characterIds: ["local-1", "local-2", "local-9"] },
+      { name: "Refused", description: "", characterIds: ["local-3"] },
+      { name: "Empty", description: "", characterIds: ["local-2"] },
+    ],
+  });
+  /** In-memory account that refuses any item named "Refused", like a service answering { ok: false }. */
+  function memoryStore() {
+    let nextId = 1;
+    const written = { creatures: [] as string[], characters: [] as { id: string; name: string; campaignId: string | null }[], campaigns: [] as { id: string; name: string }[], placed: [] as [string, string[]][] };
+    const store: LegacyImportStore = {
+      async createCreature(item) {
+        if (item.name === "Refused") return false;
+        written.creatures.push(item.name);
+        return true;
+      },
+      async createCharacter(item) {
+        if (item.name === "Refused") return null;
+        const id = `db-${nextId++}`;
+        written.characters.push({ id, name: item.name, campaignId: item.campaignId });
+        return id;
+      },
+      async createCampaign(item) {
+        if (item.name === "Refused") return null;
+        const id = `db-${nextId++}`;
+        written.campaigns.push({ id, name: item.name });
+        return id;
+      },
+      async placeCharacters(campaignId, characterIds) {
+        written.placed.push([campaignId, characterIds]);
+      },
+    };
+    return { store, written };
+  }
+
+  it("imports what the account accepts and counts only that", async () => {
+    const { store, written } = memoryStore();
+    expect(await runLegacyImport(legacy(), { status: "approved" }, store)).toEqual({ characters: 2, campaigns: 2, creatures: 1 });
+    expect(written.creatures).toEqual(["Troll"]);
+    expect(written.characters.map((row) => [row.name, row.campaignId])).toEqual([["Mira", null], ["Tor", null]]);
+    expect(written.campaigns.map((row) => row.name)).toEqual(["Costa", "Empty"]);
+  });
+
+  it("places each campaign's characters by their new ids, leaving out those that weren't imported", async () => {
+    const { store, written } = memoryStore();
+    await runLegacyImport(legacy(), { status: "approved" }, store);
+    const mira = written.characters.find((row) => row.name === "Mira")!;
+    const costa = written.campaigns.find((row) => row.name === "Costa")!;
+    // "Empty" only pointed at a refused character, so nothing is placed there.
+    expect(written.placed).toEqual([[costa.id, [mira.id]]]);
+  });
+
+  it("imports no campaigns for accounts that may not create them", async () => {
+    const { store, written } = memoryStore();
+    expect(await runLegacyImport(legacy(), { status: "pending" }, store)).toEqual({ characters: 2, campaigns: 0, creatures: 1 });
+    expect(written.campaigns).toEqual([]);
+    expect(written.placed).toEqual([]);
   });
 });
 

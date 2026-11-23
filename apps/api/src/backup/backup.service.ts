@@ -10,6 +10,7 @@ import {
   indexExisting,
   restoredCampaignId,
   RestoreQuota,
+  runLegacyImport,
   runRestore,
   serializeBackup,
   storedCharacter,
@@ -17,17 +18,22 @@ import {
   type BackupEncounter,
   type BackupFile,
   type LegacyImport,
+  type LegacyImportCounts,
   type ParsedBackup,
   type RestoreResult,
   type SectionStore,
   type StoredCharacterRow,
 } from "@grimoire/shared/backup";
-import { canCreateCampaign, type AppUser, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
+import type { AppUser, CreatureInput, EncounterInput } from "@grimoire/shared/permissions";
 import { CampaignsService } from "../campaigns/campaigns.service.js";
 import { EncountersService } from "../campaigns/encounters.service.js";
 import { CharactersService } from "../characters/characters.service.js";
+import type { DataResult } from "../common/data-result.js";
 import { CreaturesService } from "../creatures/creatures.service.js";
 import { transaction } from "../database/db.js";
+
+/** Id of what a service call created, or null when it refused. */
+const idOf = (result: DataResult<{ id: string }>) => (result.ok ? result.value.id : null);
 
 const MAX_CREATURES_PER_USER = 500;
 const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
@@ -165,35 +171,17 @@ export class BackupService {
   }
 
   /**
-   * Copy what a user had saved in this browser into their account. Campaigns are imported only for
-   * DMs/admins; character ids from the browser are remapped to the new server ids.
+   * Copy what a user had saved in this browser into their account, in one transaction. What gets
+   * imported, and how browser character ids map to the new ones, is runLegacyImport's decision.
    */
-  async importLocalData(
-    user: AppUser, { characters, campaigns, creatures }: LegacyImport,
-  ): Promise<{ characters: number; campaigns: number; creatures: number }> {
-    return transaction(async (client) => {
-      let creatureCount = 0;
-      for (const creature of creatures) {
-        if ((await this.creatures.createCreature(user, creature, client)).ok) creatureCount += 1;
-      }
-      const idMap = new Map<string, string>();
-      for (const character of characters) {
-        const created = await this.characters.createCharacter(user, { ...character, campaignId: null }, client);
-        if (created.ok) idMap.set(character.localId, created.value.id);
-      }
-      let campaignCount = 0;
-      if (canCreateCampaign(user)) {
-        for (const campaign of campaigns) {
-          const created = await this.campaigns.createCampaign(user, campaign, client);
-          if (!created.ok) continue;
-          campaignCount += 1;
-          const ids = campaign.characterIds.map((id) => idMap.get(id)).filter((id): id is string => Boolean(id));
-          if (ids.length) {
-            await client.query('UPDATE "character" SET "campaignId" = $1 WHERE "id" = ANY($2::uuid[]) AND "ownerId" = $3', [created.value.id, ids, user.id]);
-          }
-        }
-      }
-      return { characters: idMap.size, campaigns: campaignCount, creatures: creatureCount };
-    });
+  async importLocalData(user: AppUser, legacy: LegacyImport): Promise<LegacyImportCounts> {
+    return transaction(async (client) => runLegacyImport(legacy, user, {
+      createCreature: async (item) => (await this.creatures.createCreature(user, item, client)).ok,
+      createCharacter: async (item) => idOf(await this.characters.createCharacter(user, item, client)),
+      createCampaign: async (item) => idOf(await this.campaigns.createCampaign(user, item, client)),
+      async placeCharacters(campaignId, characterIds) {
+        await client.query('UPDATE "character" SET "campaignId" = $1 WHERE "id" = ANY($2::uuid[]) AND "ownerId" = $3', [campaignId, characterIds, user.id]);
+      },
+    }));
   }
 }

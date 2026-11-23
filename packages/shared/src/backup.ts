@@ -14,14 +14,18 @@
  *
  * The decisions behind each SQL store (how a row reads back as a fingerprintable item, which campaign
  * a restored item lands in, the per-section limits, the dates an encounter keeps) are also here, at
- * the end, so the stores themselves only run queries.
+ * the end, so the stores themselves only run queries. The one-time import of data an old version kept
+ * in the browser follows the same split: `parseLegacyImport` validates it and `runLegacyImport` drives a
+ * `LegacyImportStore`.
  */
 import {
+  canCreateCampaign,
   isCampaignRole,
   parseCampaignInput,
   parseCharacterInput,
   parseCreatureInput,
   parseEncounterInput,
+  type AppUser,
   type CampaignRole,
   type CharacterInput,
   type CharacterScores,
@@ -233,6 +237,53 @@ export function parseLegacyImport(body: unknown): { ok: true; value: LegacyImpor
     return input ? [input] : [];
   });
   return { ok: true, value: { characters, campaigns, creatures } };
+}
+
+/** Where the legacy import writes, one item per call. A store answers false/null when the account refused that item. */
+export interface LegacyImportStore {
+  createCreature(item: CreatureInput): Promise<boolean>;
+  /** The new character's id. */
+  createCharacter(item: CharacterInput): Promise<string | null>;
+  /** The new campaign's id. */
+  createCampaign(item: { name: string; description: string }): Promise<string | null>;
+  /** Put characters that were just imported (their new ids) in a campaign. */
+  placeCharacters(campaignId: string, characterIds: string[]): Promise<void>;
+}
+
+export interface LegacyImportCounts { characters: number; campaigns: number; creatures: number }
+
+/**
+ * Copy validated legacy data through the store: creatures, then characters outside any campaign
+ * (remembering browser id -> new id), then, only for accounts that may create campaigns, each
+ * campaign with the characters it pointed at. Refused items are left out and not counted.
+ */
+export async function runLegacyImport(
+  { characters, campaigns, creatures }: LegacyImport, user: Pick<AppUser, "status">, store: LegacyImportStore,
+): Promise<LegacyImportCounts> {
+  let creatureCount = 0;
+  for (const creature of creatures) {
+    if (await store.createCreature(creature)) creatureCount += 1;
+  }
+  const idMap = new Map<string, string>();
+  for (const character of characters) {
+    const id = await store.createCharacter({ ...character, campaignId: null });
+    if (id !== null) idMap.set(character.localId, id);
+  }
+  const campaignCount = canCreateCampaign(user) ? await importLegacyCampaigns(campaigns, idMap, store) : 0;
+  return { characters: idMap.size, campaigns: campaignCount, creatures: creatureCount };
+}
+
+/** Create each legacy campaign and place in it the characters it pointed at that were imported; returns how many were created. */
+async function importLegacyCampaigns(campaigns: LegacyCampaign[], idMap: Map<string, string>, store: LegacyImportStore): Promise<number> {
+  let created = 0;
+  for (const campaign of campaigns) {
+    const id = await store.createCampaign(campaign);
+    if (id === null) continue;
+    created += 1;
+    const ids = campaign.characterIds.flatMap((localId) => idMap.get(localId) ?? []);
+    if (ids.length) await store.placeCharacters(id, ids);
+  }
+  return created;
 }
 
 export type BackupErrorCode = "invalid" | "version" | "section" | "item" | "too-many";
