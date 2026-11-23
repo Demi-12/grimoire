@@ -48,7 +48,42 @@ export const INVITE_TTL_DAYS = 7;
 /** Invite tokens are 32 random bytes in base64url; reject anything else before touching the database. */
 export const isInviteToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 
+/** Account ids are better-auth's, not UUIDs: only their length is bounded. */
+export const isAccountId = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 128;
+
 export type AdminChange = { role?: SiteRole; status?: AccountStatus };
+export type AdminRequest = { kind: "revoke-sessions" } | { kind: "change"; change: AdminChange };
+
+/** Read an admin panel edit: `{ revokeSessions: true }`, or a new role and/or status. */
+export function parseAdminRequest(body: unknown): { ok: true; value: AdminRequest } | { ok: false; error: string } {
+  if (!body || typeof body !== "object") return { ok: false, error: "Invalid change." };
+  const value = body as Record<string, unknown>;
+  if (value.revokeSessions === true) return { ok: true, value: { kind: "revoke-sessions" } };
+  if (value.role !== undefined && !isSiteRole(value.role)) return { ok: false, error: "Invalid role." };
+  if (value.status !== undefined && !isAccountStatus(value.status)) return { ok: false, error: "Invalid status." };
+  const change: AdminChange = {
+    ...(value.role !== undefined ? { role: value.role as SiteRole } : {}),
+    ...(value.status !== undefined ? { status: value.status as AccountStatus } : {}),
+  };
+  if (!change.role && !change.status) return { ok: false, error: "Nothing to change." };
+  return { ok: true, value: { kind: "change", change } };
+}
+
+export type MemberRequest =
+  | { kind: "add"; /** Exact email or account name. */ query: string; role: CampaignRole }
+  | { kind: "set-role"; userId: string; role: CampaignRole };
+
+/** Read a campaign roster edit: add someone by email/name (`query`), or change a member's role (`userId`). */
+export function parseMemberRequest(body: unknown): MemberRequest | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  if (!isCampaignRole(value.role)) return null;
+  if (typeof value.query === "string") {
+    const query = value.query.trim();
+    return query && query.length <= 254 ? { kind: "add", query, role: value.role } : null;
+  }
+  return isAccountId(value.userId) ? { kind: "set-role", userId: value.userId, role: value.role } : null;
+}
 
 /**
  * Guard admin edits: an admin can't lock themselves out, and the site always keeps at least one
