@@ -173,10 +173,9 @@ const creatureTypes: Record<string, { en: string; es: string }> = {
   plant: { en: "Plant", es: "Planta" }, undead: { en: "Undead", es: "Muerto viviente" }, swarm: { en: "Swarm", es: "Enjambre" },
 };
 
-/** Groups "swarm of tiny beasts" and similar variants under one filter key. */
+/** Files a type under the known type it starts with ("swarm of tiny beasts" → "swarm", "humanoid (goblinoid)" → "humanoid"). */
 export function creatureTypeKey(type: string) {
   const lower = type.toLowerCase().trim();
-  if (lower.startsWith("swarm")) return "swarm";
   return Object.keys(creatureTypes).find((key) => lower.startsWith(key)) ?? (lower || "other");
 }
 
