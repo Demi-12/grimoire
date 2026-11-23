@@ -546,7 +546,11 @@ describe("parseMapOp, change by change", () => {
 
   it("accepts each kind of change and returns it cleaned up", () => {
     const accepted: [unknown, MapOp][] = [
+      [{ type: "move", tokenId: "a", x: 0, y: 39 }, { type: "move", tokenId: "a", x: 0, y: 39 }],
       [{ type: "place-hero", characterId: aliceHero, x: 3, y: 4 }, { type: "place-hero", characterId: aliceHero, x: 3, y: 4 }],
+      [{ type: "place-hero", characterId: aliceHero, x: 0, y: 0 }, { type: "place-hero", characterId: aliceHero, x: 0, y: 0 }],
+      [{ type: "add-walls", walls: Array.from({ length: 50 }, () => ({ x1: 0, y1: 0, x2: 0, y2: 1 })) }, { type: "add-walls", walls: Array.from({ length: 50 }, () => ({ x1: 0, y1: 0, x2: 0, y2: 1 })) }],
+      [{ type: "combat-start", entries: Array.from({ length: 120 }, (_, i) => ({ tokenId: `t${i}`, initiative: 1 })) }, { type: "combat-start", entries: Array.from({ length: 120 }, (_, i) => ({ tokenId: `t${i}`, initiative: 1 })) }],
       [{ type: "add-monster", label: "Goblin", count: 1, size: 2, hidden: true, monsterSlug: "srd_goblin" }, { type: "add-monster", label: "Goblin", count: 1, size: 2, hidden: true, monsterSlug: "srd_goblin" }],
       [{ type: "update", tokenId: "a", label: " Boss  goblin ", hidden: true, defeated: false, size: 4 }, { type: "update", tokenId: "a", label: "Boss goblin", hidden: true, defeated: false, size: 4 }],
       [{ type: "settings", gridHidden: false, resetExplored: true }, { type: "settings", gridHidden: false, resetExplored: true }],
@@ -577,6 +581,7 @@ describe("parseMapOp, change by change", () => {
       { type: "add-monster", label: "Goblin", count: 1, hidden: "no" },
       { type: "add-monster", label: "Goblin", count: 1, monsterSlug: "a/b" },
       { type: "add-monster", label: "   ", count: 1 },
+      { type: "add-monster", label: "Goblin", count: 0 },
       { type: "update", tokenId: "a b", hidden: true },
       { type: "update", tokenId: "a", label: "" },
       { type: "update", tokenId: "a", hidden: "yes" },
@@ -655,6 +660,13 @@ describe("applyMapOps, change by change", () => {
     const moved = ok(apply(boxed, [{ type: "move", tokenId: "t1", x: 3, y: 5 }]));
     expect(moved.tokens.find((token) => token.id === "t1")).toMatchObject({ x: 3, y: 5 });
     expect(combatantOf(moved, "t1")).toMatchObject({ moved: 4 });
+    expect(combatantOf(ok(apply(boxed, [{ type: "move", tokenId: "t1", x: 6, y: 2 }])), "t1")).toMatchObject({ moved: 5 });
+  });
+
+  it("lets a player use the whole speed in one go, and not a square more", () => {
+    const state = fight(); // Lia (t1) at B2 walks 6 squares a turn
+    expect(combatantOf(ok(apply(state, [{ type: "move", tokenId: "t1", x: 7, y: 1 }], alice)), "t1")).toMatchObject({ moved: 6 });
+    expect(apply(state, [{ type: "move", tokenId: "t1", x: 8, y: 1 }], alice)).toEqual({ ok: false, error: "movement" });
   });
 
   it("places heroes: walks an existing one, caps the token count, falls back on a label", () => {
@@ -665,6 +677,10 @@ describe("applyMapOps, change by change", () => {
     expect(nameless.tokens).toEqual([{ id: "t1", kind: "hero", label: "?", characterId: aliceHero, size: 1, x: 2, y: 3 }]);
     // Placed again without a square: it stays where it is.
     expect(ok(apply(nameless, [{ type: "place-hero", characterId: aliceHero }])).tokens).toEqual(nameless.tokens);
+    // Without a square, the first free one scanning from the left.
+    const second = ok(apply(nameless, [{ type: "place-hero", characterId: bobHero }, { type: "add-monster", label: "Rat", count: 1, size: 1, hidden: false }, { type: "place-hero", characterId: aliceHero }]));
+    expect(second.tokens.find((token) => token.characterId === bobHero)).toMatchObject({ x: 0, y: 0 });
+    expect(ok(apply({ ...emptyMapState(), tokens: [{ id: "m", kind: "monster", label: "Rat", x: 0, y: 0, size: 1 }] }, [{ type: "place-hero", characterId: aliceHero }])).tokens[1]).toMatchObject({ x: 0, y: 1 });
     const dmPlaced = ok(apply(emptyMapState(), [{ type: "place-hero", characterId: bobHero, x: 39, y: 39 }]));
     expect(dmPlaced.tokens[0]).toMatchObject({ label: "Brom", x: 19, y: 13 });
   });
@@ -771,6 +787,18 @@ describe("applyMapOps, change by change", () => {
     expect(reset.combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
     expect(ok(apply(reset, [{ type: "combatant", tokenId: "t4", initiative: 10 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
     expect(ok(apply(reset, [{ type: "combatant", tokenId: "t2", initiative: 10 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t4", "t2", "t3"]);
+    expect(ok(apply(reset, [{ type: "combatant", tokenId: "t2", speed: 3 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
+  });
+
+  it("gives the turn to the highest initiative when a stored fight has nobody active", () => {
+    const stored = normalizeMapState({ ...fight(), combat: { round: 2, active: "gone", order: [{ tokenId: "t1", initiative: 15 }, { tokenId: "t2", initiative: 10 }] } });
+    expect(stored.combat).not.toHaveProperty("active");
+    expect(ok(apply(stored, [{ type: "combatant", tokenId: "t2", speed: 5 }])).combat).toMatchObject({ round: 2, active: "t1" });
+  });
+
+  it("never lets a player pass the turn back, even on their own hero's turn", () => {
+    expect(apply(fight(), [{ type: "turn", step: -1 }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(fight(), [{ type: "turn", step: 1 }], alice)).combat).toMatchObject({ active: "t2" });
   });
 
   it("lets only the DM take creatures out of a fight or end it, and leaving no fight is harmless", () => {

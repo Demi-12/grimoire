@@ -958,7 +958,7 @@ function applyPlaceHero(state: MapState, op: MapOpOf<"place-hero">, { actor, her
 /** Several monsters at once are numbered on from the ones already on the map ("Goblin 3", "Goblin 4"…). */
 function applyAddMonster(state: MapState, op: MapOpOf<"add-monster">, { newId }: ApplyContext): MapApplyResult {
   if (state.tokens.length + op.count > MAP_MAX_TOKENS) return refuse("invalid");
-  const first = op.count > 1 ? nextNumber(state, op.label) : 0;
+  const first = nextNumber(state, op.label);
   let next = state;
   for (let index = 0; index < op.count; index++) {
     const name = op.count > 1 ? `${op.label.slice(0, TOKEN_LABEL_MAX - 4)} ${first + index}` : op.label;
