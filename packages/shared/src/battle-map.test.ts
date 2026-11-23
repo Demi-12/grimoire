@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map.js";
 
@@ -200,6 +200,38 @@ describe("the map as one viewer receives it", () => {
 
   it("reads damaged stored state as a valid map", () => {
     expect(viewMap({ state: "junk", version: 3, updatedAt: new Date(0) }, [], { ...dm, audience: "auto" }).state).toEqual(emptyMapState());
+  });
+});
+
+describe("saved maps", () => {
+  const picture = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+  const saved = () => JSON.parse(JSON.stringify({ ...withParty(), background: { key: "old-key" } }));
+
+  it("lets only DMs into the saved maps, and hides the campaign from non-members", () => {
+    const viewer = { campaignName: "Costa", isDm: true };
+    expect(requireDm(viewer)).toEqual({ ok: true, value: viewer });
+    expect(requireDm({ ...viewer, isDm: false })).toEqual({ ok: false, error: "forbidden" });
+    expect(requireDm(null)).toEqual({ ok: false, error: "not-found" });
+  });
+
+  it("puts a save back on the table with the campaign's current heroes and its own picture", () => {
+    const loaded = mapFromSave({ state: saved(), image: picture, mimeType: "image/png" }, [heroes[0]]);
+    expect(loaded.picture).toEqual({ image: picture, mimeType: "image/png" });
+    expect(loaded.state.tokens.filter((token) => token.kind === "hero").map((token) => token.label)).toEqual(["Lia"]);
+    expect(loaded.state.tokens.filter((token) => token.kind === "monster")).toHaveLength(3);
+    // The old key would point at the previous picture: the caller stores the picture again under a new one.
+    expect(loaded.state.background).toBeUndefined();
+  });
+
+  it("loads a save without a picture, or with an unknown picture type, without a background", () => {
+    expect(mapFromSave({ state: saved(), image: null, mimeType: null }, heroes).picture).toBeNull();
+    expect(mapFromSave({ state: saved(), image: picture, mimeType: null }, heroes).picture).toBeNull();
+    expect(mapFromSave({ state: saved(), image: null, mimeType: "image/png" }, heroes).state.background).toBeUndefined();
+  });
+
+  it("clears the table to an empty map when no save is given, and reads a damaged save safely", () => {
+    expect(mapFromSave(null, heroes)).toEqual({ state: emptyMapState(), picture: null });
+    expect(mapFromSave({ state: "junk", image: null, mimeType: null }, heroes).state).toEqual(emptyMapState());
   });
 });
 

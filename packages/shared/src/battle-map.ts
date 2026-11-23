@@ -1264,3 +1264,27 @@ export function rowsForImage(cols: number, width: number, height: number): numbe
   if (!(width > 0 && height > 0)) return MAP_DEFAULT_ROWS;
   return Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Math.round(cols * height / width)));
 }
+
+// ---- Saved maps: the decisions behind the saves routes of apps/api/src/map/map.service.ts ----
+
+/** DM-only map routes: someone outside the campaign (no viewer) gets not-found, so it doesn't show; a player gets forbidden. */
+export function requireDm<Viewer extends { isDm: boolean }>(viewer: Viewer | null): { ok: true; value: Viewer } | { ok: false; error: "not-found" | "forbidden" } {
+  if (!viewer) return { ok: false, error: "not-found" };
+  if (!viewer.isDm) return { ok: false, error: "forbidden" };
+  return { ok: true, value: viewer };
+}
+
+/** A saved map as stored: its state and the background picture kept with it. `Image` is the picture's bytes. */
+export interface MapSaveRow<Image> { state: unknown; image: Image | null; mimeType: MapImageType | null }
+
+/**
+ * What loading a save (or, with null, clearing the table) puts on the table: the state read safely, hero tokens
+ * of characters that left the campaign dropped, and no background key, since the old one points at the previous
+ * picture. `picture` is the save's own background, to store again under a new key; null when it has none.
+ */
+export function mapFromSave<Image>(save: MapSaveRow<Image> | null, heroes: MapHero[]): { state: MapState; picture: { image: Image; mimeType: MapImageType } | null } {
+  const state = syncHeroes({ ...(save ? normalizeMapState(save.state) : emptyMapState()) }, heroes);
+  delete state.background;
+  const picture = save?.image && save.mimeType ? { image: save.image, mimeType: save.mimeType } : null;
+  return { state, picture };
+}

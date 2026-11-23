@@ -8,8 +8,8 @@ import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { MapSaveSummary } from "@grimoire/shared/api-types";
 import {
-  applyMapOps, emptyMapState, normalizeMapState, syncHeroes, viewMap,
-  type MapAudience, type MapHero, type MapImageType, type MapOp, type MapOpError, type MapState, type MapViewerState, type StoredMap,
+  applyMapOps, emptyMapState, mapFromSave, normalizeMapState, requireDm, syncHeroes, viewMap,
+  type MapAudience, type MapHero, type MapImageType, type MapOp, type MapOpError, type MapSaveRow, type MapState, type MapViewerState, type StoredMap,
 } from "@grimoire/shared/battle-map";
 import { canManageCampaign, type AppUser, type CampaignRole } from "@grimoire/shared/permissions";
 import { pool, transaction, type Queryable } from "../database/db.js";
@@ -143,9 +143,9 @@ export class MapService {
    */
   async setBattleMapBackground(user: AppUser, campaignId: string, image: { bytes: Buffer; mimeType: MapImageType } | null, audience: MapAudience = "auto"): Promise<MapResult<BattleMapView>> {
     return transaction(async (client) => {
-      const context = await readContext(client, user, campaignId);
-      if (!context) return { ok: false as const, error: "not-found" as const };
-      if (!context.isDm) return { ok: false as const, error: "forbidden" as const };
+      const access = requireDm(await readContext(client, user, campaignId));
+      if (!access.ok) return access;
+      const context = access.value;
       const state: MapState = { ...await lockMap(client, campaignId) };
       if (image) {
         const key = newBackgroundKey();
@@ -165,9 +165,8 @@ export class MapService {
 
   /** Saved maps of the campaign, newest first (DMs only). */
   async listMapSaves(user: AppUser, campaignId: string): Promise<MapResult<MapSaveSummary[]>> {
-    const context = await readContext(pool, user, campaignId);
-    if (!context) return { ok: false, error: "not-found" };
-    if (!context.isDm) return { ok: false, error: "forbidden" };
+    const access = requireDm(await readContext(pool, user, campaignId));
+    if (!access.ok) return access;
     const result = await pool.query<{ id: string; name: string; state: unknown; hasBackground: boolean; createdByName: string | null; createdAt: Date }>(
       `SELECT s."id", s."name", s."state", s."image" IS NOT NULL AS "hasBackground", u."name" AS "createdByName", s."createdAt"
          FROM "battle_map_save" s LEFT JOIN "user" u ON u."id" = s."createdBy"
@@ -214,30 +213,23 @@ export class MapService {
    */
   async loadMapSave(user: AppUser, campaignId: string, saveId: string | null, audience: MapAudience = "auto"): Promise<MapResult<BattleMapView>> {
     return transaction(async (client) => {
-      const context = await readContext(client, user, campaignId);
-      if (!context) return { ok: false as const, error: "not-found" as const };
-      if (!context.isDm) return { ok: false as const, error: "forbidden" as const };
-      let state: MapState = emptyMapState();
-      let image: { image: Buffer; mimeType: MapImageType } | null = null;
-      if (saveId) {
-        const save = await client.query<{ state: unknown; image: Buffer | null; mimeType: MapImageType | null }>(
-          'SELECT "state", "image", "mimeType" FROM "battle_map_save" WHERE "id" = $1 AND "campaignId" = $2',
-          [saveId, campaignId],
-        );
-        const row = save.rows[0];
-        if (!row) return { ok: false as const, error: "not-found" as const };
-        state = normalizeMapState(row.state);
-        if (row.image && row.mimeType) image = { image: row.image, mimeType: row.mimeType };
-      }
+      const access = requireDm(await readContext(client, user, campaignId));
+      if (!access.ok) return access;
+      const context = access.value;
+      // undefined: the save asked for isn't there; null: clear the table.
+      const save = saveId ? (await client.query<MapSaveRow<Buffer>>(
+        'SELECT "state", "image", "mimeType" FROM "battle_map_save" WHERE "id" = $1 AND "campaignId" = $2',
+        [saveId, campaignId],
+      )).rows[0] : null;
+      if (save === undefined) return { ok: false as const, error: "not-found" as const };
       await lockMap(client, campaignId);
-      state = syncHeroes({ ...state }, context.heroes);
-      delete state.background;
-      if (image) {
+      const { state, picture } = mapFromSave(save, context.heroes);
+      if (picture) {
         const key = newBackgroundKey();
         await client.query(
           `INSERT INTO "battle_map_background" ("campaignId", "image", "mimeType", "key") VALUES ($1, $2, $3, $4)
            ON CONFLICT ("campaignId") DO UPDATE SET "image" = EXCLUDED."image", "mimeType" = EXCLUDED."mimeType", "key" = EXCLUDED."key", "updatedAt" = now()`,
-          [campaignId, image.image, image.mimeType, key],
+          [campaignId, picture.image, picture.mimeType, key],
         );
         state.background = { key };
       } else {
@@ -249,9 +241,8 @@ export class MapService {
 
   /** Delete a saved map (DMs only); the map on the table is untouched. */
   async deleteMapSave(user: AppUser, campaignId: string, saveId: string): Promise<MapResult<MapSaveSummary[]>> {
-    const context = await readContext(pool, user, campaignId);
-    if (!context) return { ok: false, error: "not-found" };
-    if (!context.isDm) return { ok: false, error: "forbidden" };
+    const access = requireDm(await readContext(pool, user, campaignId));
+    if (!access.ok) return access;
     await pool.query('DELETE FROM "battle_map_save" WHERE "id" = $1 AND "campaignId" = $2', [saveId, campaignId]);
     return this.listMapSaves(user, campaignId);
   }
