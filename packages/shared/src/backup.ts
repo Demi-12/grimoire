@@ -11,6 +11,10 @@
  * Every item gets a fingerprint (its natural key); items whose fingerprint already exists in the
  * account are skipped, the rest are created, all inside one transaction. Importing the same file
  * twice therefore creates nothing the second time.
+ *
+ * The decisions behind each SQL store (how a row reads back as a fingerprintable item, which campaign
+ * a restored item lands in, the per-section limits, the dates an encounter keeps) are also here, at
+ * the end, so the stores themselves only run queries.
  */
 import {
   isCampaignRole,
@@ -20,6 +24,7 @@ import {
   parseEncounterInput,
   type CampaignRole,
   type CharacterInput,
+  type CharacterScores,
   type CreatureInput,
   type EncounterInput,
 } from "./permissions.js";
@@ -341,3 +346,85 @@ export async function runRestore(backup: ParsedBackup, stores: Record<string, Se
   }
   return result;
 }
+
+// ---- Restore decisions the SQL stores in backup.service.ts delegate ----
+
+const sectionByKey = (sectionKey: string) => {
+  const found = backupSections.find((candidate) => candidate.key === sectionKey);
+  if (!found) throw new Error(`Unknown backup section ${sectionKey}`);
+  return found;
+};
+
+/** Existing rows are fingerprinted with their real ids, so no local->real mapping applies to them. */
+const noMap: IdMap = {};
+
+/**
+ * Fingerprint -> id of the rows an account already has, for `SectionStore.existing`. `toItem` reads a
+ * row as the section's item (the row itself by default). Rows come in the store's order and the first
+ * one wins: with two campaigns of the same name, the oldest is the one reused.
+ */
+export function indexExisting<Row extends { id: string }>(
+  sectionKey: string, rows: readonly Row[], toItem: (row: Row) => unknown = (row) => row,
+): Map<string, string> {
+  const section = sectionByKey(sectionKey);
+  const found = new Map<string, string>();
+  for (const row of rows) {
+    const fingerprint = section.fingerprint(toItem(row), noMap);
+    if (!found.has(fingerprint)) found.set(fingerprint, row.id);
+  }
+  return found;
+}
+
+/** A character row as the restore reads it. `data` is the jsonb column; quick-edit characters lack most of it. */
+export interface StoredCharacterRow {
+  name: string;
+  level: number;
+  data: { className?: string; species?: string; background?: string; scores?: Partial<CharacterScores>; notes?: string; build?: Record<string, unknown> };
+}
+
+const defaultScores: CharacterScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+
+/** A stored character as the backup item it fingerprints like (missing fields read as empty, scores as 10). */
+export function storedCharacter({ name, level, data }: StoredCharacterRow): Omit<BackupCharacter, "id" | "campaignId"> {
+  return {
+    name, level, className: data.className ?? "", species: data.species ?? "", background: data.background ?? "",
+    scores: { ...defaultScores, ...data.scores }, notes: data.notes ?? "", ...(data.build ? { build: data.build } : {}),
+  };
+}
+
+/** Real id of the campaign a restored item points at (a backup-local id), or null when it points at none or isn't mapped. */
+export const restoredCampaignId = (localId: string | null | undefined, idMap: IdMap): string | null =>
+  localId ? idMap.campaigns?.get(localId) ?? null : null;
+
+/** Real id of the campaign a restored encounter lands in; an encounter always belongs to one, so an unmapped link is a bug. */
+export function encounterCampaignId(item: BackupEncounter, idMap: IdMap): string {
+  const campaignId = restoredCampaignId(item.campaignId, idMap);
+  if (!campaignId) throw new Error("Encounter references an unknown campaign.");
+  return campaignId;
+}
+
+/**
+ * Per-restore count of what a section holds, per scope (the account, or one campaign). Stores `add`
+ * what `existing` found and `take` a slot before each insert, which throws once the limit is reached.
+ */
+export class RestoreQuota {
+  private readonly used = new Map<string, number>();
+  constructor(readonly section: string, readonly max: number) {}
+
+  add(scope: string, count = 1): void {
+    this.used.set(scope, (this.used.get(scope) ?? 0) + count);
+  }
+
+  take(scope: string): void {
+    if ((this.used.get(scope) ?? 0) >= this.max) throw new BackupRestoreError("limit", this.section);
+    this.add(scope);
+  }
+}
+
+/**
+ * Dates a restored encounter is inserted with. Null leaves the date to the database clock (now), and
+ * `playedAt` only counts when the encounter was played.
+ */
+export const encounterRestoreDates = (item: BackupEncounter) => ({
+  played: item.status === "played", playedAt: item.playedAt ?? null, createdAt: item.createdAt ?? null,
+});

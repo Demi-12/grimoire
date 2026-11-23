@@ -5,18 +5,22 @@
 import { Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import {
-  BackupRestoreError,
-  backupSections,
+  encounterCampaignId,
+  encounterRestoreDates,
+  indexExisting,
+  restoredCampaignId,
+  RestoreQuota,
   runRestore,
   serializeBackup,
+  storedCharacter,
   type BackupCharacter,
   type BackupEncounter,
   type BackupFile,
-  type IdMap,
   type LegacyImport,
   type ParsedBackup,
   type RestoreResult,
   type SectionStore,
+  type StoredCharacterRow,
 } from "@grimoire/shared/backup";
 import { canCreateCampaign, type AppUser, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
 import { CampaignsService } from "../campaigns/campaigns.service.js";
@@ -30,125 +34,97 @@ const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
 
 type Db = Pick<PoolClient, "query">;
 
-const section = (name: string) => {
-  const found = backupSections.find((candidate) => candidate.key === name);
-  if (!found) throw new Error(`Unknown backup section ${name}`);
-  return found;
-};
+/** What every store works with during one restore. */
+interface RestoreContext { user: AppUser; db: Db; campaigns: CampaignsService; characters: CharactersService }
 
-/** Existing rows are fingerprinted with their real ids, so no local->real mapping applies to them. */
-const noMap: IdMap = {};
-
-/** One store per registered section; add the store for a new section here. */
-function createStores(user: AppUser, db: Db, campaigns: CampaignsService, characters: CharactersService): Record<string, SectionStore> {
-  let creatureTotal = 0;
-  const encounterTotals = new Map<string, number>();
-
+function campaignStore({ user, db, campaigns }: RestoreContext): SectionStore {
   return {
-    campaigns: {
-      async existing() {
-        const rows = await db.query<{ id: string; name: string }>('SELECT "id", "name" FROM "campaign" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
-        const found = new Map<string, string>();
-        // Oldest first wins when an account already holds two campaigns with the same name.
-        for (const row of rows.rows) {
-          const fingerprint = section("campaigns").fingerprint({ name: row.name }, noMap);
-          if (!found.has(fingerprint)) found.set(fingerprint, row.id);
-        }
-        return found;
-      },
-      async create(item) {
-        const created = await campaigns.createCampaign(user, item as { name: string; description: string }, db);
-        if (!created.ok) throw new Error("Campaign could not be restored.");
-        return created.value.id;
-      },
+    async existing() {
+      const rows = await db.query<{ id: string; name: string }>('SELECT "id", "name" FROM "campaign" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
+      return indexExisting("campaigns", rows.rows);
     },
-
-    characters: {
-      async existing() {
-        const rows = await db.query<{ id: string; name: string; level: number; data: Record<string, unknown> }>(
-          'SELECT "id", "name", "level", "data" FROM "character" WHERE "ownerId" = $1', [user.id]);
-        const found = new Map<string, string>();
-        for (const row of rows.rows) {
-          const data = row.data as { className?: string; species?: string; background?: string; scores?: BackupCharacter["scores"]; notes?: string; build?: Record<string, unknown> };
-          const item = {
-            name: row.name, level: row.level, className: data.className ?? "", species: data.species ?? "", background: data.background ?? "",
-            scores: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, ...data.scores }, notes: data.notes ?? "", ...(data.build ? { build: data.build } : {}),
-          };
-          const fingerprint = section("characters").fingerprint(item, noMap);
-          if (!found.has(fingerprint)) found.set(fingerprint, row.id);
-        }
-        return found;
-      },
-      async create(raw, idMap) {
-        const item = raw as BackupCharacter;
-        const campaignId = item.campaignId ? idMap.campaigns?.get(item.campaignId) ?? null : null;
-        const created = await characters.createCharacter(user, { ...item, campaignId }, db);
-        if (!created.ok) throw new Error("Character could not be restored.");
-        return created.value.id;
-      },
-    },
-
-    creatures: {
-      async existing() {
-        // Same lock as createCreature in creatures.service.ts, so a creature added meanwhile can't push the account past the limit.
-        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`creature-limit:${user.id}`]);
-        const rows = await db.query<{ id: string; name: string; xp: number; source: string; monsterSlug: string | null }>(
-          'SELECT "id", "name", "xp", "source", "monsterSlug" FROM "creature" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
-        creatureTotal = rows.rows.length;
-        const found = new Map<string, string>();
-        for (const row of rows.rows) {
-          const fingerprint = section("creatures").fingerprint({ name: row.name, xp: row.xp, source: row.source, monsterSlug: row.monsterSlug }, noMap);
-          if (!found.has(fingerprint)) found.set(fingerprint, row.id);
-        }
-        return found;
-      },
-      async create(raw) {
-        const item = raw as CreatureInput;
-        if (creatureTotal >= MAX_CREATURES_PER_USER) throw new BackupRestoreError("limit", "creatures");
-        const inserted = await db.query<{ id: string }>(
-          `INSERT INTO "creature" ("ownerId", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT ("ownerId", "monsterSlug") WHERE "monsterSlug" IS NOT NULL DO UPDATE SET "name" = "creature"."name"
-           RETURNING "id"`,
-          [user.id, item.name, item.xp, item.source, item.monsterSlug, item.cr, item.type, JSON.stringify(item.roleTags)],
-        );
-        creatureTotal += 1;
-        return inserted.rows[0].id;
-      },
-    },
-
-    encounters: {
-      async existing() {
-        const rows = await db.query<{ id: string; campaignId: string } & Omit<EncounterInput, "status">>(
-          `SELECT e."id", e."campaignId", e."title", e."notes", e."difficulty", e."budget", e."totalXp", e."partyLevels", e."lines"
-             FROM "encounter" e JOIN "campaign" k ON k."id" = e."campaignId" WHERE k."ownerId" = $1`, [user.id]);
-        const found = new Map<string, string>();
-        for (const row of rows.rows) {
-          encounterTotals.set(row.campaignId, (encounterTotals.get(row.campaignId) ?? 0) + 1);
-          const fingerprint = section("encounters").fingerprint(row, noMap);
-          if (!found.has(fingerprint)) found.set(fingerprint, row.id);
-        }
-        return found;
-      },
-      async create(raw, idMap) {
-        const item = raw as BackupEncounter;
-        const campaignId = idMap.campaigns?.get(item.campaignId);
-        if (!campaignId) throw new Error("Encounter references an unknown campaign.");
-        const total = encounterTotals.get(campaignId) ?? 0;
-        if (total >= MAX_ENCOUNTERS_PER_CAMPAIGN) throw new BackupRestoreError("limit", "encounters");
-        const played = item.status === "played";
-        const inserted = await db.query<{ id: string }>(
-          `INSERT INTO "encounter" ("campaignId", "createdBy", "title", "notes", "status", "difficulty", "budget", "totalXp", "partyLevels", "lines", "playedAt", "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $11::boolean THEN COALESCE($12::timestamptz, now()) END, COALESCE($13::timestamptz, now()))
-           RETURNING "id"`,
-          [campaignId, user.id, item.title, item.notes, item.status, item.difficulty, item.budget, item.totalXp, JSON.stringify(item.partyLevels), JSON.stringify(item.lines),
-            played, item.playedAt ?? null, item.createdAt ?? null],
-        );
-        encounterTotals.set(campaignId, total + 1);
-        return inserted.rows[0].id;
-      },
+    async create(item) {
+      const created = await campaigns.createCampaign(user, item as { name: string; description: string }, db);
+      if (!created.ok) throw new Error("Campaign could not be restored.");
+      return created.value.id;
     },
   };
+}
+
+function characterStore({ user, db, characters }: RestoreContext): SectionStore {
+  return {
+    async existing() {
+      const rows = await db.query<{ id: string } & StoredCharacterRow>('SELECT "id", "name", "level", "data" FROM "character" WHERE "ownerId" = $1', [user.id]);
+      return indexExisting("characters", rows.rows, storedCharacter);
+    },
+    async create(raw, idMap) {
+      const item = raw as BackupCharacter;
+      const created = await characters.createCharacter(user, { ...item, campaignId: restoredCampaignId(item.campaignId, idMap) }, db);
+      if (!created.ok) throw new Error("Character could not be restored.");
+      return created.value.id;
+    },
+  };
+}
+
+function creatureStore({ user, db }: RestoreContext): SectionStore {
+  const quota = new RestoreQuota("creatures", MAX_CREATURES_PER_USER);
+  return {
+    async existing() {
+      // Same lock as createCreature in creatures.service.ts, so a creature added meanwhile can't push the account past the limit.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`creature-limit:${user.id}`]);
+      const rows = await db.query<{ id: string; name: string; xp: number; source: string; monsterSlug: string | null }>(
+        'SELECT "id", "name", "xp", "source", "monsterSlug" FROM "creature" WHERE "ownerId" = $1 ORDER BY "createdAt"', [user.id]);
+      quota.add(user.id, rows.rows.length);
+      return indexExisting("creatures", rows.rows);
+    },
+    async create(raw) {
+      const item = raw as CreatureInput;
+      quota.take(user.id);
+      const inserted = await db.query<{ id: string }>(
+        `INSERT INTO "creature" ("ownerId", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT ("ownerId", "monsterSlug") WHERE "monsterSlug" IS NOT NULL DO UPDATE SET "name" = "creature"."name"
+         RETURNING "id"`,
+        [user.id, item.name, item.xp, item.source, item.monsterSlug, item.cr, item.type, JSON.stringify(item.roleTags)],
+      );
+      return inserted.rows[0].id;
+    },
+  };
+}
+
+function encounterStore({ user, db }: RestoreContext): SectionStore {
+  const quota = new RestoreQuota("encounters", MAX_ENCOUNTERS_PER_CAMPAIGN);
+  return {
+    async existing() {
+      const rows = await db.query<{ id: string; campaignId: string } & Omit<EncounterInput, "status">>(
+        `SELECT e."id", e."campaignId", e."title", e."notes", e."difficulty", e."budget", e."totalXp", e."partyLevels", e."lines"
+           FROM "encounter" e JOIN "campaign" k ON k."id" = e."campaignId" WHERE k."ownerId" = $1`, [user.id]);
+      for (const row of rows.rows) quota.add(row.campaignId);
+      return indexExisting("encounters", rows.rows);
+    },
+    async create(raw, idMap) {
+      const item = raw as BackupEncounter;
+      const campaignId = encounterCampaignId(item, idMap);
+      quota.take(campaignId);
+      const { played, playedAt, createdAt } = encounterRestoreDates(item);
+      const inserted = await db.query<{ id: string }>(
+        `INSERT INTO "encounter" ("campaignId", "createdBy", "title", "notes", "status", "difficulty", "budget", "totalXp", "partyLevels", "lines", "playedAt", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $11::boolean THEN COALESCE($12::timestamptz, now()) END, COALESCE($13::timestamptz, now()))
+         RETURNING "id"`,
+        [campaignId, user.id, item.title, item.notes, item.status, item.difficulty, item.budget, item.totalXp, JSON.stringify(item.partyLevels), JSON.stringify(item.lines),
+          played, playedAt, createdAt],
+      );
+      return inserted.rows[0].id;
+    },
+  };
+}
+
+/**
+ * One store per registered section; add the store for a new section here. The stores only run queries:
+ * fingerprints, campaign links, limits and dates are decided in @grimoire/shared/backup.
+ */
+function createStores(context: RestoreContext): Record<string, SectionStore> {
+  return { campaigns: campaignStore(context), characters: characterStore(context), creatures: creatureStore(context), encounters: encounterStore(context) };
 }
 
 @Injectable()
@@ -184,7 +160,7 @@ export class BackupService {
   async importBackup(user: AppUser, backup: ParsedBackup): Promise<RestoreResult> {
     return transaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`backup-restore:${user.id}`]);
-      return runRestore(backup, createStores(user, client, this.campaigns, this.characters));
+      return runRestore(backup, createStores({ user, db: client, campaigns: this.campaigns, characters: this.characters }));
     });
   }
 

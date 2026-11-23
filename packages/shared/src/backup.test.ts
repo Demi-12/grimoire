@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   BACKUP_VERSION,
+  BackupRestoreError,
   backupFilename,
   backupSections,
+  encounterCampaignId,
+  encounterRestoreDates,
+  indexExisting,
   looksLikeBackup,
   parseBackup,
   parseLegacyImport,
+  restoredCampaignId,
+  RestoreQuota,
   runRestore,
   serializeBackup,
+  storedCharacter,
+  type BackupCharacter,
+  type BackupEncounter,
   type IdMap,
   type SectionStore,
 } from "./backup.js";
@@ -315,5 +324,88 @@ describe("parseLegacyImport", () => {
     expect(errorOf({ characters: [], campaigns: Array(201).fill({ name: "x" }) })).toBe("too-many");
     expect(errorOf({ characters: [], creatures: Array(501).fill({ name: "x", xp: 1 }) })).toBe("too-many");
     expect(errorOf({ characters: Array(200).fill(character), creatures: Array(500).fill({ name: "x", xp: 1 }) })).toBeNull();
+  });
+});
+
+describe("restore decisions behind the SQL stores", () => {
+  const fingerprintOf = (sectionKey: string, item: unknown) => backupSections.find((section) => section.key === sectionKey)!.fingerprint(item, {});
+  const restored = () => {
+    const result = parseBackup(JSON.parse(JSON.stringify(serializeBackup(views, now))));
+    if (!result.ok) throw new Error("fixture must be valid");
+    return result.value.sections;
+  };
+
+  it("indexes what the account has by fingerprint, reusing the oldest of two same-named campaigns", () => {
+    const index = indexExisting("campaigns", [{ id: "older", name: "Lost Mine" }, { id: "newer", name: "  lost   MINE " }, { id: "other", name: "Curse" }]);
+    expect(index.size).toBe(2);
+    expect(index.get(fingerprintOf("campaigns", { name: "Lost Mine" }))).toBe("older");
+    expect(index.get(fingerprintOf("campaigns", { name: "Curse" }))).toBe("other");
+  });
+
+  it("fingerprints rows with their real campaign id, not through any backup mapping", () => {
+    const [encounter] = restored().encounters as BackupEncounter[];
+    const row = { ...encounter, id: "db-encounter", campaignId: "real-campaign" };
+    const index = indexExisting("encounters", [row]);
+    expect(index.get(fingerprintOf("encounters", { ...encounter, campaignId: "real-campaign" }))).toBe("db-encounter");
+  });
+
+  it("refuses sections it doesn't know", () => {
+    expect(() => indexExisting("spells", [])).toThrow("Unknown backup section spells");
+  });
+
+  it("reads a stored character back as the backup item it was restored from", () => {
+    const characters = restored().characters as BackupCharacter[];
+    for (const item of characters) {
+      // What the characters table keeps in its jsonb "data" column, with keys reordered as jsonb does.
+      const data = Object.fromEntries(Object.entries({ className: item.className, species: item.species, background: item.background, scores: item.scores, notes: item.notes, ...(item.build ? { build: item.build } : {}) }).reverse());
+      const index = indexExisting("characters", [{ id: "db-character", name: item.name, level: item.level, data }], storedCharacter);
+      expect(index.get(fingerprintOf("characters", item))).toBe("db-character");
+    }
+  });
+
+  it("fills the fields a quick-edit character never stored", () => {
+    const character = storedCharacter({ name: "Tor", level: 2, data: { scores: { str: 16 } } });
+    expect(character).toEqual({
+      name: "Tor", level: 2, className: "", species: "", background: "", notes: "",
+      scores: { str: 16, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    });
+    expect("build" in character).toBe(false);
+  });
+
+  it("links a restored item to the real id of its campaign, or to none", () => {
+    const idMap: IdMap = { campaigns: new Map([["local-campaign", "real-campaign"]]) };
+    expect(restoredCampaignId("local-campaign", idMap)).toBe("real-campaign");
+    expect(restoredCampaignId("missing", idMap)).toBeNull();
+    expect(restoredCampaignId(null, idMap)).toBeNull();
+    expect(restoredCampaignId("local-campaign", {})).toBeNull();
+  });
+
+  it("restores an encounter only into a campaign the restore knows", () => {
+    const [encounter] = restored().encounters as BackupEncounter[];
+    const idMap: IdMap = { campaigns: new Map([[encounter.campaignId, "real-campaign"]]) };
+    expect(encounterCampaignId(encounter, idMap)).toBe("real-campaign");
+    expect(() => encounterCampaignId(encounter, { campaigns: new Map() })).toThrow("Encounter references an unknown campaign.");
+  });
+
+  it("stops a section at its limit, counted per scope", () => {
+    const quota = new RestoreQuota("encounters", 3);
+    quota.add("campaign-a", 2);
+    quota.take("campaign-a");
+    expect(() => quota.take("campaign-a")).toThrow(BackupRestoreError);
+    expect(() => quota.take("campaign-a")).toThrow(expect.objectContaining({ code: "limit", section: "encounters" }));
+    quota.take("campaign-b");
+    quota.take("campaign-b");
+    quota.take("campaign-b");
+    expect(() => quota.take("campaign-b")).toThrow("Backup restore failed: limit in encounters");
+  });
+
+  it("restores the dates of played encounters and leaves missing ones to the database clock", () => {
+    const [played] = restored().encounters as BackupEncounter[];
+    expect(encounterRestoreDates(played)).toEqual({ played: true, playedAt: "2026-10-01T18:00:00.000Z", createdAt: "2026-09-30T12:00:00.000Z" });
+    const undated: BackupEncounter = { ...played };
+    delete undated.playedAt;
+    delete undated.createdAt;
+    expect(encounterRestoreDates({ ...undated, status: "planned" })).toEqual({ played: false, playedAt: null, createdAt: null });
+    expect(encounterRestoreDates({ ...undated, playedAt: null })).toEqual({ played: true, playedAt: null, createdAt: null });
   });
 });
