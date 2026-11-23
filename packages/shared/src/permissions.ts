@@ -29,6 +29,25 @@ export function parseAdminEmails(raw: string | undefined): Set<string> {
   return new Set((raw ?? "").split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
 
+/** Is this email in the GRIMOIRE_ADMIN_EMAILS list (`raw`)? Case doesn't matter. */
+export const isListedAdmin = (email: string, raw: string | undefined) => parseAdminEmails(raw).has(email.toLowerCase());
+
+/** A `user` row as the request's account; null when it's missing or holds a role or status the app doesn't know. */
+export function appUserFromRow(row: { id: string; name: string; email: string; role: string; status: string } | undefined): AppUser | null {
+  if (!row || !isSiteRole(row.role) || !isAccountStatus(row.status)) return null;
+  return { id: row.id, name: row.name, email: row.email, role: row.role, status: row.status };
+}
+
+/**
+ * Should this account become admin on its next request, provided the site still has no approved admin? Listed
+ * emails only, never a blocked account, and not one that already is an approved admin. Sign-up doesn't verify
+ * emails, so the list only bootstraps the first admin; after that, admins are named from the admin panel.
+ */
+export function awaitsAdminBootstrap(user: Pick<AppUser, "email" | "role" | "status">, raw: string | undefined): boolean {
+  if (user.status === "blocked" || (user.role === "admin" && user.status === "approved")) return false;
+  return isListedAdmin(user.email, raw);
+}
+
 /** Any approved account can open a campaign (becoming its DM) or join someone else's as a player. */
 export function canCreateCampaign(user: Pick<AppUser, "status">): boolean {
   return user.status === "approved";

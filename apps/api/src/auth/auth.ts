@@ -6,7 +6,7 @@ import { sendAuthEmail } from "./auth-email.js";
 import { resetPasswordEmail } from "./auth-email-templates.js";
 import { countApprovedAdmins } from "../admin/admin-count.js";
 import { pool } from "../database/db.js";
-import { parseAdminEmails } from "@grimoire/shared/permissions";
+import { isListedAdmin } from "@grimoire/shared/permissions";
 
 const RESET_PASSWORD_MINUTES = 30;
 const baseURL = process.env.BETTER_AUTH_URL?.trim() || "http://localhost:3000";
@@ -35,8 +35,7 @@ export const auth = betterAuth({
         before: async (user) => {
           // New accounts wait for an admin, except an owner listed in GRIMOIRE_ADMIN_EMAILS while the site has no
           // admin yet: sign-up doesn't verify emails, so anyone could otherwise claim a listed address.
-          const isOwner = parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())
-            && await countApprovedAdmins() === 0;
+          const isOwner = isListedAdmin(user.email, process.env.GRIMOIRE_ADMIN_EMAILS) && await countApprovedAdmins() === 0;
           return { data: { ...user, role: isOwner ? "admin" : "user", status: isOwner ? "approved" : "pending" } };
         },
       },

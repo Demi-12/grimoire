@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  appUserFromRow,
+  awaitsAdminBootstrap,
   canCreateCampaign,
   canManageCampaign,
   checkAdminChange,
   isAccountId,
   isInviteToken,
+  isListedAdmin,
   parseAdminEmails,
   parseCampaignInput,
   parseAdminRequest,
@@ -18,6 +21,35 @@ describe("parseAdminEmails", () => {
   it("normalises case and separators and ignores blanks", () => {
     expect([...parseAdminEmails(" Owner@Example.com, friend@example.com;; ")]).toEqual(["owner@example.com", "friend@example.com"]);
     expect(parseAdminEmails(undefined).size).toBe(0);
+  });
+});
+
+describe("the account behind a request", () => {
+  const row = { id: "u1", name: "Ana", email: "Ana@Example.com", role: "user", status: "pending" };
+  const listed = " ana@example.com, friend@example.com ";
+
+  it("reads the stored account only when its role and status are ones the app knows", () => {
+    expect(appUserFromRow(row)).toEqual({ id: "u1", name: "Ana", email: "Ana@Example.com", role: "user", status: "pending" });
+    expect(appUserFromRow({ ...row, role: "superuser" })).toBeNull();
+    expect(appUserFromRow({ ...row, status: "deleted" })).toBeNull();
+    expect(appUserFromRow(undefined)).toBeNull();
+  });
+
+  it("recognises the emails listed as admins whatever their case", () => {
+    expect(isListedAdmin("ANA@example.com", listed)).toBe(true);
+    expect(isListedAdmin("someone@example.com", listed)).toBe(false);
+    expect(isListedAdmin("ana@example.com", undefined)).toBe(false);
+  });
+
+  it("promotes a listed account that isn't an approved admin yet, but never a blocked one", () => {
+    const user = appUserFromRow(row)!;
+    expect(awaitsAdminBootstrap(user, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, status: "approved" }, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, role: "admin" }, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, role: "admin", status: "approved" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap({ ...user, status: "blocked" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap({ ...user, email: "someone@example.com" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap(user, undefined)).toBe(false);
   });
 });
 
