@@ -146,8 +146,8 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `packages/shared/src/backup.ts`: formato JSON versionado, `parseBackup`, `runRestore` (idempotente por huella) y `parseLegacyImport` (datos antiguos del navegador). Al final de `backup.ts`, las decisiones de los almacenes SQL: `indexExisting` (huella → id de lo ya guardado), `storedCharacter`, `restoredCampaignId`/`encounterCampaignId`, `RestoreQuota` (topes) y `encounterRestoreDates`. Añadir un tipo de dato = registrar un `BackupSection` en `backupSections` e implementar su `SectionStore` (solo consultas, una función `…Store` registrada en `createStores`) en `apps/api/src/backup/backup.service.ts`. Ver `docs/data-backup.md`. No entran: mapa, mapas guardados, homebrew ni analíticas.
 
 ### Analíticas y errores
-- `packages/shared/src/analytics.ts`: lista cerrada de eventos (`SERVER_EVENTS`, `CLIENT_EVENTS`), saneado (`normalizeRoute`, `sanitizeError`, `isForeignScriptError`: los scripts propios son los paquetes `main-*.js`/`chunk-*.js`/`polyfills-*.js` de la raíz), rangos. Un evento nuevo se declara aquí o se rechaza.
-- `apps/api/src/data/analytics-server.ts`: `recordEvent`, `recordError` (nunca lanzan), purga a los 90 días; `admin/analytics.service.ts`: el informe del panel.
+- `packages/shared/src/analytics.ts`: lista cerrada de eventos (`SERVER_EVENTS`, `CLIENT_EVENTS`), saneado (`normalizeRoute`, `sanitizeError`, `isForeignScriptError`: los scripts propios son los paquetes `main-*.js`/`chunk-*.js`/`polyfills-*.js` de la raíz), rangos y `shapeAnalyticsReport` (filas de las consultas → `AnalyticsReport`: cuentas a número, secciones conocidas, los 50 errores más recientes). Un evento nuevo se declara aquí o se rechaza.
+- `apps/api/src/data/analytics-server.ts`: `recordEvent`, `recordError` (nunca lanzan), purga a los 90 días; `admin/analytics.service.ts`: solo las consultas del informe del panel.
 - Navegador: `core/telemetry-client.ts` (`track()`, `reportClientError`, `installErrorReporting`) y `core/crash.service.ts` + `components/crash-screen.component.ts`. Servidor: `common/api-exception.filter.ts` guarda toda excepción no prevista.
 
 ### Seguridad

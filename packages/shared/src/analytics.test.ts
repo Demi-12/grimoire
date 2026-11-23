@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  errorGroupKey, isForeignScriptError, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, summarizeUserAgent,
+  errorGroupKey, isForeignScriptError, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, shapeAnalyticsReport, summarizeUserAgent,
+  type AnalyticsRows,
 } from "./analytics.js";
 
 describe("parseTelemetry", () => {
@@ -156,5 +157,77 @@ describe("dashboard parameters", () => {
     expect(percentChange({ current: 15, previous: 10 })).toBe(50);
     expect(percentChange({ current: 5, previous: 10 })).toBe(-50);
     expect(percentChange({ current: 3, previous: 0 })).toBeNull();
+  });
+});
+
+describe("shapeAnalyticsReport", () => {
+  const range = { days: 7 as const, timeZone: "Europe/Madrid", from: "2026-11-17", to: "2026-11-23" };
+  const now = new Date("2026-11-23T10:00:00.000Z");
+  const errorRow = (index: number) => ({
+    fingerprint: `fp-${index}`, source: "client" as const, name: "TypeError", message: `boom ${index}`, route: "/characters/:id",
+    count: "3", users: "2", firstSeen: new Date(Date.UTC(2026, 10, 1, 0, index)), lastSeen: new Date(Date.UTC(2026, 10, 20, 0, index)),
+    stack: null, digest: null, userAgent: "Firefox 140 · Linux", method: null,
+  });
+  // As the SQL queries return them: PostgreSQL counts (bigint) arrive as strings.
+  const rows: AnalyticsRows = {
+    events: [
+      { name: "character.created", current: "5", previous: "2", creator: "3", manual: "2" },
+      { name: "character.wizard_started", current: "8", previous: "1", creator: "0", manual: "0" },
+      { name: "encounter.saved", current: "4", previous: "6", creator: "0", manual: "0" },
+    ],
+    active: { current: "12", previous: "9", today: "4" },
+    users: { approved: "20", current: "3", previous: "1" },
+    errorTotals: { current: "7", previous: "2", users: "3", server: "5", client: "2" },
+    daily: [{ date: "2026-11-23", activeUsers: "4", characters: "1", encounters: "0", campaigns: "2", errors: "1" }],
+    sections: [{ section: "characters", views: "30", users: "6" }, { section: "retired-page", views: "9", users: "1" }, { section: "map", views: "2", users: "2" }],
+    errors: [errorRow(1)],
+  };
+
+  it("turns the query rows into the dashboard figures", () => {
+    const report = shapeAnalyticsReport(range, rows, now);
+    expect(report.range).toEqual({ ...range, generatedAt: "2026-11-23T10:00:00.000Z" });
+    expect(report.kpis).toEqual({
+      activeUsers: { current: 12, previous: 9 },
+      activeToday: 4,
+      approvedUsers: 20,
+      newUsers: { current: 3, previous: 1 },
+      charactersCreated: { current: 5, previous: 2, creator: 3, manual: 2 },
+      encountersGenerated: { current: 0, previous: 0 },
+      encountersSaved: { current: 4, previous: 6 },
+      campaignsCreated: { current: 0, previous: 0 },
+      campaignsJoined: { current: 0, previous: 0 },
+      errors: { current: 7, previous: 2, users: 3, server: 5, client: 2 },
+      wizard: { started: 8, completed: 3 },
+    });
+    expect(report.daily).toEqual([{ date: "2026-11-23", activeUsers: 4, characters: 1, encounters: 0, campaigns: 2, errors: 1 }]);
+    expect(report.errors).toEqual([{
+      fingerprint: "fp-1", source: "client", name: "TypeError", message: "boom 1", route: "/characters/:id", count: 3, users: 2,
+      firstSeen: "2026-11-01T00:01:00.000Z", lastSeen: "2026-11-20T00:01:00.000Z", stack: null, digest: null, userAgent: "Firefox 140 · Linux", method: null,
+    }]);
+  });
+
+  it("counts zero when nothing happened or a query returned no row", () => {
+    const report = shapeAnalyticsReport(range, { ...rows, events: [], active: undefined, users: undefined, errorTotals: undefined }, now);
+    expect(report.kpis.activeUsers).toEqual({ current: 0, previous: 0 });
+    expect(report.kpis.activeToday).toBe(0);
+    expect(report.kpis.approvedUsers).toBe(0);
+    expect(report.kpis.newUsers).toEqual({ current: 0, previous: 0 });
+    expect(report.kpis.charactersCreated).toEqual({ current: 0, previous: 0, creator: 0, manual: 0 });
+    expect(report.kpis.errors).toEqual({ current: 0, previous: 0, users: 0, server: 0, client: 0 });
+    expect(report.kpis.wizard).toEqual({ started: 0, completed: 0 });
+  });
+
+  it("keeps the order of the section views and leaves out sections the app no longer has", () => {
+    expect(shapeAnalyticsReport(range, rows, now).sections).toEqual([
+      { section: "characters", views: 30, users: 6 }, { section: "map", views: 2, users: 2 },
+    ]);
+  });
+
+  it("lists the 50 error groups seen most recently, newest first", () => {
+    const errors = Array.from({ length: 60 }, (_, index) => errorRow(index));
+    const listed = shapeAnalyticsReport(range, { ...rows, errors }, now).errors;
+    expect(listed).toHaveLength(50);
+    expect(listed[0].fingerprint).toBe("fp-59");
+    expect(listed[49].fingerprint).toBe("fp-10");
   });
 });
