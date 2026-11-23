@@ -249,9 +249,9 @@ export class SavedMapsComponent {
 
   constructor() {
     effect(() => {
-      const campaignId = this.campaignId();
+      const savesUrl = `${this.base()}/saves`;
       untracked(() => {
-        api<{ saves: MapSaveSummary[] }>(`/api/campaigns/${encodeURIComponent(campaignId)}/map/saves`).then((data) => this.saves.set(data.saves)).catch(() => this.saves.set([]));
+        api<{ saves: MapSaveSummary[] }>(savesUrl).then((data) => this.saves.set(data.saves)).catch(() => this.saves.set([]));
       });
     });
   }
@@ -533,13 +533,15 @@ export class DmToolsComponent {
   }
 
   protected clearMonsters(): void {
-    const t = this.t();
-    void this.feedback.confirm({ title: t.clearConfirm, confirmLabel: t.clearMonsters, tone: "danger" }).then((ok) => { if (ok) void this.send()([{ type: "clear-monsters" }]); });
+    void this.clearAfterConfirm(this.t().clearConfirm, this.t().clearMonsters, { type: "clear-monsters" });
   }
 
   protected clearWalls(): void {
-    const t = this.t();
-    void this.feedback.confirm({ title: t.clearWallsConfirm, confirmLabel: t.clearWalls, tone: "danger" }).then((ok) => { if (ok) void this.send()([{ type: "clear-walls" }]); });
+    void this.clearAfterConfirm(this.t().clearWallsConfirm, this.t().clearWalls, { type: "clear-walls" });
+  }
+
+  private async clearAfterConfirm(title: string, confirmLabel: string, op: MapOp): Promise<void> {
+    if (await this.feedback.confirm({ title, confirmLabel, tone: "danger" })) await this.send()([op]);
   }
 
   protected toolLabel(tool: WallTool): string {
