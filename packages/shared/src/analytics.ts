@@ -174,25 +174,29 @@ export function errorGroupKey(source: "server" | "client", report: Pick<ErrorRep
   return [source, report.name, message, report.route ?? ""].join("|");
 }
 
+/** First match wins: Edge and Opera also say "Chrome", and every Chromium browser also says "Safari". */
+const BROWSERS: [name: string, majorVersion: RegExp][] = [
+  ["Edge", /Edg\/(\d+)/], ["Opera", /OPR\/(\d+)/], ["Firefox", /Firefox\/(\d+)/], ["Chrome", /CriOS\/(\d+)/], ["Chrome", /Chrome\/(\d+)/],
+  ["Safari", /Version\/(\d+)[\d.]* .*Safari\//],
+];
+/** First match wins: Android and ChromeOS also say "Linux", iOS also says "Mac OS X". */
+const SYSTEMS: [name: string, pattern: RegExp][] = [
+  ["Android", /Android/], ["iOS", /iPhone|iPad|iPod/], ["Windows", /Windows/], ["macOS", /Mac OS X|Macintosh/], ["ChromeOS", /CrOS/], ["Linux", /Linux/],
+];
+
+function browserOf(userAgent: string): string {
+  for (const [name, pattern] of BROWSERS) {
+    const major = pattern.exec(userAgent)?.[1];
+    if (major) return `${name} ${major}`;
+  }
+  return /node|undici/i.test(userAgent) ? "Node" : "Other";
+}
+
 /** A short "Browser version · OS" label, enough to reproduce an error without keeping the full user agent. */
 export function summarizeUserAgent(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
-  const ua = userAgent;
-  const browser =
-    /Edg\/(\d+)/.exec(ua) ? `Edge ${/Edg\/(\d+)/.exec(ua)![1]}`
-    : /OPR\/(\d+)/.exec(ua) ? `Opera ${/OPR\/(\d+)/.exec(ua)![1]}`
-    : /Firefox\/(\d+)/.exec(ua) ? `Firefox ${/Firefox\/(\d+)/.exec(ua)![1]}`
-    : /CriOS\/(\d+)/.exec(ua) ? `Chrome ${/CriOS\/(\d+)/.exec(ua)![1]}`
-    : /Chrome\/(\d+)/.exec(ua) ? `Chrome ${/Chrome\/(\d+)/.exec(ua)![1]}`
-    : /Version\/(\d+)[\d.]* .*Safari\//.exec(ua) ? `Safari ${/Version\/(\d+)/.exec(ua)![1]}`
-    : /node|undici/i.test(ua) ? "Node" : "Other";
-  const os =
-    /Android/.test(ua) ? "Android"
-    : /iPhone|iPad|iPod/.test(ua) ? "iOS"
-    : /Windows/.test(ua) ? "Windows"
-    : /Mac OS X|Macintosh/.test(ua) ? "macOS"
-    : /CrOS/.test(ua) ? "ChromeOS"
-    : /Linux/.test(ua) ? "Linux" : null;
+  const browser = browserOf(userAgent);
+  const os = SYSTEMS.find(([, pattern]) => pattern.test(userAgent))?.[0];
   return (os ? `${browser} · ${os}` : browser).slice(0, 100);
 }
 
