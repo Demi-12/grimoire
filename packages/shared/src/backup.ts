@@ -186,6 +186,50 @@ export interface BackupFile {
 /** True when a JSON body is the versioned backup format rather than the legacy browser import. */
 export const looksLikeBackup = (body: unknown): body is Record<string, unknown> => isRecord(body) && "version" in body;
 
+// ---- Legacy import: the one-time move of data an old version kept in the browser ----
+
+const LEGACY_MAX_ITEMS = 200;
+const LEGACY_MAX_CREATURES = 500;
+
+export interface LegacyCampaign { name: string; description: string; characterIds: string[] }
+export interface LegacyImport {
+  /** `localId` is the id the browser gave the character; legacy campaigns point at it. */
+  characters: (CharacterInput & { localId: string })[];
+  campaigns: LegacyCampaign[];
+  creatures: CreatureInput[];
+}
+
+const optionalList = (value: unknown): unknown[] | null => value === undefined ? [] : Array.isArray(value) ? value : null;
+
+/**
+ * Validate the legacy browser payload (`{ characters, campaigns?, creatures? }`). Unlike a backup,
+ * entries that do not validate are dropped one by one: the old browser data was never checked.
+ */
+export function parseLegacyImport(body: unknown): { ok: true; value: LegacyImport } | { ok: false; error: "invalid" | "too-many" } {
+  if (!isRecord(body) || !Array.isArray(body.characters)) return { ok: false, error: "invalid" };
+  const rawCampaigns = optionalList(body.campaigns);
+  const rawCreatures = optionalList(body.creatures);
+  if (!rawCampaigns || !rawCreatures) return { ok: false, error: "invalid" };
+  if (body.characters.length > LEGACY_MAX_ITEMS || rawCampaigns.length > LEGACY_MAX_ITEMS || rawCreatures.length > LEGACY_MAX_CREATURES) {
+    return { ok: false, error: "too-many" };
+  }
+  const characters = body.characters.flatMap((raw) => {
+    const localId = isRecord(raw) && typeof raw.id === "string" ? raw.id : "";
+    const input = parseCharacterInput({ ...(isRecord(raw) ? raw : {}), campaignId: null });
+    return input && localId ? [{ ...input, localId }] : [];
+  });
+  const campaigns = rawCampaigns.flatMap((raw) => {
+    const input = parseCampaignInput(raw);
+    const ids = isRecord(raw) && Array.isArray(raw.characterIds) ? raw.characterIds : [];
+    return input ? [{ ...input, characterIds: ids.slice(0, LEGACY_MAX_ITEMS).filter((id): id is string => typeof id === "string") }] : [];
+  });
+  const creatures = rawCreatures.flatMap((raw) => {
+    const input = parseCreatureInput(raw);
+    return input ? [input] : [];
+  });
+  return { ok: true, value: { characters, campaigns, creatures } };
+}
+
 export type BackupErrorCode = "invalid" | "version" | "section" | "item" | "too-many";
 export interface BackupError { code: BackupErrorCode; /** e.g. "characters[3]" */ path?: string }
 

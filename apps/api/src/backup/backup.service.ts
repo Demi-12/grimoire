@@ -13,11 +13,12 @@ import {
   type BackupEncounter,
   type BackupFile,
   type IdMap,
+  type LegacyImport,
   type ParsedBackup,
   type RestoreResult,
   type SectionStore,
 } from "@grimoire/shared/backup";
-import { canCreateCampaign, type AppUser, type CharacterInput, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
+import { canCreateCampaign, type AppUser, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
 import { CampaignsService } from "../campaigns/campaigns.service.js";
 import { EncountersService } from "../campaigns/encounters.service.js";
 import { CharactersService } from "../characters/characters.service.js";
@@ -192,10 +193,7 @@ export class BackupService {
    * DMs/admins; character ids from the browser are remapped to the new server ids.
    */
   async importLocalData(
-    user: AppUser,
-    characters: (CharacterInput & { localId: string })[],
-    campaigns: { name: string; description: string; characterIds: string[] }[],
-    creatures: CreatureInput[] = [],
+    user: AppUser, { characters, campaigns, creatures }: LegacyImport,
   ): Promise<{ characters: number; campaigns: number; creatures: number }> {
     return transaction(async (client) => {
       let creatureCount = 0;

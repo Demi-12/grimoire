@@ -143,7 +143,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - Un cambio nuevo en el mapa = variante en `MapOp` + `parseMapOp` + rama en `applyMapOps` + test en `battle-map.test.ts` + botón en `battle-map.component`.
 
 ### Copia de seguridad
-- `packages/shared/src/backup.ts`: formato JSON versionado, `parseBackup`, `runRestore` (idempotente por huella). Añadir un tipo de dato = registrar un `BackupSection` en `backupSections` e implementar su `SectionStore` en `apps/api/src/backup/backup.service.ts`. Ver `docs/data-backup.md`. No entran: mapa, mapas guardados, homebrew ni analíticas.
+- `packages/shared/src/backup.ts`: formato JSON versionado, `parseBackup`, `runRestore` (idempotente por huella) y `parseLegacyImport` (datos antiguos del navegador). Añadir un tipo de dato = registrar un `BackupSection` en `backupSections` e implementar su `SectionStore` en `apps/api/src/backup/backup.service.ts`. Ver `docs/data-backup.md`. No entran: mapa, mapas guardados, homebrew ni analíticas.
 
 ### Analíticas y errores
 - `packages/shared/src/analytics.ts`: lista cerrada de eventos (`SERVER_EVENTS`, `CLIENT_EVENTS`), saneado (`normalizeRoute`, `sanitizeError`, `isForeignScriptError`: los scripts propios son los paquetes `main-*.js`/`chunk-*.js`/`polyfills-*.js` de la raíz), rangos. Un evento nuevo se declara aquí o se rechaza.

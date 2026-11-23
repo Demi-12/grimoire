@@ -5,6 +5,7 @@ import {
   backupSections,
   looksLikeBackup,
   parseBackup,
+  parseLegacyImport,
   runRestore,
   serializeBackup,
   type IdMap,
@@ -265,5 +266,54 @@ describe("runRestore idempotence", () => {
     const counts = await runRestore(result.value, account.stores);
     expect(counts.creatures.created).toBe(1);
     expect(account.rows.campaigns).toHaveLength(0);
+  });
+});
+
+describe("parseLegacyImport", () => {
+  const character = { id: "local-1", name: "Mira", level: 3, className: "Wizard", species: "Elf", background: "Sage", scores, notes: "", campaignId };
+  const valueOf = (body: unknown) => {
+    const result = parseLegacyImport(body);
+    return result.ok ? result.value : null;
+  };
+  const errorOf = (body: unknown) => {
+    const result = parseLegacyImport(body);
+    return result.ok ? null : result.error;
+  };
+
+  it("keeps valid characters with their browser id, outside any campaign", () => {
+    expect(valueOf({ characters: [character] })).toEqual({
+      characters: [expect.objectContaining({ name: "Mira", localId: "local-1", campaignId: null })], campaigns: [], creatures: [],
+    });
+  });
+
+  it("drops entries that do not validate instead of failing the whole import", () => {
+    const value = valueOf({
+      characters: [character, { ...character, id: undefined }, { ...character, id: "local-2", level: 99 }, null],
+      campaigns: [{ name: "", description: "" }, "x"],
+      creatures: [{ name: "Troll", xp: 1800 }, { name: "", xp: 1 }],
+    });
+    expect(value?.characters.map((item) => item.localId)).toEqual(["local-1"]);
+    expect(value?.campaigns).toEqual([]);
+    expect(value?.creatures.map((item) => item.name)).toEqual(["Troll"]);
+  });
+
+  it("keeps only string character ids on campaigns", () => {
+    expect(valueOf({ characters: [], campaigns: [{ name: "Costa", description: "", characterIds: ["local-1", 7] }] })?.campaigns)
+      .toEqual([{ name: "Costa", description: "", characterIds: ["local-1"] }]);
+    expect(valueOf({ characters: [], campaigns: [{ name: "Costa", description: "" }] })?.campaigns[0].characterIds).toEqual([]);
+  });
+
+  it("rejects payloads without a characters list or with lists of the wrong type", () => {
+    expect(errorOf(null)).toBe("invalid");
+    expect(errorOf({})).toBe("invalid");
+    expect(errorOf({ characters: [], campaigns: {} })).toBe("invalid");
+    expect(errorOf({ characters: [], creatures: "x" })).toBe("invalid");
+  });
+
+  it("rejects payloads with too many items", () => {
+    expect(errorOf({ characters: Array(201).fill(character) })).toBe("too-many");
+    expect(errorOf({ characters: [], campaigns: Array(201).fill({ name: "x" }) })).toBe("too-many");
+    expect(errorOf({ characters: [], creatures: Array(501).fill({ name: "x", xp: 1 }) })).toBe("too-many");
+    expect(errorOf({ characters: Array(200).fill(character), creatures: Array(500).fill({ name: "x", xp: 1 }) })).toBeNull();
   });
 });
