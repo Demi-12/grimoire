@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inferMonsterRoles } from "./monster-api.js";
-import { legacySlugCandidates, parseMonsterSearch, toStatBlock, withoutSupersededCopies, type Open5eCreature } from "./open5e.js";
+import { legacySlugCandidates, parseMonsterSearch, toSource, toStatBlock, withoutSupersededCopies, type Open5eCreature } from "./open5e.js";
 
 /** Shaped like GET https://api.open5e.com/v2/creatures/srd-2024_adult-red-dragon/ (trimmed). */
 const dragon: Open5eCreature = {
@@ -129,5 +129,23 @@ describe("parseMonsterSearch", () => {
     for (const [page, limit] of [["0", "12"], ["1.5", "12"], ["1", "0"], ["1", "51"], ["x", "12"]]) {
       expect(parse({ page, limit })).toEqual({ ok: false, error: "Invalid pagination values." });
     }
+  });
+});
+
+describe("toSource", () => {
+  it("keeps the book's display name, publisher, system, link and licence keys", () => {
+    expect(toSource({
+      key: "srd-2024", name: "System Reference Document 5.2", display_name: "SRD 5.2", publisher: { name: "Wizards of the Coast" },
+      gamesystem: { key: "5e-2024" }, permalink: "https://example.org/srd", licenses: [{ key: "cc-by-40" }, { name: "OGL" }, {}],
+    })).toEqual({
+      key: "srd-2024", name: "SRD 5.2", publisher: "Wizards of the Coast", system: "5e-2024", url: "https://example.org/srd", licenses: ["cc-by-40", "OGL"],
+    });
+  });
+
+  it("falls back to the name, then the key, and leaves out what is missing", () => {
+    expect(toSource({ key: "tob", name: "Tome of Beasts" })).toEqual({ key: "tob", name: "Tome of Beasts" });
+    expect(toSource({ key: "tob", licenses: [] })).toEqual({ key: "tob", name: "tob" });
+    expect(toSource(undefined)).toBeUndefined();
+    expect(toSource({ key: "" })).toBeUndefined();
   });
 });

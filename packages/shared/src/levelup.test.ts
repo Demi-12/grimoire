@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveSheet, finalScores, type CharacterBuild } from "./character-sheet.js";
 import { applyLevelUp, asiFeatOptions, chosenSubclassId, fightingStyleOptions, levelGains, levelUpIssues, levelUpSteps, skillOptions, subclassLabel, unlockedFeatures, withSubclass } from "./levelup.js";
-import { asiFeats, classFeatures, epicBoons, fightingStyles, spellProgress, subclassFeatures } from "./levelup-data.js";
+import { asiFeats, classFeatures, classScaling, epicBoons, fightingStyles, spellProgress, subclassFeatures } from "./levelup-data.js";
 import { classes } from "./dnd2024.js";
 import { srdSubclassMatches, subclassesFor, subclassTracked } from "./subclasses.js";
 
@@ -316,5 +316,34 @@ describe("feature effects", () => {
     const names = (build: CharacterBuild) => unlockedFeatures(build, 7).map((feature) => feature.name.en);
     expect(names(fighter)).toContain("Additional Fighting Style");
     expect(names({ ...fighter, useSubclass: false, subclassId: "battleMaster" })).not.toContain("Additional Fighting Style");
+  });
+});
+
+describe("classScaling", () => {
+  const values = (classId: Parameters<typeof classScaling>[0], level: number) =>
+    Object.fromEntries(classScaling(classId, level).map(({ key, value }) => [key, value]));
+
+  it("follows the class tables at the levels where the numbers change", () => {
+    expect([1, 3, 6, 9, 12, 16, 17].map((level) => values("barbarian", level))).toEqual([
+      { rages: "2", rageDamage: "+2" }, { rages: "3", rageDamage: "+2" }, { rages: "4", rageDamage: "+2" }, { rages: "4", rageDamage: "+3" },
+      { rages: "5", rageDamage: "+3" }, { rages: "5", rageDamage: "+4" }, { rages: "6", rageDamage: "+4" },
+    ]);
+    expect([1, 5, 10, 15].map((level) => values("bard", level).inspiration)).toEqual(["d6", "d8", "d10", "d12"]);
+    expect([1, 5, 11, 17].map((level) => values("monk", level).martialArts)).toEqual(["d6", "d8", "d10", "d12"]);
+    expect([1, 2, 5, 7, 9, 12, 15, 18].map((level) => values("warlock", level).invocations)).toEqual(["1", "3", "5", "6", "7", "8", "9", "10"]);
+    expect(values("paladin", 7)).toEqual({ layOnHands: "35 HP" });
+    expect([1, 2, 5, 20].map((level) => values("rogue", level).sneak)).toEqual(["1d6", "1d6", "3d6", "10d6"]);
+  });
+
+  it("adds Focus and Sorcery Points from level 2", () => {
+    expect(values("monk", 1).focus).toBeUndefined();
+    expect(values("monk", 6).focus).toBe("6");
+    expect(classScaling("sorcerer", 1)).toEqual([]);
+    expect(values("sorcerer", 4)).toEqual({ sorceryPoints: "4" });
+  });
+
+  it("has nothing to point out for classes without scaling numbers", () => {
+    expect(classScaling("fighter", 10)).toEqual([]);
+    expect(classScaling("wizard", 10)).toEqual([]);
   });
 });
