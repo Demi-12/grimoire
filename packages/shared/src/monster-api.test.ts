@@ -26,7 +26,7 @@ describe("fetchMonsterCatalog", () => {
 
   it("keeps the well-formed entries and books and counts them when the total is missing", async () => {
     serve(200, {
-      sources: [{ key: "srd-2024", name: "SRD 5.2", count: 2 }, { key: 1 }],
+      sources: [{ key: "srd-2024", name: "SRD 5.2", count: 2 }, { key: 1, name: "No key" }, { key: "no-name" }],
       results: [{ index: "goblin", name: "Goblin", cr: 0.25 }, { index: "orc" }, null],
     });
     expect(await fetchMonsterCatalog()).toEqual({
@@ -41,6 +41,8 @@ describe("fetchMonsterCatalog", () => {
     expect(await failure(fetchMonsterCatalog())).toMatchObject({ message: "Invalid book filter.", status: 400 });
     serve(502, undefined);
     expect(await failure(fetchMonsterCatalog())).toMatchObject({ message: "Could not load the bestiary.", status: 502 });
+    serve(500, { error: "" });
+    expect(await failure(fetchMonsterCatalog())).toMatchObject({ message: "", status: 500 });
   });
 
   it("rejects an answer that is not a catalog", async () => {
