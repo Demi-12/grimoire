@@ -569,28 +569,38 @@ export function blockingEdges(walls: MapWall[] | undefined): Set<string> {
 /** Is the straight line between two points (in squares) free of blocking edges? Walks the squares it crosses. */
 export function lineIsClear(x0: number, y0: number, x1: number, y1: number, blocked: Set<string>): boolean {
   if (!blocked.size) return true;
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  let cellX = Math.floor(x0);
-  let cellY = Math.floor(y0);
-  const stepX = Math.sign(dx);
-  const stepY = Math.sign(dy);
-  const deltaX = dx ? Math.abs(1 / dx) : Infinity;
-  const deltaY = dy ? Math.abs(1 / dy) : Infinity;
-  let maxX = dx ? ((stepX > 0 ? cellX + 1 : cellX) - x0) / dx : Infinity;
-  let maxY = dy ? ((stepY > 0 ? cellY + 1 : cellY) - y0) / dy : Infinity;
-  while (Math.min(maxX, maxY) <= 1) {
-    if (maxX < maxY) {
-      if (blocked.has(`v:${stepX > 0 ? cellX + 1 : cellX},${cellY}`)) return false;
-      cellX += stepX;
-      maxX += deltaX;
-    } else {
-      if (blocked.has(`h:${cellX},${stepY > 0 ? cellY + 1 : cellY}`)) return false;
-      cellY += stepY;
-      maxY += deltaY;
-    }
+  const across = axisWalk(x0, x1 - x0);
+  const down = axisWalk(y0, y1 - y0);
+  while (Math.min(across.next, down.next) <= 1) {
+    const vertical = across.next < down.next;
+    if (blocked.has(vertical ? `v:${lineAhead(across)},${down.cell}` : `h:${across.cell},${lineAhead(down)}`)) return false;
+    advance(vertical ? across : down);
   }
   return true;
+}
+
+/**
+ * One axis of a walk along a line, square by square: the square it is in, which way it steps, and how far along
+ * the line (0 at the start, 1 at the end) it crosses the next grid line and each one after that.
+ */
+interface AxisWalk { cell: number; step: number; next: number; delta: number }
+
+function axisWalk(from: number, distance: number): AxisWalk {
+  const cell = Math.floor(from);
+  if (!distance) return { cell, step: 0, next: Infinity, delta: Infinity };
+  const step = Math.sign(distance);
+  return { cell, step, next: ((step > 0 ? cell + 1 : cell) - from) / distance, delta: Math.abs(1 / distance) };
+}
+
+/** The grid line (column or row number) the walk crosses next. */
+function lineAhead(walk: AxisWalk): number {
+  return walk.step > 0 ? walk.cell + 1 : walk.cell;
+}
+
+/** Cross that line: into the next square, and on to the line after. */
+function advance(walk: AxisWalk): void {
+  walk.cell += walk.step;
+  walk.next += walk.delta;
 }
 
 /** Where sight lines end inside a square: its centre and four points near its corners, so a square seen only in part counts. */
@@ -602,29 +612,53 @@ const SIGHT_SAMPLES: [number, number][] = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15
  * Range is counted from the token's edge (a Medium hero with 12 squares sees 60 ft around it).
  */
 export function tokenSight(token: MapToken, cols: number, rows: number, blocked: Set<string> = new Set()): Set<string> {
-  const cells = new Set<string>();
-  for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.add(`${token.x + dx},${token.y + dy}`);
+  const cells = new Set(coveredSquares(token));
   const vision = tokenVision(token);
   if (!vision) return cells;
-  const cx = token.x + token.size / 2;
-  const cy = token.y + token.size / 2;
-  const reach = vision.range + token.size / 2;
-  const facing = facingScreenAngle(token.facing);
-  const eps = 1e-9;
-  // Nudged off the exact centre so sight lines never run through a grid corner exactly.
-  const ox = cx + 1.3e-4;
-  const oy = cy + 0.7e-4;
-  for (let x = Math.max(0, Math.floor(cx - reach)); x <= Math.min(cols - 1, Math.ceil(cx + reach)); x++) {
-    for (let y = Math.max(0, Math.floor(cy - reach)); y <= Math.min(rows - 1, Math.ceil(cy + reach)); y++) {
-      const px = x + 0.5 - cx;
-      const py = y + 0.5 - cy;
-      if (Math.hypot(px, py) > reach + eps) continue;
-      if (vision.angle < 360 && angleGap(Math.atan2(py, px) * 180 / Math.PI, facing) > vision.angle / 2 + eps) continue;
-      if (blocked.size && !SIGHT_SAMPLES.some(([sx, sy]) => lineIsClear(ox, oy, x + sx, y + sy, blocked))) continue;
-      cells.add(`${x},${y}`);
-    }
+  const cone = sightCone(token, vision);
+  const [left, right] = reachSpan(cone.cx, cone.reach, cols);
+  const [top, bottom] = reachSpan(cone.cy, cone.reach, rows);
+  for (let x = left; x <= right; x++) for (let y = top; y <= bottom; y++) {
+    if (inCone(cone, x, y) && hasLineOfSight(cone, x, y, blocked)) cells.add(`${x},${y}`);
   }
   return cells;
+}
+
+/** A token's cone in squares: its centre, how far it reaches from there (range plus half the token) and which way it looks. */
+interface SightCone { cx: number; cy: number; reach: number; facing: number; angle: number }
+
+function sightCone(token: MapToken, vision: TokenVision): SightCone {
+  return {
+    cx: token.x + token.size / 2, cy: token.y + token.size / 2,
+    reach: vision.range + token.size / 2, facing: facingScreenAngle(token.facing), angle: vision.angle,
+  };
+}
+
+/** Slack for squares whose centre lies right on the edge of a cone. */
+const SIGHT_EPSILON = 1e-9;
+
+/** First and last column (or row) within `reach` of `centre`, inside a grid `length` squares long. */
+function reachSpan(centre: number, reach: number, length: number): [number, number] {
+  return [Math.max(0, Math.floor(centre - reach)), Math.min(length - 1, Math.ceil(centre + reach))];
+}
+
+/** Does the centre of square (x, y) fall inside the cone, both in range and in angle? */
+function inCone(cone: SightCone, x: number, y: number): boolean {
+  const px = x + 0.5 - cone.cx;
+  const py = y + 0.5 - cone.cy;
+  if (Math.hypot(px, py) > cone.reach + SIGHT_EPSILON) return false;
+  return !(cone.angle < 360 && angleGap(Math.atan2(py, px) * 180 / Math.PI, cone.facing) > cone.angle / 2 + SIGHT_EPSILON);
+}
+
+/**
+ * Does a straight line from the cone's centre reach some part of square (x, y) without crossing a blocking edge?
+ * The lines start nudged off the exact centre so they never run through a grid corner exactly.
+ */
+function hasLineOfSight(cone: SightCone, x: number, y: number, blocked: Set<string>): boolean {
+  if (!blocked.size) return true;
+  const ox = cone.cx + 1.3e-4;
+  const oy = cone.cy + 0.7e-4;
+  return SIGHT_SAMPLES.some(([sx, sy]) => lineIsClear(ox, oy, x + sx, y + sy, blocked));
 }
 
 /** Squares the party sees together: the union of every hero's sight. */
@@ -707,10 +741,15 @@ function knownWalls(walls: MapWall[], seen: Set<string>): MapWall[] {
   return known;
 }
 
-const tokenCells = (token: MapToken) => Array.from({ length: token.size * token.size }, (_, i) => `${token.x + (i % token.size)},${token.y + Math.floor(i / token.size)}`);
+/** The squares ("x,y") a token covers, column by column. */
+function coveredSquares(token: Pick<MapToken, "x" | "y" | "size">): string[] {
+  const cells: string[] = [];
+  for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.push(`${token.x + dx},${token.y + dy}`);
+  return cells;
+}
 
 /** Is any square of this token in sight? */
-export const tokenInSight = (token: MapToken, sight: Set<string>) => tokenCells(token).some((cell) => sight.has(cell));
+export const tokenInSight = (token: MapToken, sight: Set<string>) => coveredSquares(token).some((cell) => sight.has(cell));
 
 /**
  * What a viewer may see: players (and the table display) never receive hidden monsters, and with fog of war
@@ -921,9 +960,7 @@ export function nearDoor(token: Pick<MapToken, "x" | "y" | "size">, door: Pick<M
 /** Squares covered by tokens, to place new ones without stacking them. */
 function occupied(state: MapState): Set<string> {
   const cells = new Set<string>();
-  for (const token of state.tokens) {
-    for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.add(`${token.x + dx},${token.y + dy}`);
-  }
+  for (const token of state.tokens) for (const cell of coveredSquares(token)) cells.add(cell);
   return cells;
 }
 
