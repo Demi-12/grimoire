@@ -841,20 +841,34 @@ export function viewMap(stored: StoredMap | undefined, heroes: MapHero[], viewer
 /** May a token take one step of (dx, dy) squares? Diagonal steps can't slip past the end or the corner of a wall. */
 function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: number, blocked: Set<string>): boolean {
   for (let i = 0; i < token.size; i++) for (let j = 0; j < token.size; j++) {
-    const cx = token.x + i;
-    const cy = token.y + j;
-    const inside = (x: number, y: number) => x >= token.x && x < token.x + token.size && y >= token.y && y < token.y + token.size;
-    if (inside(cx + dx, cy + dy)) continue;
-    if (dx && dy) {
-      const X = cx + (dx > 0 ? 1 : 0);
-      const Y = cy + (dy > 0 ? 1 : 0);
-      if ([`h:${X - 1},${Y}`, `h:${X},${Y}`, `v:${X},${Y - 1}`, `v:${X},${Y}`].some((edge) => blocked.has(edge))) return false;
-    } else if (dx) {
-      if (blocked.has(`v:${dx > 0 ? cx + 1 : cx},${cy}`)) return false;
-    } else if (blocked.has(`h:${cx},${dy > 0 ? cy + 1 : cy}`)) return false;
+    const x = token.x + i;
+    const y = token.y + j;
+    if (covers(token, x + dx, y + dy)) continue;
+    if (stepEdges(x, y, dx, dy).some((edge) => blocked.has(edge))) return false;
   }
   return true;
 }
+
+/** Is square (x, y) one of the token's? */
+function covers(token: Pick<MapToken, "x" | "y" | "size">, x: number, y: number): boolean {
+  return x >= token.x && x < token.x + token.size && y >= token.y && y < token.y + token.size;
+}
+
+/**
+ * The unit edges a step of (dx, dy) out of square (x, y) must not cross: the side it goes through, or for a diagonal
+ * all four edges that meet at the corner it slips past.
+ */
+function stepEdges(x: number, y: number, dx: number, dy: number): string[] {
+  if (dx && dy) {
+    const X = x + (dx > 0 ? 1 : 0);
+    const Y = y + (dy > 0 ? 1 : 0);
+    return [`h:${X - 1},${Y}`, `h:${X},${Y}`, `v:${X},${Y - 1}`, `v:${X},${Y}`];
+  }
+  return dx ? [`v:${dx > 0 ? x + 1 : x},${y}`] : [`h:${x},${dy > 0 ? y + 1 : y}`];
+}
+
+/** The eight steps a token can take, in the order movementSteps tries them. */
+const STEPS: [number, number][] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
 /**
  * Fewest steps the token needs to reach each spot it can get to without crossing a wall or a closed door, keyed
@@ -863,26 +877,41 @@ function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: 
  */
 export function movementSteps(state: MapState, token: Pick<MapToken, "x" | "y" | "size">, limit = Infinity, target?: { x: number; y: number }): Map<string, number> {
   const blocked = blockingEdges(state.walls);
-  const maxX = state.cols - token.size;
-  const maxY = state.rows - token.size;
   const steps = new Map([[`${token.x},${token.y}`, 0]]);
-  const queue: [number, number][] = [[token.x, token.y]];
+  const queue: [number, number, number][] = [[token.x, token.y, 0]];
   for (let head = 0; head < queue.length; head++) {
-    const [px, py] = queue[head];
-    const here = steps.get(`${px},${py}`)!;
+    const [px, py, here] = queue[head];
     if (here >= limit) continue;
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      const nx = px + dx;
-      const ny = py + dy;
+    for (const [nx, ny] of nextSpots(state, { x: px, y: py, size: token.size }, blocked)) {
       const key = `${nx},${ny}`;
-      if ((!dx && !dy) || nx < 0 || ny < 0 || nx > maxX || ny > maxY || steps.has(key)) continue;
-      if (!stepIsClear({ x: px, y: py, size: token.size }, dx, dy, blocked)) continue;
+      if (steps.has(key)) continue;
       steps.set(key, here + 1);
-      if (target && nx === target.x && ny === target.y) return steps;
-      queue.push([nx, ny]);
+      if (isSpot(target, nx, ny)) return steps;
+      queue.push([nx, ny, here + 1]);
     }
   }
   return steps;
+}
+
+/** Spots (top-left squares) one step away that keep the token on the grid and cross no blocking edge, in STEPS order. */
+function nextSpots(state: MapState, from: Pick<MapToken, "x" | "y" | "size">, blocked: Set<string>): [number, number][] {
+  const spots: [number, number][] = [];
+  for (const [dx, dy] of STEPS) {
+    const x = from.x + dx;
+    const y = from.y + dy;
+    if (fitsGrid(state, x, y, from.size) && stepIsClear(from, dx, dy, blocked)) spots.push([x, y]);
+  }
+  return spots;
+}
+
+/** Does a token of this size with its top-left square at (x, y) lie wholly on the grid? */
+function fitsGrid(state: MapState, x: number, y: number, size: number): boolean {
+  return x >= 0 && y >= 0 && x <= state.cols - size && y <= state.rows - size;
+}
+
+/** Is (x, y) the spot asked for? Never when none was. */
+function isSpot(spot: { x: number; y: number } | undefined, x: number, y: number): boolean {
+  return !!spot && spot.x === x && spot.y === y;
 }
 
 /** Squares the token walks to get to (x, y) the shortest way round walls; null when no path gets there. */
