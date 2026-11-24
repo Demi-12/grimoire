@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  errorGroupKey, isForeignScriptError, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, shapeAnalyticsReport, summarizeUserAgent,
+  errorGroupKey, errorReportLimitKey, isForeignScriptError, keepsUsageEvents, normalizeRoute, parseRange, parseTelemetry, parseTimeZone, percentChange, sanitizeError, sanitizeText, shapeAnalyticsReport, summarizeUserAgent,
   type AnalyticsRows,
 } from "./analytics.js";
 
@@ -32,6 +32,23 @@ describe("parseTelemetry", () => {
     expect(parseTelemetry({ kind: "error", message: "  " })).toBeNull();
     expect(parseTelemetry(null)).toBeNull();
     expect(parseTelemetry([])).toBeNull();
+  });
+});
+
+describe("who a telemetry report counts against", () => {
+  const account = (status: "pending" | "approved" | "blocked") => ({ id: "user-1", status });
+
+  it("keeps usage events only from approved accounts", () => {
+    expect(keepsUsageEvents(account("approved"))).toBe(true);
+    expect(keepsUsageEvents(account("pending"))).toBe(false);
+    expect(keepsUsageEvents(account("blocked"))).toBe(false);
+    expect(keepsUsageEvents(null)).toBe(false);
+  });
+
+  it("limits error reports per account, whatever its status, or per address before signing in", () => {
+    expect(errorReportLimitKey(account("pending"), "203.0.113.7")).toBe("user-1");
+    expect(errorReportLimitKey(account("blocked"), "203.0.113.7")).toBe("user-1");
+    expect(errorReportLimitKey(null, "203.0.113.7")).toBe("ip:203.0.113.7");
   });
 });
 
