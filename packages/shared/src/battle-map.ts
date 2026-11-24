@@ -667,9 +667,7 @@ function encodeExplored(cols: number, rows: number, cells: Set<string>): string 
 /** Add what the party sees now to what it has explored (only while the fog is on). */
 function remember(state: MapState): MapState {
   if (!state.fog) return state;
-  const cells = exploredCells(state);
-  for (const cell of partySight(state)) cells.add(cell);
-  return { ...state, explored: encodeExplored(state.cols, state.rows, cells) };
+  return { ...state, explored: encodeExplored(state.cols, state.rows, seenCells(state, partySight(state))) };
 }
 
 /** Squares on either side of a unit edge. */
@@ -721,23 +719,49 @@ export const tokenInSight = (token: MapToken, sight: Set<string>) => tokenCells(
 export function visibleMapState(state: MapState, showHidden: boolean): MapState {
   if (showHidden) return state;
   const sight = state.fog ? partySight(state) : null;
-  const visible: MapState = { ...state, tokens: state.tokens.filter((token) => !token.hidden && (!sight || token.kind !== "monster" || tokenInSight(token, sight))) };
-  if (sight && state.walls) {
-    const seen = exploredCells(state);
-    for (const cell of sight) seen.add(cell);
-    const walls = knownWalls(state.walls, seen);
+  const visible: MapState = { ...state, tokens: state.tokens.filter((token) => isSentToPlayers(token, sight)) };
+  if (sight) showOnlySeen(visible, state, sight);
+  if (state.combat) visible.combat = playersCombat(state.combat, visible.tokens);
+  return visible;
+}
+
+/** Do players receive this token? Never while hidden; with fog of war (`sight` given), a monster only while the party sees it. */
+function isSentToPlayers(token: MapToken, sight: Set<string> | null): boolean {
+  return !token.hidden && (!sight || token.kind !== "monster" || tokenInSight(token, sight));
+}
+
+/**
+ * Fog of war in the players' copy: only the walls next to squares the party sees or has explored (no walls at all
+ * when it knows none), and the party's sight worked out with every wall.
+ */
+function showOnlySeen(visible: MapState, state: MapState, sight: Set<string>): void {
+  if (state.walls) {
+    const walls = knownWalls(state.walls, seenCells(state, sight));
     if (walls.length) visible.walls = walls; else delete visible.walls;
   }
-  if (sight) visible.sight = encodeExplored(state.cols, state.rows, sight);
-  if (state.combat) {
-    // Only the creatures they can see, and no monster speeds: those come from the DM's stat blocks.
-    const shown = new Map(visible.tokens.map((token) => [token.id, token]));
-    const order = state.combat.order.filter((entry) => shown.has(entry.tokenId))
-      .map((entry) => shown.get(entry.tokenId)!.kind === "monster" ? { tokenId: entry.tokenId, initiative: entry.initiative } : entry);
-    const active = state.combat.active && shown.has(state.combat.active) ? state.combat.active : undefined;
-    visible.combat = { round: state.combat.round, order, ...(active ? { active } : {}) };
-  }
-  return visible;
+  visible.sight = encodeExplored(state.cols, state.rows, sight);
+}
+
+/** Squares the party has explored plus those it sees now. */
+function seenCells(state: MapState, sight: Iterable<string>): Set<string> {
+  const seen = exploredCells(state);
+  for (const cell of sight) seen.add(cell);
+  return seen;
+}
+
+/**
+ * The fight in the players' copy: only the creatures they receive, no monster speeds or movement (those come from
+ * the DM's stat blocks), and whose turn it is only while they can see that creature.
+ */
+function playersCombat(combat: MapCombat, sent: MapToken[]): MapCombat {
+  const shown = new Map(sent.map((token) => [token.id, token]));
+  const order = combat.order.flatMap((entry) => {
+    const token = shown.get(entry.tokenId);
+    if (!token) return [];
+    return [token.kind === "monster" ? { tokenId: entry.tokenId, initiative: entry.initiative } : entry];
+  });
+  const active = combat.active && shown.has(combat.active) ? combat.active : undefined;
+  return { round: combat.round, order, ...(active ? { active } : {}) };
 }
 
 /** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
