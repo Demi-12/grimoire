@@ -196,5 +196,7 @@ describe("creatureTypeKey and creatureTypeLabel", () => {
     expect([creatureTypeLabel("dragon", "en"), creatureTypeLabel("dragon", "es")]).toEqual(["Dragon", "Dragón"]);
     expect([creatureTypeLabel("swarm", "en"), creatureTypeLabel("swarm", "es")]).toEqual(["Swarm", "Enjambre"]);
     expect([creatureTypeLabel("spirit", "es"), creatureTypeLabel("other", "en")]).toEqual(["Spirit", "Other"]);
+    // "other" is Grimoire's own bucket for creatures with no type, so it is translated like the known types.
+    expect(creatureTypeLabel("other", "es")).toBe("Otro");
   });
 });
