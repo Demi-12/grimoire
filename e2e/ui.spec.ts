@@ -287,3 +287,24 @@ for (const width of [360, 1280]) {
     });
   }
 }
+
+// A failed sign-in reads in the interface language: better-auth's English message never reaches the screen.
+for (const locale of ["es", "en"] as const) {
+  test(`failed sign-in explains itself in ${locale}`, async ({ page }) => {
+    await page.route("**/api/**", async (route) => {
+      const { pathname } = new URL(route.request().url());
+      if (pathname === "/api/auth/sign-in/email") {
+        return route.fulfill({ status: 401, json: { code: "INVALID_EMAIL_OR_PASSWORD", message: "Invalid email or password" } });
+      }
+      if (pathname === "/api/auth/get-session") return route.fulfill({ json: null });
+      return route.fulfill({ status: 401, json: { error: "Sign in to continue." } });
+    });
+    await page.addInitScript((value) => localStorage.setItem("grimoire.locale.v1", value), locale);
+    await page.goto("/");
+    await page.locator("#auth-email").fill("ada@example.com");
+    await page.locator("#auth-password").fill("a wrong password");
+    await page.locator("#auth-sign-in").getByRole("button", { name: locale === "es" ? "Iniciar sesión" : "Sign in", exact: true }).click();
+    const alert = page.locator(".auth-notice-error");
+    await expect(alert).toHaveText(locale === "es" ? "El correo o la contraseña no son correctos." : "The email or password is incorrect.");
+  });
+}

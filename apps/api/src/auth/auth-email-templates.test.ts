@@ -36,3 +36,16 @@ describe("resetPasswordEmail", () => {
     expect(html).toContain("[data-ogsb] .g-card{background-color:#1a1630!important");
   });
 });
+
+describe("resetPasswordEmail in English", () => {
+  it("writes every part in the account's language", () => {
+    const email = resetPasswordEmail({ name: "Ana María", url, expiresInMinutes: 30, locale: "en" });
+    expect(email.subject).toBe("Reset your Grimoire password");
+    expect(email.text).toMatch(/^Hi Ana,/);
+    expect(email.text).toContain("30 minutes");
+    expect(email.html).toContain('<html lang="en">');
+    expect(email.html).toContain("Choose a new password</a>");
+    // No Spanish left behind in either part.
+    expect(`${email.text}${email.html}`).not.toMatch(/contraseña|Hola|correo/i);
+  });
+});

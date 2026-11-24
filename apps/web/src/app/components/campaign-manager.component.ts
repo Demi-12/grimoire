@@ -4,7 +4,7 @@ import {
 import { RouterLink } from "@angular/router";
 import { characterIdentity } from "@grimoire/shared/character-view";
 import type { CampaignRole } from "@grimoire/shared/permissions";
-import { api, ApiError, type Campaign, type Character, type Invite, type Me } from "../core/api-client";
+import { api, type Campaign, type Character, type Invite, type Me } from "../core/api-client";
 import { FeedbackService } from "../core/feedback.service";
 import { I18nService } from "../core/i18n.service";
 import { EncounterJournalComponent } from "./encounter-journal.component";
@@ -136,7 +136,7 @@ export class AddMemberComponent {
       await this.onAdded()();
     } catch (cause) {
       // Kept next to the field: it usually says the name or email didn't match anyone.
-      this.message.set(cause instanceof ApiError && cause.status !== 403 ? cause.message : this.t().error);
+      this.message.set(this.i18n.errorText(cause, this.t().error));
     } finally {
       this.busy.set(false);
     }

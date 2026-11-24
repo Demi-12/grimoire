@@ -20,6 +20,7 @@ type BrowserCopy = {
   loading: string; retry: string; errorTitle: string; errorBody: string; count: (count: number) => string; noResults: string;
   select: string; selected: string; add: string; added: string; previous: string; next: string; page: (current: number, total: number) => string;
   ratingLabel: (rating: string) => string;
+  ratingShort: string;
 };
 const PAGE_SIZE = 12;
 /** Wait this long after the last keystroke before asking the server, so typing "owlbear" is one request, not seven. */
@@ -33,7 +34,7 @@ const copy = {
     loading: "The archivist is opening the bestiary…", retry: "Retry", errorTitle: "The bestiary is out of reach.", errorBody: "Open5e, which serves the creatures, may not be answering right now. Try again in a moment.",
     count: (count: number) => `${count} creatures`, noResults: "No creatures match those runes.", select: "Open stat block", selected: "Selected", add: "Add to encounter list", added: "Added to encounter list",
     previous: "Previous", next: "Next", page: (current: number, total: number) => `Page ${current} of ${total}`,
-    ratingLabel: (rating: string) => rating === "0.125" ? "1/8" : rating === "0.25" ? "1/4" : rating === "0.5" ? "1/2" : rating,
+    ratingLabel: (rating: string) => rating === "0.125" ? "1/8" : rating === "0.25" ? "1/4" : rating === "0.5" ? "1/2" : rating, ratingShort: "CR",
   },
   es: {
     title: "El Bestiario", subtitle: "Miles de criaturas de todos los libros de 5e con licencia libre (SRD 5.2 y 5.1, Tome of Beasts, Creature Codex, el Monstrous Menagerie de Level Up y más), servidas por Open5e. Los términos de reglas se traducen, pero los nombres y los textos de rasgos y acciones llegan solo en inglés.",
@@ -41,7 +42,7 @@ const copy = {
     loading: "El archivero está abriendo el bestiario…", retry: "Reintentar", errorTitle: "El bestiario no está disponible.", errorBody: "Puede que Open5e, que sirve las criaturas, no responda ahora mismo. Vuelve a intentarlo en un momento.",
     count: (count: number) => `${count} criaturas`, noResults: "Ninguna criatura coincide con esos símbolos.", select: "Abrir ficha", selected: "Elegido", add: "Añadir al catálogo de encuentros", added: "Añadido al catálogo de encuentros",
     previous: "Anterior", next: "Siguiente", page: (current: number, total: number) => `Página ${current} de ${total}`,
-    ratingLabel: (rating: string) => rating === "0.125" ? "1/8" : rating === "0.25" ? "1/4" : rating === "0.5" ? "1/2" : rating,
+    ratingLabel: (rating: string) => rating === "0.125" ? "1/8" : rating === "0.25" ? "1/4" : rating === "0.5" ? "1/2" : rating, ratingShort: "VD",
   },
 } satisfies Record<Locale, BrowserCopy>;
 

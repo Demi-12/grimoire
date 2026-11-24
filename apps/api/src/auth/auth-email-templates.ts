@@ -16,6 +16,7 @@
  */
 
 export type RenderedEmail = { subject: string; text: string; html: string };
+export type EmailLocale = "es" | "en";
 
 const light = {
   page: "#e6e3ef", // --paper
@@ -87,21 +88,55 @@ function greetingName(name: string | null | undefined) {
   return first || undefined;
 }
 
-type ResetPasswordInput = { name?: string | null; url: string; expiresInMinutes: number };
+type ResetPasswordInput = { name?: string | null; url: string; expiresInMinutes: number; locale?: EmailLocale };
 
-export function resetPasswordEmail({ name, url, expiresInMinutes }: ResetPasswordInput): RenderedEmail {
-  const subject = "Restablece tu contraseña de Grimoire";
-  const who = greetingName(name);
-  const greeting = who ? `Hola, ${who}:` : "Hola:";
-  const intro = "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de Grimoire.";
-  const validity = `El enlace caduca en ${expiresInMinutes} minutos y solo puede usarse una vez.`;
-  const ignore = "Si no lo has solicitado tú, puedes ignorar este correo: tu contraseña no cambiará.";
+/** The reset email's words in each language. */
+const resetCopy = {
+  es: {
+    subject: "Restablece tu contraseña de Grimoire",
+    greeting: (who?: string) => (who ? `Hola, ${who}:` : "Hola:"),
+    intro: "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta de Grimoire.",
+    openLink: "Abre este enlace para elegir una nueva contraseña:",
+    validity: (minutes: number) => `El enlace caduca en ${minutes} minutos y solo puede usarse una vez.`,
+    ignore: "Si no lo has solicitado tú, puedes ignorar este correo: tu contraseña no cambiará.",
+    preheader: "Elige una nueva contraseña.",
+    kicker: "Recuperación de cuenta",
+    title: "Restablece tu contraseña",
+    pressButton: "Pulsa el botón para elegir una nueva.",
+    button: "Elegir nueva contraseña",
+    copyLink: "¿El botón no funciona? Copia este enlace en tu navegador:",
+    footer: "Correo automático de Grimoire, tu grimorio de D&amp;D. No respondas a este mensaje.",
+  },
+  en: {
+    subject: "Reset your Grimoire password",
+    greeting: (who?: string) => (who ? `Hi ${who},` : "Hi,"),
+    intro: "We received a request to reset the password of your Grimoire account.",
+    openLink: "Open this link to choose a new password:",
+    validity: (minutes: number) => `The link expires in ${minutes} minutes and works only once.`,
+    ignore: "If you didn't ask for this, you can ignore this email: your password won't change.",
+    preheader: "Choose a new password.",
+    kicker: "Account recovery",
+    title: "Reset your password",
+    pressButton: "Press the button to choose a new one.",
+    button: "Choose a new password",
+    copyLink: "Button not working? Copy this link into your browser:",
+    footer: "Automatic email from Grimoire, your D&amp;D grimoire. Please don't reply to this message.",
+  },
+} as const;
+
+export function resetPasswordEmail({ name, url, expiresInMinutes, locale = "es" }: ResetPasswordInput): RenderedEmail {
+  const copy = resetCopy[locale];
+  const subject = copy.subject;
+  const greeting = copy.greeting(greetingName(name));
+  const intro = copy.intro;
+  const validity = copy.validity(expiresInMinutes);
+  const ignore = copy.ignore;
 
   const text = [
     greeting,
     "",
     intro,
-    "Abre este enlace para elegir una nueva contraseña:",
+    copy.openLink,
     "",
     url,
     "",
@@ -113,7 +148,7 @@ export function resetPasswordEmail({ name, url, expiresInMinutes }: ResetPasswor
 
   const href = escapeHtml(url);
   const html = `<!doctype html>
-<html lang="es">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -123,7 +158,7 @@ export function resetPasswordEmail({ name, url, expiresInMinutes }: ResetPasswor
 ${darkStyle}
 </head>
 <body class="g-page" style="margin:0;padding:0;background-color:${light.page};">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;">${escapeHtml(`Elige una nueva contraseña. ${validity}`)}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;">${escapeHtml(`${copy.preheader} ${validity}`)}</div>
 <table role="presentation" class="g-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${light.page}" style="background-color:${light.page};">
   <tr>
     <td align="center" style="padding:32px 12px;">
@@ -136,14 +171,14 @@ ${darkStyle}
         </tr>
         <tr>
           <td class="g-card g-ink" bgcolor="${light.card}" style="background-color:${light.card};padding:36px 32px 28px;border:1px solid ${light.line};border-top:0;border-radius:0 0 10px 10px;font-family:${serif};color:${light.ink};">
-            <p class="g-muted" style="margin:0 0 6px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${light.muted};">Recuperación de cuenta</p>
-            <h1 class="g-ink" style="margin:0 0 20px;font-family:${serif};font-size:26px;line-height:1.25;font-weight:normal;color:${light.ink};">Restablece tu contraseña</h1>
+            <p class="g-muted" style="margin:0 0 6px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${light.muted};">${copy.kicker}</p>
+            <h1 class="g-ink" style="margin:0 0 20px;font-family:${serif};font-size:26px;line-height:1.25;font-weight:normal;color:${light.ink};">${copy.title}</h1>
             <p class="g-ink" style="margin:0 0 12px;font-size:16px;line-height:1.6;color:${light.ink};">${escapeHtml(greeting)}</p>
-            <p class="g-ink" style="margin:0 0 28px;font-size:16px;line-height:1.6;color:${light.ink};">${escapeHtml(intro)} Pulsa el botón para elegir una nueva.</p>
+            <p class="g-ink" style="margin:0 0 28px;font-size:16px;line-height:1.6;color:${light.ink};">${escapeHtml(intro)} ${copy.pressButton}</p>
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 28px;">
               <tr>
                 <td align="center" class="g-button" bgcolor="${light.button}" style="background-color:${light.button};border-radius:4px;">
-                  <a href="${href}" target="_blank" rel="noopener" class="g-button-text" style="display:inline-block;padding:14px 30px;font-family:${serif};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:4px;">Elegir nueva contraseña</a>
+                  <a href="${href}" target="_blank" rel="noopener" class="g-button-text" style="display:inline-block;padding:14px 30px;font-family:${serif};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:4px;">${copy.button}</a>
                 </td>
               </tr>
             </table>
@@ -158,13 +193,13 @@ ${darkStyle}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
               <tr><td class="g-rule" style="border-top:1px solid ${light.line};font-size:0;line-height:0;">&nbsp;</td></tr>
             </table>
-            <p class="g-muted" style="margin:0 0 6px;font-size:13px;line-height:1.5;color:${light.muted};">¿El botón no funciona? Copia este enlace en tu navegador:</p>
+            <p class="g-muted" style="margin:0 0 6px;font-size:13px;line-height:1.5;color:${light.muted};">${copy.copyLink}</p>
             <p style="margin:0;font-size:13px;line-height:1.5;word-break:break-all;"><a href="${href}" target="_blank" rel="noopener" class="g-link" style="color:${light.link};text-decoration:underline;">${href}</a></p>
           </td>
         </tr>
         <tr>
           <td align="center" class="g-muted" style="padding:20px 24px 0;font-family:${serif};font-size:12px;line-height:1.5;color:${light.muted};">
-            Correo automático de Grimoire, tu grimorio de D&amp;D. No respondas a este mensaje.
+            ${copy.footer}
           </td>
         </tr>
       </table>

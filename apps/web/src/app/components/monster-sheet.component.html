@@ -5,7 +5,7 @@
 } @else if (error() && !monster()) {
   <div class="error" role="alert">{{ t().error }}<p>{{ t().errorHint }}</p><button type="button" (click)="retry()">{{ t().retry }}</button></div>
 } @else if (sheet(); as sheet) {
-  <article class="frame" [attr.aria-label]="sheet.monster.name + ' stat block'">
+  <article class="frame" [attr.aria-label]="t().statBlockOf + ' ' + sheet.monster.name">
     <header class="header"><p class="sheetEyebrow">{{ sheet.eyebrow }}</p><h2 class="name">{{ sheet.monster.name }}</h2><p class="kind">{{ sheet.kind }}</p></header>
     @if (!compact()) {
       @if (sheet.monster.image && !portraitFailed()) {

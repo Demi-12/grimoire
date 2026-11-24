@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from "@angular/core";
 import type { AccountStatus, SiteRole } from "@grimoire/shared/permissions";
-import { api, ApiError, type AdminUser, type Me } from "../core/api-client";
+import { api, type AdminUser, type Me } from "../core/api-client";
 import { FeedbackService } from "../core/feedback.service";
 import { I18nService } from "../core/i18n.service";
 import { SKELETONS } from "./skeleton.component";
@@ -125,7 +125,7 @@ export class AdminUsersComponent {
         : user.status === "blocked" ? t.unblocked(user.name) : t.approvedDone(user.name));
       await this.load();
     } catch (cause) {
-      this.feedback.toast.error(cause instanceof ApiError && cause.status === 409 ? cause.message : t.error);
+      this.feedback.toast.error(this.i18n.errorText(cause, t.error));
     } finally {
       this.busyId.set("");
     }
