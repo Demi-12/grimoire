@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave, mapStateToSave, mapSavesFull, MAP_MAX_SAVES,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, movementSteps, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave, mapStateToSave, mapSavesFull, MAP_MAX_SAVES,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map.js";
 
@@ -914,5 +914,346 @@ describe("applyMapOps, change by change", () => {
     const dashed = ok(apply(state, [{ type: "dash", tokenId: "t2", dash: true }]));
     expect(combatantOf(dashed, "t2")).toEqual({ tokenId: "t2", initiative: 10, dash: true });
     expect(combatantOf(ok(apply(dashed, [{ type: "dash", tokenId: "t2", dash: false }])), "t2")).toEqual({ tokenId: "t2", initiative: 10 });
+  });
+});
+
+describe("reading a stored map, field by field", () => {
+  const rat = (over: Record<string, unknown> = {}) => ({ id: "r", kind: "monster", label: "Rat", x: 1, y: 1, size: 1, ...over });
+  const plainRat: MapToken = { id: "r", kind: "monster", label: "Rat", x: 1, y: 1, size: 1 };
+  const tokensOf = (tokens: unknown) => normalizeMapState({ cols: 10, rows: 10, tokens }).tokens;
+
+  it("falls back to an empty map for anything that isn't an object", () => {
+    for (const raw of [undefined, null, "junk", 7, true]) expect(normalizeMapState(raw)).toStrictEqual(emptyMapState());
+  });
+
+  it("keeps the grid size only as a whole number of squares within the limits", () => {
+    expect(normalizeMapState({ cols: 4, rows: 40 })).toStrictEqual({ cols: 4, rows: 40, tokens: [] });
+    for (const bad of [3, 41, 10.5, "10", null]) expect(normalizeMapState({ cols: bad, rows: bad })).toStrictEqual(emptyMapState());
+  });
+
+  it("drops a token when a required field is wrong", () => {
+    expect(tokensOf([rat()])).toStrictEqual([plainRat]);
+    expect(tokensOf([rat({ label: "  Big   rat " })])[0].label).toBe("Big rat");
+    const wrong = [{ id: "a b" }, { id: 7 }, { kind: "npc" }, { label: "" }, { label: " " }, { label: "x".repeat(41) }, { label: 3 },
+      { size: 0 }, { size: 5 }, { size: 1.5 }, { x: -1 }, { x: 40 }, { x: "1" }, { y: -1 }, { y: 40 }, { y: 0.5 }];
+    for (const over of wrong) expect(tokensOf([rat(over)])).toStrictEqual([]);
+    expect(tokensOf("rats")).toStrictEqual([]);
+    expect(tokensOf([null, 0, "rat", []])).toStrictEqual([]);
+  });
+
+  it("keeps a hero only with a character link, and the link only on heroes", () => {
+    const hero = { id: "h", kind: "hero", label: "Lia", x: 0, y: 0, size: 1 };
+    expect(tokensOf([{ ...hero, characterId: aliceHero }])).toStrictEqual([{ ...hero, characterId: aliceHero }]);
+    expect(tokensOf([hero, { ...hero, characterId: "not-a-uuid" }, { ...hero, characterId: 5 }])).toStrictEqual([]);
+    expect(tokensOf([rat({ characterId: aliceHero })])).toStrictEqual([plainRat]);
+  });
+
+  it("keeps optional fields only with a valid value, and drops fields it doesn't know", () => {
+    expect(tokensOf([rat({ monsterSlug: "srd_rat", hidden: true, defeated: true, facing: 7, vision: { range: 0, angle: 360 }, extra: "x" })]))
+      .toStrictEqual([{ ...plainRat, monsterSlug: "srd_rat", hidden: true, defeated: true, facing: 7, vision: { range: 0, angle: 360 } }]);
+    const wrong = [{ monsterSlug: 7 }, { hidden: "yes" }, { hidden: false }, { defeated: 1 }, { facing: 0 }, { facing: 8 }, { facing: -1 },
+      { vision: "far" }, { vision: { range: 25, angle: 90 } }, { vision: { range: 3, angle: 45 } }];
+    for (const over of wrong) expect(tokensOf([rat(over)])).toStrictEqual([plainRat]);
+  });
+
+  it("writes token fields in a fixed order, pulled back inside the grid", () => {
+    const [token] = tokensOf([{ vision: { range: 2, angle: 60 }, facing: 1, defeated: true, hidden: true, monsterSlug: "srd_rat", size: 3, y: 39, x: 39, label: "Rat", kind: "monster", id: "r" }]);
+    expect(token).toStrictEqual({ ...plainRat, x: 7, y: 7, size: 3, monsterSlug: "srd_rat", hidden: true, defeated: true, facing: 1, vision: { range: 2, angle: 60 } });
+    expect(Object.keys(token)).toEqual(["id", "kind", "label", "x", "y", "size", "monsterSlug", "hidden", "defeated", "facing", "vision"]);
+    const [hero] = tokensOf([{ characterId: aliceHero, size: 1, y: 0, x: 0, label: "Lia", kind: "hero", id: "h" }]);
+    expect(Object.keys(hero)).toEqual(["id", "kind", "label", "x", "y", "size", "characterId"]);
+  });
+
+  it("keeps the first 120 valid tokens, and only those can be in the fight", () => {
+    const many = Array.from({ length: 125 }, (_, i) => rat({ id: `r${i}` }));
+    const state = normalizeMapState({ tokens: ["junk", rat({ id: "bad id" }), ...many], combat: { order: [{ tokenId: "r119", initiative: 1 }, { tokenId: "r120", initiative: 2 }] } });
+    expect(state.tokens.map((token) => token.id)).toEqual(many.slice(0, 120).map((token) => token.id));
+    expect(state.combat).toStrictEqual({ round: 1, order: [{ tokenId: "r119", initiative: 1 }] });
+  });
+
+  it("keeps a background only with a well-formed key", () => {
+    expect(normalizeMapState({ background: { key: "a-B_9", url: "x" } }).background).toStrictEqual({ key: "a-B_9" });
+    for (const bad of ["abc", null, [], {}, { key: 5 }, { key: "" }, { key: "x".repeat(41) }, { key: "a/b" }]) expect(normalizeMapState({ background: bad })).toStrictEqual(emptyMapState());
+  });
+
+  it("reads walls one by one: drops broken ones, cuts them to the grid and keeps at most 300", () => {
+    const state = normalizeMapState({ cols: 6, rows: 6, walls: [
+      null, "wall", { x1: 0, y1: 0, x2: 0, y2: 0 }, { x1: 2, y1: 9, x2: 2, y2: 1, door: "closed", extra: 1 },
+      { x1: 7, y1: 0, x2: 7, y2: 3 }, { x1: 0, y1: 7, x2: 2, y2: 7 }, { x1: 6, y1: 2, x2: 9, y2: 2 }, { x1: 0, y1: 6, x2: 9, y2: 6 }, { x1: 6, y1: 0, x2: 6, y2: 2 },
+    ] });
+    expect(state.walls).toStrictEqual([{ x1: 2, y1: 1, x2: 2, y2: 6, door: "closed" }, { x1: 0, y1: 6, x2: 6, y2: 6 }, { x1: 6, y1: 0, x2: 6, y2: 2 }]);
+    for (const walls of [[], "walls", [{ x1: 30, y1: 0, x2: 30, y2: 2 }]]) expect(normalizeMapState({ walls })).toStrictEqual(emptyMapState());
+    const many = Array.from({ length: 305 }, (_, i) => ({ x1: i % 20, y1: i % 14, x2: i % 20 + 1, y2: i % 14 }));
+    const kept = normalizeMapState({ walls: [{ x1: 30, y1: 0, x2: 30, y2: 2 }, ...many] }).walls!;
+    expect(kept).toHaveLength(300);
+    expect(kept[299]).toStrictEqual(many[299]);
+  });
+
+  it("keeps the explored map only as lowercase hex as long as the grid needs", () => {
+    expect(normalizeMapState({ cols: 5, rows: 5, explored: "f00000a" }).explored).toBe("f00000a");
+    for (const bad of ["f00000", "f00000a0", "F00000A", "f00000g", 7]) expect(normalizeMapState({ cols: 5, rows: 5, explored: bad }).explored).toBeUndefined();
+    // Measured against the grid as read: a broken size falls back to 20 × 14.
+    expect(normalizeMapState({ cols: 99, explored: "0".repeat(70) }).explored).toBe("0".repeat(70));
+  });
+
+  it("switches fog and hidden grid lines on only for true", () => {
+    expect(normalizeMapState({ fog: "true", gridHidden: 1 })).toStrictEqual(emptyMapState());
+    expect(normalizeMapState({ fog: true, gridHidden: true })).toStrictEqual({ ...emptyMapState(), fog: true, gridHidden: true });
+  });
+
+  it("writes the map's fields in a fixed order", () => {
+    const state = normalizeMapState({ gridHidden: true, fog: true, background: { key: "bg" }, explored: "0".repeat(70), walls: [{ x1: 0, y1: 1, x2: 2, y2: 1 }],
+      combat: { order: [] }, tokens: [], rows: 14, cols: 20 });
+    expect(Object.keys(state)).toEqual(["cols", "rows", "tokens", "combat", "walls", "explored", "background", "fog", "gridHidden"]);
+  });
+});
+
+describe("reading a stored fight", () => {
+  const rat = (id: string): MapToken => ({ id, kind: "monster", label: "Rat", x: 0, y: 0, size: 1 });
+  const fightOf = (combat: unknown) => normalizeMapState({ tokens: [rat("a"), rat("b"), rat("c"), rat("d")], combat }).combat;
+
+  it("has no fight unless one is stored as an object", () => {
+    for (const combat of [undefined, null, "fight", 3, true]) expect(fightOf(combat)).toBeUndefined();
+  });
+
+  it("reads a fight with no usable order as an empty one", () => {
+    expect(fightOf({})).toStrictEqual({ round: 1, order: [] });
+    expect(fightOf([])).toStrictEqual({ round: 1, order: [] });
+    expect(fightOf({ round: 4, order: "a,b" })).toStrictEqual({ round: 4, order: [] });
+  });
+
+  it("keeps a round from 1 to 999", () => {
+    for (const round of [1, 999]) expect(fightOf({ round })).toStrictEqual({ round, order: [] });
+    for (const round of [0, 1000, 2.5, "3", null]) expect(fightOf({ round })).toStrictEqual({ round: 1, order: [] });
+  });
+
+  it("keeps each creature on the map once, with its valid fields, highest initiative first", () => {
+    expect(fightOf({ order: [
+      null, "a",
+      { tokenId: "a", initiative: 5, speed: 6, moved: 3, dash: true, extra: 1 },
+      { tokenId: "a", initiative: 9 }, // twice: the first one counts
+      { tokenId: "zz", initiative: 9 }, // not on the map
+      { tokenId: "b", initiative: 100 },
+      { tokenId: "b", initiative: 7, speed: 41 },
+      { tokenId: "c", initiative: 5, speed: 0, moved: 999, dash: "yes" },
+      { tokenId: "b", initiative: -20, moved: 1000 },
+      { tokenId: "d", initiative: 99, moved: 0, dash: false },
+    ] })).toStrictEqual({ round: 1, order: [
+      { tokenId: "d", initiative: 99 },
+      { tokenId: "a", initiative: 5, speed: 6, moved: 3, dash: true },
+      { tokenId: "c", initiative: 5, speed: 0, moved: 999 },
+      { tokenId: "b", initiative: -20 },
+    ] });
+  });
+
+  it("keeps whose turn it is only when that creature is in the order", () => {
+    const order = [{ tokenId: "a", initiative: 5 }];
+    expect(fightOf({ active: "a", order, round: 2 })).toStrictEqual({ round: 2, order, active: "a" });
+    expect(Object.keys(fightOf({ active: "a", order, round: 2 })!)).toEqual(["round", "order", "active"]);
+    for (const active of ["b", "zz", 5, null]) expect(fightOf({ active, order })).toStrictEqual({ round: 1, order });
+  });
+});
+
+describe("the players' view, field by field", () => {
+  const hero = (id: string, x: number, y: number, over: Partial<MapToken> = {}): MapToken => ({ id, kind: "hero", label: "Lia", characterId: aliceHero, x, y, size: 1, ...over });
+  const monster = (id: string, x: number, y: number, over: Partial<MapToken> = {}): MapToken => ({ id, kind: "monster", label: "Rat", x, y, size: 1, ...over });
+  const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+
+  it("gives the DM's view back as it is", () => {
+    const state = withParty();
+    expect(visibleMapState(state, true)).toBe(state);
+  });
+
+  it("without fog, drops only hidden tokens and passes everything else through", () => {
+    const state: MapState = {
+      cols: 8, rows: 8, background: { key: "bg" }, gridHidden: true, explored: "ffff0000ffff0000", walls: [{ x1: 4, y1: 0, x2: 4, y2: 8 }],
+      tokens: [hero("h", 0, 0), hero("hh", 1, 0, { hidden: true }), monster("m", 7, 7), monster("mh", 6, 6, { hidden: true })],
+    };
+    const before = copy(state);
+    expect(visibleMapState(state, false)).toStrictEqual({ ...state, tokens: [state.tokens[0], state.tokens[2]] });
+    expect(visibleMapState({ ...state, walls: [] }, false).walls).toStrictEqual([]);
+    expect(state).toStrictEqual(before);
+  });
+
+  it("with fog, sends the party's sight and only the monsters standing in it, but every visible hero", () => {
+    const state: MapState = {
+      cols: 8, rows: 8, fog: true, explored: "0000000100000000",
+      tokens: [
+        hero("h", 0, 4, { facing: 2, vision: { range: 2, angle: 90 } }),
+        hero("blind", 7, 0, { vision: { range: 0, angle: 90 } }),
+        monster("seen", 2, 4), monster("unseen", 0, 0), monster("hid", 1, 4, { hidden: true }), monster("big", 2, 1, { size: 2 }),
+      ],
+    };
+    const before = copy(state);
+    const view = visibleMapState(state, false);
+    // h sees 0,4 1,3 1,4 1,5 2,3 2,4 2,5 (east, two squares); the blind hero only its own square 7,0.
+    expect(view).toStrictEqual({ ...state, tokens: [state.tokens[0], state.tokens[1], state.tokens[2]], sight: "01000060e0600000" });
+    expect(currentSight(view)).toEqual(partySight(state));
+    expect(state).toStrictEqual(before);
+  });
+
+  it("with fog, sends only the stretches of wall next to squares seen or explored, and no walls when none are known", () => {
+    const blind = hero("h", 0, 0, { vision: { range: 0, angle: 90 } });
+    const wall = { x1: 6, y1: 0, x2: 6, y2: 8 };
+    const door = { x1: 0, y1: 1, x2: 3, y2: 1, door: "closed" as const };
+    expect("walls" in visibleMapState({ cols: 8, rows: 8, fog: true, tokens: [blind], walls: [wall] }, false)).toBe(false);
+    expect("walls" in visibleMapState({ cols: 8, rows: 8, fog: true, tokens: [blind], walls: [] }, false)).toBe(false);
+    // (5,3) explored: only that stretch of the long wall; the door touches the hero's square and comes whole.
+    const view = visibleMapState({ cols: 8, rows: 8, fog: true, explored: "0000000400000000", tokens: [blind], walls: [wall, door] }, false);
+    expect(view.walls).toStrictEqual([{ x1: 6, y1: 3, x2: 6, y2: 4 }, door]);
+    expect(view.explored).toBe("0000000400000000");
+  });
+
+  it("in a fight, lists only the creatures sent, without monster speeds, movement or Dash", () => {
+    const state: MapState = {
+      cols: 8, rows: 8, tokens: [hero("h", 0, 0), monster("m", 3, 3), monster("mh", 4, 4, { hidden: true })],
+      combat: { round: 3, active: "m", order: [
+        { tokenId: "h", initiative: 20, speed: 6, moved: 2, dash: true }, { tokenId: "m", initiative: 10, speed: 8, moved: 4, dash: true }, { tokenId: "mh", initiative: 5, speed: 4 },
+      ] },
+    };
+    const before = copy(state);
+    const order = [{ tokenId: "h", initiative: 20, speed: 6, moved: 2, dash: true }, { tokenId: "m", initiative: 10 }];
+    expect(visibleMapState(state, false).combat).toStrictEqual({ round: 3, order, active: "m" });
+    // Whose turn it is stays secret while it's a creature they can't see.
+    expect(visibleMapState({ ...state, combat: { ...state.combat!, active: "mh" } }, false).combat).toStrictEqual({ round: 3, order });
+    const { round, order: all } = state.combat!;
+    expect(visibleMapState({ ...state, combat: { round, order: all } }, false).combat).toStrictEqual({ round: 3, order });
+    expect(state).toStrictEqual(before);
+  });
+});
+
+describe("sight lines, edge cases", () => {
+  it("is always clear with nothing in the way", () => {
+    expect(lineIsClear(0.5, 0.5, 9.5, 3.5, new Set())).toBe(true);
+  });
+
+  it("follows a row or a column in either direction", () => {
+    const blocked = new Set(["v:3,1", "h:1,3"]);
+    expect(lineIsClear(0.5, 1.5, 5.5, 1.5, blocked)).toBe(false); // east
+    expect(lineIsClear(5.5, 1.5, 0.5, 1.5, blocked)).toBe(false); // west
+    expect(lineIsClear(0.5, 0.5, 5.5, 0.5, blocked)).toBe(true); // the row above
+    expect(lineIsClear(1.5, 0.5, 1.5, 5.5, blocked)).toBe(false); // south
+    expect(lineIsClear(1.5, 5.5, 1.5, 0.5, blocked)).toBe(false); // north
+    expect(lineIsClear(2.5, 5.5, 2.5, 0.5, blocked)).toBe(true); // the next column
+    expect(lineIsClear(3.2, 1.5, 3.8, 1.5, blocked)).toBe(true); // inside one square
+    expect(lineIsClear(3.5, 1.5, 3.5, 1.5, blocked)).toBe(true); // a single point
+  });
+
+  it("counts a wall right at the far end, but not one beyond it", () => {
+    const blocked = new Set(["v:3,1"]);
+    expect(lineIsClear(0.5, 1.5, 2.5, 1.5, blocked)).toBe(true);
+    expect(lineIsClear(0.5, 1.5, 3, 1.5, blocked)).toBe(false);
+  });
+
+  it("crosses a corner exactly through the edge below it, then the one beside it", () => {
+    for (const [edge, clear] of [["h:0,1", false], ["v:1,1", false], ["v:1,0", true], ["h:1,1", true]] as const) {
+      expect(lineIsClear(0.5, 0.5, 1.5, 1.5, new Set([edge]))).toBe(clear);
+    }
+    for (const [edge, clear] of [["h:1,1", false], ["v:1,0", false], ["h:0,1", true], ["v:1,1", true]] as const) {
+      expect(lineIsClear(1.5, 1.5, 0.5, 0.5, new Set([edge]))).toBe(clear);
+    }
+  });
+});
+
+describe("what one token sees, edge cases", () => {
+  const hero = (over: Partial<MapToken> = {}): MapToken => ({ id: "h", kind: "hero", label: "Lia", characterId: aliceHero, x: 5, y: 5, size: 1, ...over });
+
+  it("sees only its own squares without a cone", () => {
+    expect([...tokenSight({ id: "m", kind: "monster", label: "Ogre", x: 3, y: 3, size: 2 }, 10, 10)]).toEqual(["3,3", "3,4", "4,3", "4,4"]);
+    expect([...tokenSight(hero({ vision: { range: 0, angle: 360 } }), 10, 10)]).toEqual(["5,5"]);
+  });
+
+  it("includes squares right on the edge of its range and of its cone", () => {
+    const sight = tokenSight(hero({ vision: { range: 3, angle: 90 } }), 20, 20);
+    expect(sight.has("4,4") && sight.has("6,4")).toBe(true); // 45° either side of north
+    expect(sight.has("4,5") || sight.has("6,5")).toBe(false); // straight to the sides
+    expect(sight.has("7,3") && sight.has("3,3")).toBe(true);
+    expect(sight.has("8,3") || sight.has("2,3")).toBe(false);
+    expect(tokenSight(hero({ vision: { range: 1, angle: 360 } }), 20, 20).size).toBe(9);
+  });
+
+  it("measures a big token's range from its edge", () => {
+    const sight = tokenSight(hero({ x: 4, y: 4, size: 2, vision: { range: 1, angle: 360 } }), 20, 20);
+    expect(sight.has("6,4") && sight.has("5,3") && sight.has("3,5")).toBe(true);
+    expect(sight.has("3,3") || sight.has("7,5") || sight.has("5,2")).toBe(false);
+    expect(sight.size).toBe(12);
+  });
+
+  it("sees a square when a line reaches any part of it", () => {
+    // A wall stub hides the centre of the square beyond it, but not its far corner.
+    const sight = tokenSight(hero({ x: 0, y: 0, facing: 2, vision: { range: 6, angle: 360 } }), 8, 8, new Set(["v:3,0"]));
+    expect(sight.has("3,0")).toBe(false);
+    expect(sight.has("3,1")).toBe(true);
+  });
+});
+
+describe("moving round walls, edge cases", () => {
+  const open = (cols = 10, rows = 10, walls: MapState["walls"] = []): MapState => ({ cols, rows, tokens: [], walls });
+  const one = (x: number, y: number, size: 1 | 2 = 1) => ({ x, y, size });
+
+  it("stops looking past the limit", () => {
+    expect([...movementSteps(open(), one(5, 5), 0)]).toEqual([["5,5", 0]]);
+    const near = movementSteps(open(), one(5, 5), 1);
+    expect(near.size).toBe(9);
+    expect([...near.values()].every((steps) => steps <= 1)).toBe(true);
+    expect(movementSteps(open(), one(5, 5), 2).size).toBe(25);
+  });
+
+  it("stops as soon as it gets to the target", () => {
+    const steps = movementSteps(open(), one(5, 5), Infinity, { x: 6, y: 5 });
+    expect(steps.get("6,5")).toBe(1);
+    expect(steps.size).toBe(8);
+    expect(movementSteps(open(), one(5, 5), Infinity, { x: 9, y: 9 }).get("9,9")).toBe(4);
+  });
+
+  it("keeps big tokens inside the grid", () => {
+    expect([...movementSteps(open(4, 4), one(0, 0, 2)).keys()].sort()).toEqual(["0,0", "0,1", "0,2", "1,0", "1,1", "1,2", "2,0", "2,1", "2,2"]);
+  });
+
+  it("blocks each straight step through a wall, and the diagonals beside it", () => {
+    const cases: [MapState["walls"], string[]][] = [
+      [[{ x1: 3, y1: 2, x2: 3, y2: 3 }], ["3,1", "3,2", "3,3"]], // east
+      [[{ x1: 2, y1: 2, x2: 2, y2: 3 }], ["1,1", "1,2", "1,3"]], // west
+      [[{ x1: 2, y1: 3, x2: 3, y2: 3 }], ["1,3", "2,3", "3,3"]], // south
+      [[{ x1: 2, y1: 2, x2: 3, y2: 2 }], ["1,1", "2,1", "3,1"]], // north
+    ];
+    for (const [walls, shut] of cases) {
+      const steps = movementSteps(open(6, 6, walls), one(2, 2), 1);
+      expect(shut.map((spot) => steps.has(spot))).toEqual([false, false, false]);
+      expect(steps.size).toBe(6);
+    }
+  });
+
+  it("won't let a diagonal step cut past the end of a wall", () => {
+    const steps = movementSteps(open(6, 6, [{ x1: 0, y1: 2, x2: 2, y2: 2 }]), one(2, 1), 1);
+    expect(steps.has("1,2")).toBe(false);
+    expect(steps.has("3,2") && steps.has("2,2") && steps.has("1,1")).toBe(true);
+  });
+
+  it("checks every square of a big token, not the ones it already covers", () => {
+    expect([...movementSteps(open(6, 6, [{ x1: 2, y1: 0, x2: 2, y2: 6 }]), one(0, 0, 2)).keys()]).toEqual(["0,0", "0,1", "0,2", "0,3", "0,4"]);
+    const stub = movementSteps(open(6, 6, [{ x1: 3, y1: 0, x2: 3, y2: 1 }]), one(1, 1, 2), 1);
+    expect(stub.has("2,1") && stub.has("1,0")).toBe(true);
+    expect(stub.has("2,0")).toBe(false);
+  });
+});
+
+describe("finding a free spot, edge cases", () => {
+  const rat = (id: string, x: number, y: number, size: 1 | 2 | 3 | 4 = 1): MapToken => ({ id, kind: "monster", label: "Rat", x, y, size });
+
+  it("skips spots a token would overlap, scanning column by column", () => {
+    const state: MapState = { cols: 4, rows: 4, tokens: [rat("a", 0, 0), rat("b", 0, 2)] };
+    expect(findFreeSpot(state, 1, "left")).toEqual({ x: 0, y: 1 });
+    expect(findFreeSpot(state, 2, "left")).toEqual({ x: 1, y: 0 });
+    const right: MapState = { ...state, tokens: [rat("a", 3, 0), rat("b", 2, 1)] };
+    expect(findFreeSpot(right, 1, "right")).toEqual({ x: 3, y: 1 });
+    expect(findFreeSpot(right, 2, "right")).toEqual({ x: 2, y: 2 });
+  });
+
+  it("falls back to the first column on its side when the map is full", () => {
+    const full: MapState = { cols: 4, rows: 4, tokens: [rat("worm", 0, 0, 4)] };
+    expect(findFreeSpot(full, 1, "left")).toEqual({ x: 0, y: 0 });
+    expect(findFreeSpot(full, 2, "right")).toEqual({ x: 2, y: 0 });
+    expect(findFreeSpot({ cols: 2, rows: 2, tokens: [] }, 3, "right")).toEqual({ x: 0, y: 0 });
   });
 });
