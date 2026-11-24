@@ -2,7 +2,8 @@
  * Homebrew monsters: input validation, XP by challenge rating and access rules.
  * Pure (no database), so route handlers and tests share the same rules.
  */
-import { inferMonsterRoles, type MonsterAction, type MonsterRole, type MonsterStatBlock } from "./monster-api.js";
+import type { MonsterAction, MonsterRole, MonsterStatBlock } from "./monster-api.js";
+import { inferMonsterRoles, proficiencyBonusFor } from "./monster-roles.js";
 import type { AppUser } from "./permissions.js";
 
 export const homebrewVisibilities = ["private", "campaign", "instance"] as const;
@@ -24,8 +25,7 @@ const XP_BY_CR: Record<string, number> = {
 };
 export const challengeRatings = Object.keys(XP_BY_CR).map(Number);
 export const xpForChallengeRating = (cr: number): number | null => XP_BY_CR[String(cr)] ?? null;
-/** Proficiency bonus by challenge rating: +2 up to CR 4, then +1 every four ratings. */
-export const proficiencyBonusFor = (cr: number): number => (cr < 5 ? 2 : Math.floor((cr - 1) / 4) + 2);
+export { proficiencyBonusFor };
 
 export interface HomebrewInput {
   visibility: HomebrewVisibility;

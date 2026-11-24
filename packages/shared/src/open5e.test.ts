@@ -75,7 +75,16 @@ describe("Open5e stat blocks", () => {
     expect(block.actions?.[1]).toMatchObject({ attack_bonus: 14, damage: [{ damage_dice: "1d10+8", damage_type: { name: "Slashing" } }] });
     expect(block.legendary_actions?.map((action) => action.name)).toEqual(["Pounce", "Tail Swipe (Costs 2 Actions)"]);
     expect(block.special_abilities?.[0].name).toBe("Legendary Resistance (4/Day, or 5/Day in Lair)");
-    expect(inferMonsterRoles(block)).toContain("damage");
+  });
+
+  it("gives the roles the catalog gives: a Huge melee brute with the median HP for CR 17 that flies 80 ft., never damage", () => {
+    expect(inferMonsterRoles(block)).toEqual(["frontline", "scouting"]);
+  });
+
+  it("maps the senses and skills the scouting rule reads", () => {
+    const burrower = toStatBlock({ ...dragon, tremorsense_range: 60, truesight_range: 30, skill_bonuses: { stealth: 9, sleight_of_hand: 4 } });
+    expect(burrower.senses).toMatchObject({ tremorsense: "60 ft.", truesight: "30 ft." });
+    expect(burrower.proficiencies).toContainEqual({ proficiency: { name: "Skill: Sleight Of Hand" }, value: 4 });
   });
 
   it("marks hovering fliers and makes illustration URLs absolute", () => {

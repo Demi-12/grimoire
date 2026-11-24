@@ -1,8 +1,16 @@
-/** The personal creature catalog of an account: what its encounter builder offers next to the bestiary. */
+/**
+ * The personal creature catalog of an account: what its encounter builder offers next to the bestiary.
+ * Role tags of creatures taken from the bestiary or homebrew are worked out again on every read from their
+ * stat block (currentRoleTags in @grimoire/shared/monster-roles); the stored ones are never rewritten.
+ */
 import { Injectable } from "@nestjs/common";
+import { isHomebrewId, parseHomebrewSlug } from "@grimoire/shared/homebrew";
+import { currentRoleTags, inferMonsterRoles } from "@grimoire/shared/monster-roles";
 import { MAX_CREATURES_PER_USER, type AppUser, type CreatureInput } from "@grimoire/shared/permissions";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, transaction, type Queryable } from "../database/db.js";
+import { HomebrewService } from "../homebrew/homebrew.service.js";
+import { MonstersService } from "../monsters/monsters.service.js";
 
 export interface CreatureView {
   id: string; name: string; xp: number; source: string;
@@ -21,11 +29,27 @@ const toCreatureView = (row: CreatureRow): CreatureView => ({
 
 const creatureColumns = '"id", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags"';
 
+
 @Injectable()
 export class CreaturesService {
+  constructor(private readonly homebrew: HomebrewService, private readonly monsters: MonstersService) {}
+
+  /** The rows with the role tags of today's rules: homebrew from the stat blocks the user may see, the rest from the catalog in memory. */
+  private async withCurrentRoles(user: AppUser, rows: CreatureRow[]): Promise<CreatureView[]> {
+    const homebrewIds = rows.map((row) => (row.monsterSlug ? parseHomebrewSlug(row.monsterSlug) : null));
+    const statBlocks = await this.homebrew.visibleStatBlocks(user, [...new Set(homebrewIds.filter(isHomebrewId))]);
+    const fresh = (row: CreatureRow, homebrewId: string | null) => {
+      if (!row.monsterSlug) return undefined;
+      if (homebrewId === null) return this.monsters.catalogRoles(row.monsterSlug);
+      const statBlock = statBlocks.get(homebrewId);
+      return statBlock && inferMonsterRoles(statBlock);
+    };
+    return rows.map((row, index) => toCreatureView({ ...row, roleTags: currentRoleTags(row, fresh(row, homebrewIds[index])) }));
+  }
+
   async listCreatures(user: AppUser): Promise<CreatureView[]> {
     const result = await pool.query<CreatureRow>(`SELECT ${creatureColumns} FROM "creature" WHERE "ownerId" = $1 ORDER BY "createdAt" DESC`, [user.id]);
-    return result.rows.map(toCreatureView);
+    return this.withCurrentRoles(user, result.rows);
   }
 
   /** Adds a creature; re-adding the same SRD monster returns the existing row. */
@@ -42,7 +66,7 @@ export class CreaturesService {
          RETURNING ${creatureColumns}`,
         [user.id, input.name, input.xp, input.source, input.monsterSlug, input.cr, input.type, JSON.stringify(input.roleTags)],
       );
-      return { ok: true, value: toCreatureView(result.rows[0]) };
+      return { ok: true, value: (await this.withCurrentRoles(user, result.rows))[0] };
     };
     return db ? run(db) : transaction(run);
   }

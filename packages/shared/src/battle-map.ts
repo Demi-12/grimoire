@@ -154,6 +154,8 @@ export interface MapActor {
 export const emptyMapState = (): MapState => ({ cols: MAP_DEFAULT_COLS, rows: MAP_DEFAULT_ROWS, tokens: [] });
 
 const isInt = (value: unknown, min: number, max: number): value is number => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+/** Any object (arrays too), to read its fields one by one. */
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object";
 const isSize = (value: unknown): value is TokenSize => isInt(value, 1, 4);
 const tokenIdPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const isTokenId = (value: unknown): value is string => typeof value === "string" && tokenIdPattern.test(value);
@@ -395,63 +397,120 @@ export function parseMapOps(body: unknown): MapOp[] | null {
 
 /** Read a stored state defensively: drop anything malformed instead of failing the whole map. */
 export function normalizeMapState(raw: unknown): MapState {
-  const fallback = emptyMapState();
-  if (!raw || typeof raw !== "object") return fallback;
-  const value = raw as Record<string, unknown>;
-  const cols = isInt(value.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value.cols : fallback.cols;
-  const rows = isInt(value.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value.rows : fallback.rows;
-  const tokens: MapToken[] = [];
-  for (const item of Array.isArray(value.tokens) ? value.tokens : []) {
-    if (!item || typeof item !== "object") continue;
-    const token = item as Record<string, unknown>;
-    const name = label(token.label);
-    if (!isTokenId(token.id) || (token.kind !== "hero" && token.kind !== "monster") || !name || !isSize(token.size)) continue;
-    if (!isInt(token.x, 0, MAP_MAX_SIZE - 1) || !isInt(token.y, 0, MAP_MAX_SIZE - 1)) continue;
-    if (token.kind === "hero" && (typeof token.characterId !== "string" || !uuidPattern.test(token.characterId))) continue;
-    const vision = parseVision(token.vision);
-    tokens.push(clampToken({
-      id: token.id, kind: token.kind, label: name, x: token.x, y: token.y, size: token.size,
-      ...(token.kind === "hero" ? { characterId: token.characterId as string } : {}),
-      ...(typeof token.monsterSlug === "string" ? { monsterSlug: token.monsterSlug } : {}),
-      ...(token.hidden === true ? { hidden: true } : {}),
-      ...(token.defeated === true ? { defeated: true } : {}),
-      ...(isFacing(token.facing) && token.facing !== 0 ? { facing: token.facing } : {}),
-      ...(vision ? { vision } : {}),
-    }, cols, rows));
-  }
-  const background = value.background && typeof value.background === "object" ? (value.background as Record<string, unknown>).key : undefined;
-  const walls = (Array.isArray(value.walls) ? value.walls : []).map(parseWall)
-    .map((wall) => wall && clipWall(wall, cols, rows)).filter((wall): wall is MapWall => wall !== null).slice(0, MAP_MAX_WALLS);
-  const explored = typeof value.explored === "string" && value.explored.length === Math.ceil(cols * rows / 4) && /^[0-9a-f]*$/.test(value.explored) ? value.explored : null;
-  const kept = tokens.slice(0, MAP_MAX_TOKENS);
-  const combat = normalizeCombat(value.combat, new Set(kept.map((token) => token.id)));
+  if (!isRecord(raw)) return emptyMapState();
+  const cols = storedGridSize(raw.cols, MAP_DEFAULT_COLS);
+  const rows = storedGridSize(raw.rows, MAP_DEFAULT_ROWS);
+  const tokens = storedTokens(raw.tokens, cols, rows);
+  const combat = normalizeCombat(raw.combat, new Set(tokens.map((token) => token.id)));
+  const walls = storedWalls(raw.walls, cols, rows);
+  const explored = storedExplored(raw.explored, cols, rows);
+  const background = storedBackground(raw.background);
   return {
-    cols, rows, tokens: kept,
+    cols, rows, tokens,
     ...(combat ? { combat } : {}),
     ...(walls.length ? { walls } : {}),
     ...(explored ? { explored } : {}),
-    ...(typeof background === "string" && backgroundKeyPattern.test(background) ? { background: { key: background } } : {}),
-    ...(value.fog === true ? { fog: true } : {}),
-    ...(value.gridHidden === true ? { gridHidden: true } : {}),
+    ...(background ? { background } : {}),
+    ...(raw.fog === true ? { fog: true } : {}),
+    ...(raw.gridHidden === true ? { gridHidden: true } : {}),
   };
+}
+
+/** Columns or rows of a stored grid: a whole number within the limits, else the default. */
+function storedGridSize(value: unknown, fallback: number): number {
+  return isInt(value, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value : fallback;
+}
+
+/** The stored tokens that are well formed, pulled inside the grid, up to MAP_MAX_TOKENS. */
+function storedTokens(value: unknown, cols: number, rows: number): MapToken[] {
+  const tokens: MapToken[] = [];
+  for (const item of Array.isArray(value) ? value : []) {
+    const token = storedToken(item);
+    if (token) tokens.push(clampToken(token, cols, rows));
+  }
+  return tokens.slice(0, MAP_MAX_TOKENS);
+}
+
+/** One stored token, or null when a field every token needs is wrong or a hero has no character. */
+function storedToken(item: unknown): MapToken | null {
+  if (!isRecord(item)) return null;
+  const core = storedTokenCore(item);
+  const link = core && storedCharacterLink(core.kind, item.characterId);
+  return core && link ? { ...core, ...link, ...storedTokenExtras(item) } : null;
+}
+
+/** The fields every token needs (id, kind, label, square and size); null when one is missing or wrong. */
+function storedTokenCore(item: Record<string, unknown>): Pick<MapToken, "id" | "kind" | "label" | "x" | "y" | "size"> | null {
+  const { id, kind, x, y, size } = item;
+  const name = label(item.label);
+  if (!isTokenId(id) || !isTokenKind(kind) || !name || !isSize(size)) return null;
+  return isSquare(x) && isSquare(y) ? { id, kind, label: name, x, y, size } : null;
+}
+
+const isTokenKind = (value: unknown): value is TokenKind => value === "hero" || value === "monster";
+
+/** A hero's link to its character (null when it has none that is valid); monsters have no link. */
+function storedCharacterLink(kind: TokenKind, characterId: unknown): Pick<MapToken, "characterId"> | null {
+  if (kind !== "hero") return {};
+  return isUuid(characterId) ? { characterId } : null;
+}
+
+/** A stored token's optional fields, each kept only with a valid value; facing north and false flags are left out. */
+function storedTokenExtras(item: Record<string, unknown>): Pick<MapToken, "monsterSlug" | "hidden" | "defeated" | "facing" | "vision"> {
+  const vision = parseVision(item.vision);
+  return {
+    ...(typeof item.monsterSlug === "string" ? { monsterSlug: item.monsterSlug } : {}),
+    ...(item.hidden === true ? { hidden: true } : {}),
+    ...(item.defeated === true ? { defeated: true } : {}),
+    ...(isFacing(item.facing) && item.facing !== 0 ? { facing: item.facing } : {}),
+    ...(vision ? { vision } : {}),
+  };
+}
+
+/** The stored walls that are well formed, cut to the grid (those left outside dropped), up to MAP_MAX_WALLS. */
+function storedWalls(value: unknown, cols: number, rows: number): MapWall[] {
+  return (Array.isArray(value) ? value : []).map(parseWall)
+    .map((wall) => wall && clipWall(wall, cols, rows)).filter((wall): wall is MapWall => wall !== null).slice(0, MAP_MAX_WALLS);
+}
+
+/** The explored bitmap when it is lowercase hex exactly as long as the grid needs; null otherwise. */
+function storedExplored(value: unknown, cols: number, rows: number): string | null {
+  return typeof value === "string" && value.length === Math.ceil(cols * rows / 4) && /^[0-9a-f]*$/.test(value) ? value : null;
+}
+
+/** The background picture when its key is well formed; null otherwise. */
+function storedBackground(value: unknown): MapBackground | null {
+  const key = isRecord(value) ? value.key : undefined;
+  return typeof key === "string" && backgroundKeyPattern.test(key) ? { key } : null;
 }
 
 /** A stored fight: only creatures still on the map, each once, in initiative order. */
 function normalizeCombat(raw: unknown, tokenIds: Set<string>): MapCombat | null {
-  if (!raw || typeof raw !== "object") return null;
-  const value = raw as Record<string, unknown>;
-  const order: Combatant[] = [];
-  for (const item of Array.isArray(value.order) ? value.order : []) {
-    const entry = parseCombatEntry(item);
-    if (!entry || !tokenIds.has(entry.tokenId) || order.some((other) => other.tokenId === entry.tokenId)) continue;
-    const { moved, dash } = item as Record<string, unknown>;
-    order.push({ ...entry, ...(isInt(moved, 1, COMBAT_MAX_MOVED) ? { moved } : {}), ...(dash === true ? { dash: true } : {}) });
-  }
+  if (!isRecord(raw)) return null;
+  const order = storedOrder(raw.order, tokenIds);
   return {
-    round: isInt(value.round, 1, COMBAT_MAX_ROUND) ? value.round : 1,
+    round: isInt(raw.round, 1, COMBAT_MAX_ROUND) ? raw.round : 1,
     order: sortOrder(order),
-    ...(typeof value.active === "string" && order.some((entry) => entry.tokenId === value.active) ? { active: value.active } : {}),
+    ...(typeof raw.active === "string" && order.some((entry) => entry.tokenId === raw.active) ? { active: raw.active } : {}),
   };
+}
+
+/** The stored initiative order as it was stored: valid entries for creatures on the map, the first one of each. */
+function storedOrder(value: unknown, tokenIds: Set<string>): Combatant[] {
+  const order: Combatant[] = [];
+  for (const item of Array.isArray(value) ? value : []) {
+    const entry = storedCombatant(item);
+    if (entry && tokenIds.has(entry.tokenId) && !order.some((other) => other.tokenId === entry.tokenId)) order.push(entry);
+  }
+  return order;
+}
+
+/** One stored combatant with the movement it has used (if any) and its Dash; null when its entry is malformed. */
+function storedCombatant(item: unknown): Combatant | null {
+  const entry = parseCombatEntry(item);
+  if (!entry) return null;
+  const { moved, dash } = item as Record<string, unknown>;
+  return { ...entry, ...(isInt(moved, 1, COMBAT_MAX_MOVED) ? { moved } : {}), ...(dash === true ? { dash: true } : {}) };
 }
 
 /** Highest initiative first; ties keep the order they had. */
@@ -510,28 +569,38 @@ export function blockingEdges(walls: MapWall[] | undefined): Set<string> {
 /** Is the straight line between two points (in squares) free of blocking edges? Walks the squares it crosses. */
 export function lineIsClear(x0: number, y0: number, x1: number, y1: number, blocked: Set<string>): boolean {
   if (!blocked.size) return true;
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  let cellX = Math.floor(x0);
-  let cellY = Math.floor(y0);
-  const stepX = Math.sign(dx);
-  const stepY = Math.sign(dy);
-  const deltaX = dx ? Math.abs(1 / dx) : Infinity;
-  const deltaY = dy ? Math.abs(1 / dy) : Infinity;
-  let maxX = dx ? ((stepX > 0 ? cellX + 1 : cellX) - x0) / dx : Infinity;
-  let maxY = dy ? ((stepY > 0 ? cellY + 1 : cellY) - y0) / dy : Infinity;
-  while (Math.min(maxX, maxY) <= 1) {
-    if (maxX < maxY) {
-      if (blocked.has(`v:${stepX > 0 ? cellX + 1 : cellX},${cellY}`)) return false;
-      cellX += stepX;
-      maxX += deltaX;
-    } else {
-      if (blocked.has(`h:${cellX},${stepY > 0 ? cellY + 1 : cellY}`)) return false;
-      cellY += stepY;
-      maxY += deltaY;
-    }
+  const across = axisWalk(x0, x1 - x0);
+  const down = axisWalk(y0, y1 - y0);
+  while (Math.min(across.next, down.next) <= 1) {
+    const vertical = across.next < down.next;
+    if (blocked.has(vertical ? `v:${lineAhead(across)},${down.cell}` : `h:${across.cell},${lineAhead(down)}`)) return false;
+    advance(vertical ? across : down);
   }
   return true;
+}
+
+/**
+ * One axis of a walk along a line, square by square: the square it is in, which way it steps, and how far along
+ * the line (0 at the start, 1 at the end) it crosses the next grid line and each one after that.
+ */
+interface AxisWalk { cell: number; step: number; next: number; delta: number }
+
+function axisWalk(from: number, distance: number): AxisWalk {
+  const cell = Math.floor(from);
+  if (!distance) return { cell, step: 0, next: Infinity, delta: Infinity };
+  const step = Math.sign(distance);
+  return { cell, step, next: ((step > 0 ? cell + 1 : cell) - from) / distance, delta: Math.abs(1 / distance) };
+}
+
+/** The grid line (column or row number) the walk crosses next. */
+function lineAhead(walk: AxisWalk): number {
+  return walk.step > 0 ? walk.cell + 1 : walk.cell;
+}
+
+/** Cross that line: into the next square, and on to the line after. */
+function advance(walk: AxisWalk): void {
+  walk.cell += walk.step;
+  walk.next += walk.delta;
 }
 
 /** Where sight lines end inside a square: its centre and four points near its corners, so a square seen only in part counts. */
@@ -543,29 +612,53 @@ const SIGHT_SAMPLES: [number, number][] = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15
  * Range is counted from the token's edge (a Medium hero with 12 squares sees 60 ft around it).
  */
 export function tokenSight(token: MapToken, cols: number, rows: number, blocked: Set<string> = new Set()): Set<string> {
-  const cells = new Set<string>();
-  for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.add(`${token.x + dx},${token.y + dy}`);
+  const cells = new Set(coveredSquares(token));
   const vision = tokenVision(token);
   if (!vision) return cells;
-  const cx = token.x + token.size / 2;
-  const cy = token.y + token.size / 2;
-  const reach = vision.range + token.size / 2;
-  const facing = facingScreenAngle(token.facing);
-  const eps = 1e-9;
-  // Nudged off the exact centre so sight lines never run through a grid corner exactly.
-  const ox = cx + 1.3e-4;
-  const oy = cy + 0.7e-4;
-  for (let x = Math.max(0, Math.floor(cx - reach)); x <= Math.min(cols - 1, Math.ceil(cx + reach)); x++) {
-    for (let y = Math.max(0, Math.floor(cy - reach)); y <= Math.min(rows - 1, Math.ceil(cy + reach)); y++) {
-      const px = x + 0.5 - cx;
-      const py = y + 0.5 - cy;
-      if (Math.hypot(px, py) > reach + eps) continue;
-      if (vision.angle < 360 && angleGap(Math.atan2(py, px) * 180 / Math.PI, facing) > vision.angle / 2 + eps) continue;
-      if (blocked.size && !SIGHT_SAMPLES.some(([sx, sy]) => lineIsClear(ox, oy, x + sx, y + sy, blocked))) continue;
-      cells.add(`${x},${y}`);
-    }
+  const cone = sightCone(token, vision);
+  const [left, right] = reachSpan(cone.cx, cone.reach, cols);
+  const [top, bottom] = reachSpan(cone.cy, cone.reach, rows);
+  for (let x = left; x <= right; x++) for (let y = top; y <= bottom; y++) {
+    if (inCone(cone, x, y) && hasLineOfSight(cone, x, y, blocked)) cells.add(`${x},${y}`);
   }
   return cells;
+}
+
+/** A token's cone in squares: its centre, how far it reaches from there (range plus half the token) and which way it looks. */
+interface SightCone { cx: number; cy: number; reach: number; facing: number; angle: number }
+
+function sightCone(token: MapToken, vision: TokenVision): SightCone {
+  return {
+    cx: token.x + token.size / 2, cy: token.y + token.size / 2,
+    reach: vision.range + token.size / 2, facing: facingScreenAngle(token.facing), angle: vision.angle,
+  };
+}
+
+/** Slack for squares whose centre lies right on the edge of a cone. */
+const SIGHT_EPSILON = 1e-9;
+
+/** First and last column (or row) within `reach` of `centre`, inside a grid `length` squares long. */
+function reachSpan(centre: number, reach: number, length: number): [number, number] {
+  return [Math.max(0, Math.floor(centre - reach)), Math.min(length - 1, Math.ceil(centre + reach))];
+}
+
+/** Does the centre of square (x, y) fall inside the cone, both in range and in angle? */
+function inCone(cone: SightCone, x: number, y: number): boolean {
+  const px = x + 0.5 - cone.cx;
+  const py = y + 0.5 - cone.cy;
+  if (Math.hypot(px, py) > cone.reach + SIGHT_EPSILON) return false;
+  return !(cone.angle < 360 && angleGap(Math.atan2(py, px) * 180 / Math.PI, cone.facing) > cone.angle / 2 + SIGHT_EPSILON);
+}
+
+/**
+ * Does a straight line from the cone's centre reach some part of square (x, y) without crossing a blocking edge?
+ * The lines start nudged off the exact centre so they never run through a grid corner exactly.
+ */
+function hasLineOfSight(cone: SightCone, x: number, y: number, blocked: Set<string>): boolean {
+  if (!blocked.size) return true;
+  const ox = cone.cx + 1.3e-4;
+  const oy = cone.cy + 0.7e-4;
+  return SIGHT_SAMPLES.some(([sx, sy]) => lineIsClear(ox, oy, x + sx, y + sy, blocked));
 }
 
 /** Squares the party sees together: the union of every hero's sight. */
@@ -608,9 +701,7 @@ function encodeExplored(cols: number, rows: number, cells: Set<string>): string 
 /** Add what the party sees now to what it has explored (only while the fog is on). */
 function remember(state: MapState): MapState {
   if (!state.fog) return state;
-  const cells = exploredCells(state);
-  for (const cell of partySight(state)) cells.add(cell);
-  return { ...state, explored: encodeExplored(state.cols, state.rows, cells) };
+  return { ...state, explored: encodeExplored(state.cols, state.rows, seenCells(state, partySight(state))) };
 }
 
 /** Squares on either side of a unit edge. */
@@ -650,10 +741,15 @@ function knownWalls(walls: MapWall[], seen: Set<string>): MapWall[] {
   return known;
 }
 
-const tokenCells = (token: MapToken) => Array.from({ length: token.size * token.size }, (_, i) => `${token.x + (i % token.size)},${token.y + Math.floor(i / token.size)}`);
+/** The squares ("x,y") a token covers, column by column. */
+function coveredSquares(token: Pick<MapToken, "x" | "y" | "size">): string[] {
+  const cells: string[] = [];
+  for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.push(`${token.x + dx},${token.y + dy}`);
+  return cells;
+}
 
 /** Is any square of this token in sight? */
-export const tokenInSight = (token: MapToken, sight: Set<string>) => tokenCells(token).some((cell) => sight.has(cell));
+export const tokenInSight = (token: MapToken, sight: Set<string>) => coveredSquares(token).some((cell) => sight.has(cell));
 
 /**
  * What a viewer may see: players (and the table display) never receive hidden monsters, and with fog of war
@@ -662,23 +758,49 @@ export const tokenInSight = (token: MapToken, sight: Set<string>) => tokenCells(
 export function visibleMapState(state: MapState, showHidden: boolean): MapState {
   if (showHidden) return state;
   const sight = state.fog ? partySight(state) : null;
-  const visible: MapState = { ...state, tokens: state.tokens.filter((token) => !token.hidden && (!sight || token.kind !== "monster" || tokenInSight(token, sight))) };
-  if (sight && state.walls) {
-    const seen = exploredCells(state);
-    for (const cell of sight) seen.add(cell);
-    const walls = knownWalls(state.walls, seen);
+  const visible: MapState = { ...state, tokens: state.tokens.filter((token) => isSentToPlayers(token, sight)) };
+  if (sight) showOnlySeen(visible, state, sight);
+  if (state.combat) visible.combat = playersCombat(state.combat, visible.tokens);
+  return visible;
+}
+
+/** Do players receive this token? Never while hidden; with fog of war (`sight` given), a monster only while the party sees it. */
+function isSentToPlayers(token: MapToken, sight: Set<string> | null): boolean {
+  return !token.hidden && (!sight || token.kind !== "monster" || tokenInSight(token, sight));
+}
+
+/**
+ * Fog of war in the players' copy: only the walls next to squares the party sees or has explored (no walls at all
+ * when it knows none), and the party's sight worked out with every wall.
+ */
+function showOnlySeen(visible: MapState, state: MapState, sight: Set<string>): void {
+  if (state.walls) {
+    const walls = knownWalls(state.walls, seenCells(state, sight));
     if (walls.length) visible.walls = walls; else delete visible.walls;
   }
-  if (sight) visible.sight = encodeExplored(state.cols, state.rows, sight);
-  if (state.combat) {
-    // Only the creatures they can see, and no monster speeds: those come from the DM's stat blocks.
-    const shown = new Map(visible.tokens.map((token) => [token.id, token]));
-    const order = state.combat.order.filter((entry) => shown.has(entry.tokenId))
-      .map((entry) => shown.get(entry.tokenId)!.kind === "monster" ? { tokenId: entry.tokenId, initiative: entry.initiative } : entry);
-    const active = state.combat.active && shown.has(state.combat.active) ? state.combat.active : undefined;
-    visible.combat = { round: state.combat.round, order, ...(active ? { active } : {}) };
-  }
-  return visible;
+  visible.sight = encodeExplored(state.cols, state.rows, sight);
+}
+
+/** Squares the party has explored plus those it sees now. */
+function seenCells(state: MapState, sight: Iterable<string>): Set<string> {
+  const seen = exploredCells(state);
+  for (const cell of sight) seen.add(cell);
+  return seen;
+}
+
+/**
+ * The fight in the players' copy: only the creatures they receive, no monster speeds or movement (those come from
+ * the DM's stat blocks), and whose turn it is only while they can see that creature.
+ */
+function playersCombat(combat: MapCombat, sent: MapToken[]): MapCombat {
+  const shown = new Map(sent.map((token) => [token.id, token]));
+  const order = combat.order.flatMap((entry) => {
+    const token = shown.get(entry.tokenId);
+    if (!token) return [];
+    return [token.kind === "monster" ? { tokenId: entry.tokenId, initiative: entry.initiative } : entry];
+  });
+  const active = combat.active && shown.has(combat.active) ? combat.active : undefined;
+  return { round: combat.round, order, ...(active ? { active } : {}) };
 }
 
 /** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
@@ -719,20 +841,34 @@ export function viewMap(stored: StoredMap | undefined, heroes: MapHero[], viewer
 /** May a token take one step of (dx, dy) squares? Diagonal steps can't slip past the end or the corner of a wall. */
 function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: number, blocked: Set<string>): boolean {
   for (let i = 0; i < token.size; i++) for (let j = 0; j < token.size; j++) {
-    const cx = token.x + i;
-    const cy = token.y + j;
-    const inside = (x: number, y: number) => x >= token.x && x < token.x + token.size && y >= token.y && y < token.y + token.size;
-    if (inside(cx + dx, cy + dy)) continue;
-    if (dx && dy) {
-      const X = cx + (dx > 0 ? 1 : 0);
-      const Y = cy + (dy > 0 ? 1 : 0);
-      if ([`h:${X - 1},${Y}`, `h:${X},${Y}`, `v:${X},${Y - 1}`, `v:${X},${Y}`].some((edge) => blocked.has(edge))) return false;
-    } else if (dx) {
-      if (blocked.has(`v:${dx > 0 ? cx + 1 : cx},${cy}`)) return false;
-    } else if (blocked.has(`h:${cx},${dy > 0 ? cy + 1 : cy}`)) return false;
+    const x = token.x + i;
+    const y = token.y + j;
+    if (covers(token, x + dx, y + dy)) continue;
+    if (stepEdges(x, y, dx, dy).some((edge) => blocked.has(edge))) return false;
   }
   return true;
 }
+
+/** Is square (x, y) one of the token's? */
+function covers(token: Pick<MapToken, "x" | "y" | "size">, x: number, y: number): boolean {
+  return x >= token.x && x < token.x + token.size && y >= token.y && y < token.y + token.size;
+}
+
+/**
+ * The unit edges a step of (dx, dy) out of square (x, y) must not cross: the side it goes through, or for a diagonal
+ * all four edges that meet at the corner it slips past.
+ */
+function stepEdges(x: number, y: number, dx: number, dy: number): string[] {
+  if (dx && dy) {
+    const X = x + (dx > 0 ? 1 : 0);
+    const Y = y + (dy > 0 ? 1 : 0);
+    return [`h:${X - 1},${Y}`, `h:${X},${Y}`, `v:${X},${Y - 1}`, `v:${X},${Y}`];
+  }
+  return dx ? [`v:${dx > 0 ? x + 1 : x},${y}`] : [`h:${x},${dy > 0 ? y + 1 : y}`];
+}
+
+/** The eight steps a token can take, in the order movementSteps tries them. */
+const STEPS: [number, number][] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
 /**
  * Fewest steps the token needs to reach each spot it can get to without crossing a wall or a closed door, keyed
@@ -741,26 +877,41 @@ function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: 
  */
 export function movementSteps(state: MapState, token: Pick<MapToken, "x" | "y" | "size">, limit = Infinity, target?: { x: number; y: number }): Map<string, number> {
   const blocked = blockingEdges(state.walls);
-  const maxX = state.cols - token.size;
-  const maxY = state.rows - token.size;
   const steps = new Map([[`${token.x},${token.y}`, 0]]);
-  const queue: [number, number][] = [[token.x, token.y]];
+  const queue: [number, number, number][] = [[token.x, token.y, 0]];
   for (let head = 0; head < queue.length; head++) {
-    const [px, py] = queue[head];
-    const here = steps.get(`${px},${py}`)!;
+    const [px, py, here] = queue[head];
     if (here >= limit) continue;
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      const nx = px + dx;
-      const ny = py + dy;
+    for (const [nx, ny] of nextSpots(state, { x: px, y: py, size: token.size }, blocked)) {
       const key = `${nx},${ny}`;
-      if ((!dx && !dy) || nx < 0 || ny < 0 || nx > maxX || ny > maxY || steps.has(key)) continue;
-      if (!stepIsClear({ x: px, y: py, size: token.size }, dx, dy, blocked)) continue;
+      if (steps.has(key)) continue;
       steps.set(key, here + 1);
-      if (target && nx === target.x && ny === target.y) return steps;
-      queue.push([nx, ny]);
+      if (isSpot(target, nx, ny)) return steps;
+      queue.push([nx, ny, here + 1]);
     }
   }
   return steps;
+}
+
+/** Spots (top-left squares) one step away that keep the token on the grid and cross no blocking edge, in STEPS order. */
+function nextSpots(state: MapState, from: Pick<MapToken, "x" | "y" | "size">, blocked: Set<string>): [number, number][] {
+  const spots: [number, number][] = [];
+  for (const [dx, dy] of STEPS) {
+    const x = from.x + dx;
+    const y = from.y + dy;
+    if (fitsGrid(state, x, y, from.size) && stepIsClear(from, dx, dy, blocked)) spots.push([x, y]);
+  }
+  return spots;
+}
+
+/** Does a token of this size with its top-left square at (x, y) lie wholly on the grid? */
+function fitsGrid(state: MapState, x: number, y: number, size: number): boolean {
+  return x >= 0 && y >= 0 && x <= state.cols - size && y <= state.rows - size;
+}
+
+/** Is (x, y) the spot asked for? Never when none was. */
+function isSpot(spot: { x: number; y: number } | undefined, x: number, y: number): boolean {
+  return !!spot && spot.x === x && spot.y === y;
 }
 
 /** Squares the token walks to get to (x, y) the shortest way round walls; null when no path gets there. */
@@ -838,9 +989,7 @@ export function nearDoor(token: Pick<MapToken, "x" | "y" | "size">, door: Pick<M
 /** Squares covered by tokens, to place new ones without stacking them. */
 function occupied(state: MapState): Set<string> {
   const cells = new Set<string>();
-  for (const token of state.tokens) {
-    for (let dx = 0; dx < token.size; dx++) for (let dy = 0; dy < token.size; dy++) cells.add(`${token.x + dx},${token.y + dy}`);
-  }
+  for (const token of state.tokens) for (const cell of coveredSquares(token)) cells.add(cell);
   return cells;
 }
 

@@ -7,7 +7,7 @@ import {
   canDeleteHomebrew, canEditHomebrew, canModerateHomebrew, canPublishHomebrew,
   type HomebrewInput, type HomebrewSummary, type HomebrewVisibility,
 } from "@grimoire/shared/homebrew";
-import type { MonsterRole, MonsterStatBlock } from "@grimoire/shared/monster-api";
+import { inferMonsterRoles, type MonsterRole, type MonsterStatBlock } from "@grimoire/shared/monster-api";
 import type { AppUser } from "@grimoire/shared/permissions";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, transaction, type Queryable } from "../database/db.js";
@@ -20,13 +20,17 @@ export interface HomebrewView {
 }
 
 type HomebrewRow = {
-  id: string; ownerId: string; ownerName: string; name: string; cr: string; xp: number; type: string; roleTags: MonsterRole[];
+  id: string; ownerId: string; ownerName: string; name: string; cr: string; xp: number; type: string;
   visibility: HomebrewVisibility; locked: boolean; campaignIds: string[]; statBlock: MonsterStatBlock; updatedAt: Date;
 };
 
+/**
+ * Role tags are worked out again from the stored stat block on every read, so a monster saved under older
+ * role rules shows today's tags. The "roleTags" column is still written on save, but never read back.
+ */
 const toHomebrewView = (row: HomebrewRow, viewerId: string): HomebrewView => ({
   id: row.id, ownerId: row.ownerId, ownerName: row.ownerName, mine: row.ownerId === viewerId,
-  name: row.name, cr: Number(row.cr), xp: row.xp, type: row.type, roleTags: row.roleTags,
+  name: row.name, cr: Number(row.cr), xp: row.xp, type: row.type, roleTags: inferMonsterRoles(row.statBlock),
   visibility: row.visibility, locked: row.locked, campaignIds: row.campaignIds,
   statBlock: row.statBlock, updatedAt: row.updatedAt.toISOString(),
 });
@@ -39,7 +43,7 @@ const MAX_HOMEBREW_PER_USER = 200;
  * Other people's private work never matches, so a hidden monster looks exactly like a missing one.
  */
 const homebrewSelect = `
-  SELECT h."id", h."ownerId", u."name" AS "ownerName", h."name", h."cr", h."xp", h."type", h."roleTags",
+  SELECT h."id", h."ownerId", u."name" AS "ownerName", h."name", h."cr", h."xp", h."type",
          h."visibility", h."locked", h."statBlock", h."updatedAt",
          COALESCE(array_agg(hc."campaignId"::text) FILTER (WHERE hc."campaignId" IS NOT NULL), '{}') AS "campaignIds"
     FROM "homebrew_monster" h
@@ -91,6 +95,13 @@ export class HomebrewService {
 
   readHomebrewForUser(user: AppUser, id: string) {
     return readHomebrew(pool, user, id);
+  }
+
+  /** Stat blocks of the given monsters that the viewer may see, by id; hidden or missing ones are left out. */
+  async visibleStatBlocks(user: AppUser, ids: string[]): Promise<Map<string, MonsterStatBlock>> {
+    if (!ids.length) return new Map();
+    const result = await pool.query<HomebrewRow>(`${homebrewSelect} AND h."id" = ANY($3::uuid[])${homebrewGroup}`, [user.id, user.role === "admin", ids]);
+    return new Map(result.rows.map((row) => [row.id, row.statBlock]));
   }
 
   async createHomebrew(user: AppUser, input: HomebrewInput, summary: HomebrewSummary): Promise<DataResult<HomebrewView>> {
