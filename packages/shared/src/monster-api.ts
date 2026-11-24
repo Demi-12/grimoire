@@ -65,32 +65,11 @@ export type MonsterListEntry = { index: string; name: string; cr?: number; type?
 export type SourceSummary = { key: string; name: string; publisher?: string; count: number };
 export type MonsterCatalog = { count: number; sources: SourceSummary[]; results: MonsterListEntry[] };
 
-/** Tactical tags inferred from stat block data; Open5e does not provide these labels. */
+/** Tactical tags; monsters get them from monster-roles.ts (never `damage`), parties from encounter-builder. */
 export type MonsterRole = "frontline" | "damage" | "support" | "control" | "scouting";
 
-export function inferMonsterRoles(monster: MonsterStatBlock): MonsterRole[] {
-  const roles = new Set<MonsterRole>();
-  const actions = [...(monster.special_abilities ?? []), ...(monster.actions ?? []), ...(monster.bonus_actions ?? []), ...(monster.reactions ?? [])];
-  const actionText = actions.map((action) => `${action.name ?? ""} ${textValue(action.desc)}`).join(" ").toLowerCase();
-  const ac = typeof monster.armor_class === "number"
-    ? monster.armor_class
-    : Math.max(0, ...(monster.armor_class ?? []).map((entry) => entry.value ?? 0));
-  const hitPoints = monster.hit_points ?? 0;
-  const crScale = Math.max(1, (monster.challenge_rating ?? 1) * 8);
-  const speedText = Object.entries(monster.speed ?? {}).map(([key, value]) => `${key} ${value ?? ""}`).join(" ").toLowerCase();
-
-  if (ac >= 16 || hitPoints >= crScale * 2.4) roles.add("frontline");
-  if (/spellcasting|innate spell|spell slots|cantrip|spell attack|restrained|stunned|paralyzed|frightened|grappled|blinded|incapacitated/.test(actionText)) roles.add("control");
-  if (/regains?\s+(?:\d+\s+)?hit points|regain hit points|heals?|restores? hit points|ally|allies|friendly creature/.test(actionText)) roles.add("support");
-  if (/multiattack|attack roll|melee weapon attack|ranged weapon attack|damage|breath weapon/.test(actionText)) roles.add("damage");
-  if (/fly|teleport|disengage|bonus action|nimble|pounce|move up to/.test(`${actionText} ${speedText}`)
-    || /(?:fly|climb|swim)\s+(?:40|50|60|70|80|90|100)\s*ft/.test(speedText)) roles.add("scouting");
-  return [...roles];
-}
-
-function textValue(value?: string | string[]) {
-  return Array.isArray(value) ? value.join(" ") : value ?? "";
-}
+/** Role rules live in monster-roles.ts; re-exported so the bestiary and the API keep one import. */
+export { inferMonsterRoles } from "./monster-roles.js";
 
 export class MonsterApiError extends Error {
   constructor(message: string, public readonly status?: number) {

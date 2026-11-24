@@ -42,7 +42,8 @@ describe("parseHomebrewInput", () => {
     expect(result.value.statBlock.xp).toBe(700);
     expect(result.value.statBlock.proficiency_bonus).toBe(2);
     expect(result.summary).toMatchObject({ name: "Ash Drake", cr: 3, xp: 700, type: "dragon" });
-    expect(result.summary.roleTags).toContain("damage");
+    // A CR 3 drake with 52 HP and a 60 ft. fly speed: a scout, not a frontliner; never "damage".
+    expect(result.summary.roleTags).toEqual(["scouting"]);
   });
 
   it("ignores client-supplied XP and proficiency bonus", () => {
