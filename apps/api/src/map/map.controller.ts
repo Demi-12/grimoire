@@ -5,7 +5,7 @@
  */
 import { Controller, Delete, Get, HttpCode, Param, Post, Put, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { parseMapOps, sniffImageType } from "@grimoire/shared/battle-map";
+import { MAP_SAVE_NAME_MAX, parseMapOps, sniffImageType } from "@grimoire/shared/battle-map";
 import type { AppUser } from "@grimoire/shared/permissions";
 import { ApiError, unwrap } from "../common/api-error.js";
 import { Approved, CurrentUser } from "../common/auth.guard.js";
@@ -16,7 +16,7 @@ import { MAP_LIMIT, MAP_STREAM_LIMIT, WRITE_LIMIT } from "../common/rate-limit.j
 import { MAX_IMAGE_BYTES, readBytesLimited } from "../common/request-body.js";
 import { subscribeToMap } from "./battle-map-hub.js";
 import { openMapStream } from "./map-stream.js";
-import { MAP_SAVE_NAME_MAX, MapService, type MapAudience } from "./map.service.js";
+import { MapService, type MapAudience } from "./map.service.js";
 
 /** The audience a map request asks for: `?audience=players`, otherwise "auto". */
 const audienceOf = (request: AppRequest): MapAudience => queryText(request, "audience") === "players" ? "players" : "auto";

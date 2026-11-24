@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapOps, blockingEdges, canReach, columnName, currentSight, exploredCells, lineIsClear, nearDoor, parseWall, emptyMapState, findFreeSpot, normalizeMapState, parseMapOp, parseMapOps, partySight, rowsForImage, sniffImageType,
-  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor,
+  squareName, syncHeroes, tokenSight, tokenVision, visibleMapState, combatantOf, pathLength, isMonsterSlug, tokenSizeFor, viewMap, requireDm, mapFromSave, mapStateToSave, mapSavesFull, MAP_MAX_SAVES,
   type MapHero, type MapOp, type MapState, type MapToken,
 } from "./battle-map.js";
 
@@ -162,6 +162,92 @@ describe("what each viewer sees", () => {
     expect(state.cols).toBe(8);
     expect(state.rows).toBe(14);
     expect(state.tokens).toEqual([{ id: "ok", kind: "monster", label: "Rat", x: 7, y: 2, size: 1 }]);
+  });
+});
+
+describe("the map as one viewer receives it", () => {
+  const stored = () => ({ state: JSON.parse(JSON.stringify(withParty())), version: 7, updatedAt: new Date("2026-11-20T18:30:00.000Z") });
+
+  it("shows a DM everything, unless they asked for the players' view", () => {
+    const view = viewMap(stored(), heroes, { ...dm, audience: "auto" });
+    expect(view).toMatchObject({ version: 7, isDm: true, showsHidden: true, updatedAt: "2026-11-20T18:30:00.000Z" });
+    expect(view.state.tokens).toHaveLength(5);
+    const table = viewMap(stored(), heroes, { ...dm, audience: "players" });
+    expect(table).toMatchObject({ isDm: true, showsHidden: false });
+    expect(table.state.tokens.map((token) => token.label)).toEqual(["Lia", "Brom", "Goblin 1", "Goblin 2"]);
+  });
+
+  it("never shows a player hidden monsters, whatever they ask for", () => {
+    const view = viewMap(stored(), heroes, { ...alice, audience: "auto" });
+    expect(view).toMatchObject({ isDm: false, showsHidden: false });
+    expect(view.state.tokens.some((token) => token.hidden)).toBe(false);
+  });
+
+  it("marks the viewer's own heroes and keeps hero tokens in step with the campaign", () => {
+    const remaining = [{ ...heroes[0], name: "Lia the Bold" }];
+    const view = viewMap(stored(), remaining, { ...alice, audience: "auto" });
+    expect(view.heroes).toEqual([{ id: aliceHero, name: "Lia the Bold", ownerId: "alice", mine: true }]);
+    expect(view.state.tokens.filter((token) => token.kind === "hero").map((token) => token.label)).toEqual(["Lia the Bold"]);
+    expect(viewMap(stored(), heroes, { ...dm, audience: "auto" }).heroes.map((hero) => hero.mine)).toEqual([false, false]);
+  });
+
+  it("serves an empty map at version 0 to a campaign that has none yet", () => {
+    expect(viewMap(undefined, heroes, { ...dm, audience: "auto" })).toEqual({
+      version: 0, isDm: true, showsHidden: true, heroes: heroes.map((hero) => ({ ...hero, mine: false })),
+      state: emptyMapState(), updatedAt: "1970-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("reads damaged stored state as a valid map", () => {
+    expect(viewMap({ state: "junk", version: 3, updatedAt: new Date(0) }, [], { ...dm, audience: "auto" }).state).toEqual(emptyMapState());
+  });
+});
+
+describe("saved maps", () => {
+  const picture = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+  const saved = () => JSON.parse(JSON.stringify({ ...withParty(), background: { key: "old-key" } }));
+
+  it("lets only DMs into the saved maps, and hides the campaign from non-members", () => {
+    const viewer = { campaignName: "Costa", isDm: true };
+    expect(requireDm(viewer)).toEqual({ ok: true, value: viewer });
+    expect(requireDm({ ...viewer, isDm: false })).toEqual({ ok: false, error: "forbidden" });
+    expect(requireDm(null)).toEqual({ ok: false, error: "not-found" });
+  });
+
+  it("puts a save back on the table with the campaign's current heroes and its own picture", () => {
+    const loaded = mapFromSave({ state: saved(), image: picture, mimeType: "image/png" }, [heroes[0]]);
+    expect(loaded.picture).toEqual({ image: picture, mimeType: "image/png" });
+    expect(loaded.state.tokens.filter((token) => token.kind === "hero").map((token) => token.label)).toEqual(["Lia"]);
+    expect(loaded.state.tokens.filter((token) => token.kind === "monster")).toHaveLength(3);
+    // The old key would point at the previous picture: the caller stores the picture again under a new one.
+    expect(loaded.state.background).toBeUndefined();
+  });
+
+  it("loads a save without a picture, or with an unknown picture type, without a background", () => {
+    expect(mapFromSave({ state: saved(), image: null, mimeType: null }, heroes).picture).toBeNull();
+    expect(mapFromSave({ state: saved(), image: picture, mimeType: null }, heroes).picture).toBeNull();
+    expect(mapFromSave({ state: saved(), image: null, mimeType: "image/png" }, heroes).state.background).toBeUndefined();
+  });
+
+  it("saves a copy of the map without its background key, leaving the map on the table as it was", () => {
+    const onTable: MapState = { ...withParty(), fog: true, background: { key: "current-key" } };
+    const copy = mapStateToSave(onTable);
+    expect(copy.background).toBeUndefined();
+    expect(copy).toEqual({ ...withParty(), fog: true });
+    expect(onTable.background).toEqual({ key: "current-key" });
+  });
+
+  it("keeps up to 20 saved maps per campaign", () => {
+    expect(MAP_MAX_SAVES).toBe(20);
+    expect(mapSavesFull("19")).toBe(false);
+    expect(mapSavesFull("20")).toBe(true);
+    expect(mapSavesFull("21")).toBe(true);
+    expect(mapSavesFull(undefined)).toBe(false);
+  });
+
+  it("clears the table to an empty map when no save is given, and reads a damaged save safely", () => {
+    expect(mapFromSave(null, heroes)).toEqual({ state: emptyMapState(), picture: null });
+    expect(mapFromSave({ state: "junk", image: null, mimeType: null }, heroes).state).toEqual(emptyMapState());
   });
 });
 
@@ -538,5 +624,295 @@ describe("combat", () => {
     ] } });
     expect(state.combat).toEqual({ round: 1, order: [{ tokenId: "t3", initiative: 20 }, { tokenId: "t1", initiative: 18, moved: 2, dash: true }] });
     expect(syncHeroes(inCombat(), [heroes[1]]).combat).toMatchObject({ active: "t3" });
+  });
+});
+
+describe("parseMapOp, change by change", () => {
+  const wall = { x1: 2, y1: 5, x2: 2, y2: 1 };
+
+  it("accepts each kind of change and returns it cleaned up", () => {
+    const accepted: [unknown, MapOp][] = [
+      [{ type: "move", tokenId: "a", x: 0, y: 39 }, { type: "move", tokenId: "a", x: 0, y: 39 }],
+      [{ type: "place-hero", characterId: aliceHero, x: 3, y: 4 }, { type: "place-hero", characterId: aliceHero, x: 3, y: 4 }],
+      [{ type: "place-hero", characterId: aliceHero, x: 0, y: 0 }, { type: "place-hero", characterId: aliceHero, x: 0, y: 0 }],
+      [{ type: "add-walls", walls: Array.from({ length: 50 }, () => ({ x1: 0, y1: 0, x2: 0, y2: 1 })) }, { type: "add-walls", walls: Array.from({ length: 50 }, () => ({ x1: 0, y1: 0, x2: 0, y2: 1 })) }],
+      [{ type: "combat-start", entries: Array.from({ length: 120 }, (_, i) => ({ tokenId: `t${i}`, initiative: 1 })) }, { type: "combat-start", entries: Array.from({ length: 120 }, (_, i) => ({ tokenId: `t${i}`, initiative: 1 })) }],
+      [{ type: "add-monster", label: "Goblin", count: 1, size: 2, hidden: true, monsterSlug: "srd_goblin" }, { type: "add-monster", label: "Goblin", count: 1, size: 2, hidden: true, monsterSlug: "srd_goblin" }],
+      [{ type: "update", tokenId: "a", label: " Boss  goblin ", hidden: true, defeated: false, size: 4 }, { type: "update", tokenId: "a", label: "Boss goblin", hidden: true, defeated: false, size: 4 }],
+      [{ type: "settings", gridHidden: false, resetExplored: true }, { type: "settings", gridHidden: false, resetExplored: true }],
+      [{ type: "remove-wall", ...wall, door: "closed" }, { type: "remove-wall", x1: 2, y1: 1, x2: 2, y2: 5 }],
+      [{ type: "door", ...wall, open: false }, { type: "door", x1: 2, y1: 1, x2: 2, y2: 5, open: false }],
+      [{ type: "clear-walls", extra: 1 }, { type: "clear-walls" }],
+      [{ type: "remove", tokenId: "a" }, { type: "remove", tokenId: "a" }],
+      [{ type: "clear-monsters" }, { type: "clear-monsters" }],
+      [{ type: "resize", cols: 4, rows: 40 }, { type: "resize", cols: 4, rows: 40 }],
+      [{ type: "combat-start", entries: [] }, { type: "combat-start", entries: [] }],
+      [{ type: "combatant", tokenId: "a", initiative: -20, speed: 40, moved: 999 }, { type: "combatant", tokenId: "a", initiative: -20, speed: 40, moved: 999 }],
+      [{ type: "combatant", tokenId: "a", moved: 0 }, { type: "combatant", tokenId: "a", moved: 0 }],
+      [{ type: "combat-leave", tokenId: "a" }, { type: "combat-leave", tokenId: "a" }],
+      [{ type: "turn", step: -1 }, { type: "turn", step: -1 }],
+      [{ type: "turn", tokenId: "a" }, { type: "turn", tokenId: "a" }],
+      [{ type: "dash", tokenId: "a", dash: false }, { type: "dash", tokenId: "a", dash: false }],
+      [{ type: "combat-end" }, { type: "combat-end" }],
+    ];
+    for (const [raw, op] of accepted) expect(parseMapOp(raw), JSON.stringify(raw)).toEqual(op);
+  });
+
+  it("rejects each kind of change when a field is wrong", () => {
+    const rejected: unknown[] = [
+      null, "move", 3, { tokenId: "a" },
+      { type: "move", tokenId: "a", x: 0, y: 40 },
+      { type: "place-hero", characterId: 7 },
+      { type: "place-hero", characterId: aliceHero, x: 1, y: 40 },
+      { type: "add-monster", label: "Goblin", count: 1, hidden: "no" },
+      { type: "add-monster", label: "Goblin", count: 1, monsterSlug: "a/b" },
+      { type: "add-monster", label: "   ", count: 1 },
+      { type: "add-monster", label: "Goblin", count: 0 },
+      { type: "update", tokenId: "a b", hidden: true },
+      { type: "update", tokenId: "a", label: "" },
+      { type: "update", tokenId: "a", hidden: "yes" },
+      { type: "update", tokenId: "a", defeated: 1 },
+      { type: "update", tokenId: "a", size: 0 },
+      { type: "update", tokenId: "a", vision: "far" },
+      { type: "face", tokenId: "a" },
+      { type: "settings", fog: "on" },
+      { type: "settings", resetExplored: false },
+      { type: "add-walls", walls: "wall" },
+      { type: "add-walls", walls: Array.from({ length: 51 }, () => wall) },
+      { type: "add-walls", walls: [wall, { x1: 0, y1: 0, x2: 1, y2: 1 }] },
+      { type: "remove-wall", x1: 0, y1: 0, x2: 1, y2: 1 },
+      { type: "remove-wall", x1: 0, y1: 0, x2: 0 },
+      { type: "door", x1: 0, y1: 0, x2: 1, y2: 1, open: true },
+      { type: "door", ...wall },
+      { type: "door", ...wall, open: "yes" },
+      { type: "remove", tokenId: "" },
+      { type: "remove" },
+      { type: "resize", cols: 10, rows: 41 },
+      { type: "resize", cols: 10 },
+      { type: "combat-start" },
+      { type: "combat-start", entries: Array.from({ length: 121 }, (_, i) => ({ tokenId: `t${i}`, initiative: 1 })) },
+      { type: "combat-start", entries: [null] },
+      { type: "combat-start", entries: [{ tokenId: "a", initiative: 1.5 }] },
+      { type: "combatant", tokenId: "a b", initiative: 1 },
+      { type: "combatant", tokenId: "a", initiative: 100 },
+      { type: "combatant", tokenId: "a", initiative: "high" },
+      { type: "combatant", tokenId: "a", speed: 41 },
+      { type: "combatant", tokenId: "a", speed: -1 },
+      { type: "combatant", tokenId: "a", moved: 1000 },
+      { type: "combatant", tokenId: "a", moved: -1 },
+      { type: "combat-leave", tokenId: "a b" },
+      { type: "combat-leave" },
+      { type: "turn" },
+      { type: "turn", tokenId: "a b" },
+      { type: "turn", step: 0 },
+      { type: "dash", tokenId: "a b", dash: true },
+      { type: "dash", tokenId: "a" },
+      { type: "toString" }, { type: "constructor" }, { type: "__proto__" }, { type: "hasOwnProperty" },
+    ];
+    for (const raw of rejected) expect(parseMapOp(raw), JSON.stringify(raw)).toBeNull();
+  });
+});
+
+describe("applyMapOps, change by change", () => {
+  const bob = { userId: "bob", isDm: false };
+  const apply = (state: MapState, ops: MapOp[], actor = dm, party = heroes) => applyMapOps(state, ops, actor, party, ids());
+  const ok = (result: ReturnType<typeof applyMapOps>) => { if (!result.ok) throw new Error(result.error); return result.state; };
+  const monsters = (count: number): MapToken[] => Array.from({ length: count }, (_, i) => ({ id: `m${i}`, kind: "monster", label: `Rat ${i}`, x: i % 20, y: Math.floor(i / 20) % 14, size: 1 }));
+  /** withParty() with a fight on: Lia (t1) acts first, then Brom (t2), then Goblin 1 (t3). */
+  const fight = () => ok(apply(withParty(), [{ type: "combat-start", entries: [{ tokenId: "t1", initiative: 15, speed: 6 }, { tokenId: "t2", initiative: 10 }, { tokenId: "t3", initiative: 5 }] }]));
+
+  it("leaves the starting state untouched, whether the batch is applied or rejected", () => {
+    const start = withParty();
+    const copy = structuredClone(start);
+    ok(apply(start, [{ type: "move", tokenId: "t1", x: 9, y: 9 }, { type: "add-walls", walls: [{ x1: 0, y1: 0, x2: 0, y2: 2 }] }, { type: "settings", fog: true }]));
+    expect(apply(start, [{ type: "move", tokenId: "t1", x: 9, y: 9 }, { type: "move", tokenId: "nope", x: 1, y: 1 }])).toEqual({ ok: false, error: "invalid" });
+    expect(start).toEqual(copy);
+  });
+
+  it("moves tokens: unknown ones are invalid, staying put costs nothing", () => {
+    const state = fight();
+    expect(apply(state, [{ type: "move", tokenId: "nope", x: 1, y: 1 }])).toEqual({ ok: false, error: "invalid" });
+    const stayed = ok(apply(state, [{ type: "move", tokenId: "t1", x: 1, y: 1 }], alice));
+    expect(stayed).toEqual(state);
+    // Bob's Brom isn't up, but asking it to stay where it is isn't a move.
+    expect(ok(apply(state, [{ type: "move", tokenId: "t2", x: 2, y: 1 }], bob))).toEqual(state);
+  });
+
+  it("counts a DM's move with no path as the straight distance", () => {
+    const state = fight();
+    // Lia boxed in at B2 (1, 1): walls on all four sides.
+    const boxed: MapState = { ...state, walls: [{ x1: 1, y1: 1, x2: 2, y2: 1 }, { x1: 1, y1: 2, x2: 2, y2: 2 }, { x1: 1, y1: 1, x2: 1, y2: 2 }, { x1: 2, y1: 1, x2: 2, y2: 2 }] };
+    expect(apply(boxed, [{ type: "move", tokenId: "t1", x: 3, y: 5 }], alice)).toEqual({ ok: false, error: "blocked" });
+    const moved = ok(apply(boxed, [{ type: "move", tokenId: "t1", x: 3, y: 5 }]));
+    expect(moved.tokens.find((token) => token.id === "t1")).toMatchObject({ x: 3, y: 5 });
+    expect(combatantOf(moved, "t1")).toMatchObject({ moved: 4 });
+    expect(combatantOf(ok(apply(boxed, [{ type: "move", tokenId: "t1", x: 6, y: 2 }])), "t1")).toMatchObject({ moved: 5 });
+  });
+
+  it("lets a player use the whole speed in one go, and not a square more", () => {
+    const state = fight(); // Lia (t1) at B2 walks 6 squares a turn
+    expect(combatantOf(ok(apply(state, [{ type: "move", tokenId: "t1", x: 7, y: 1 }], alice)), "t1")).toMatchObject({ moved: 6 });
+    expect(apply(state, [{ type: "move", tokenId: "t1", x: 8, y: 1 }], alice)).toEqual({ ok: false, error: "movement" });
+  });
+
+  it("places heroes: walks an existing one, caps the token count, falls back on a label", () => {
+    expect(apply(fight(), [{ type: "place-hero", characterId: bobHero, x: 6, y: 6 }], bob)).toEqual({ ok: false, error: "turn" });
+    const full: MapState = { ...emptyMapState(), tokens: monsters(120) };
+    expect(apply(full, [{ type: "place-hero", characterId: aliceHero }])).toEqual({ ok: false, error: "invalid" });
+    const nameless = ok(apply(emptyMapState(), [{ type: "place-hero", characterId: aliceHero, x: 2, y: 3 }], dm, [{ id: aliceHero, name: "   ", ownerId: "alice" }]));
+    expect(nameless.tokens).toEqual([{ id: "t1", kind: "hero", label: "?", characterId: aliceHero, size: 1, x: 2, y: 3 }]);
+    // Placed again without a square: it stays where it is.
+    expect(ok(apply(nameless, [{ type: "place-hero", characterId: aliceHero }])).tokens).toEqual(nameless.tokens);
+    // Without a square, the first free one scanning from the left.
+    const second = ok(apply(nameless, [{ type: "place-hero", characterId: bobHero }, { type: "add-monster", label: "Rat", count: 1, size: 1, hidden: false }, { type: "place-hero", characterId: aliceHero }]));
+    expect(second.tokens.find((token) => token.characterId === bobHero)).toMatchObject({ x: 0, y: 0 });
+    expect(ok(apply({ ...emptyMapState(), tokens: [{ id: "m", kind: "monster", label: "Rat", x: 0, y: 0, size: 1 }] }, [{ type: "place-hero", characterId: aliceHero }])).tokens[1]).toMatchObject({ x: 0, y: 1 });
+    const dmPlaced = ok(apply(emptyMapState(), [{ type: "place-hero", characterId: bobHero, x: 39, y: 39 }]));
+    expect(dmPlaced.tokens[0]).toMatchObject({ label: "Brom", x: 19, y: 13 });
+  });
+
+  it("adds monsters: one keeps its name, the slug is kept, the token count is capped", () => {
+    const one = ok(apply(emptyMapState(), [{ type: "add-monster", label: "Goblin", count: 1, size: 1, hidden: false, monsterSlug: "srd_goblin" }]));
+    expect(one.tokens).toEqual([{ id: "t1", kind: "monster", label: "Goblin", size: 1, x: 19, y: 0, monsterSlug: "srd_goblin" }]);
+    expect(apply({ ...emptyMapState(), tokens: monsters(119) }, [{ type: "add-monster", label: "Rat", count: 2, size: 1, hidden: false }])).toEqual({ ok: false, error: "invalid" });
+    expect(ok(apply({ ...emptyMapState(), tokens: monsters(118) }, [{ type: "add-monster", label: "Rat", count: 2, size: 1, hidden: false }])).tokens).toHaveLength(120);
+    const long = ok(apply(emptyMapState(), [{ type: "add-monster", label: "x".repeat(40), count: 2, size: 1, hidden: false }]));
+    expect(long.tokens.map((token) => token.label)).toEqual([`${"x".repeat(36)} 1`, `${"x".repeat(36)} 2`]);
+  });
+
+  it("updates tokens: renames, relinks, hides and revives monsters; heroes keep name and link", () => {
+    const state = withParty();
+    expect(apply(state, [{ type: "update", tokenId: "nope", defeated: true }])).toEqual({ ok: false, error: "invalid" });
+    const changed = ok(apply(state, [{ type: "update", tokenId: "t3", label: "Boss", monsterSlug: "srd_hobgoblin", hidden: true, defeated: true }]));
+    expect(changed.tokens.find((token) => token.id === "t3")).toEqual({ id: "t3", kind: "monster", label: "Boss", x: 19, y: 0, size: 1, monsterSlug: "srd_hobgoblin", hidden: true, defeated: true });
+    const revived = ok(apply(changed, [{ type: "update", tokenId: "t3", defeated: false }]));
+    expect(revived.tokens.find((token) => token.id === "t3")).not.toHaveProperty("defeated");
+    expect(apply(state, [{ type: "update", tokenId: "t1", label: "Lia the Bold" }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(state, [{ type: "update", tokenId: "t1", monsterSlug: "srd_goblin" }])).toEqual({ ok: false, error: "invalid" });
+    const downed = ok(apply(state, [{ type: "update", tokenId: "t1", defeated: true, size: 2 }]));
+    expect(downed.tokens.find((token) => token.id === "t1")).toMatchObject({ defeated: true, size: 2 });
+  });
+
+  it("turns tokens: unknown ones are invalid, facing north drops the field", () => {
+    const state = withParty();
+    expect(apply(state, [{ type: "face", tokenId: "nope", facing: 2 }])).toEqual({ ok: false, error: "invalid" });
+    const north = ok(apply(state, [{ type: "face", tokenId: "t1", facing: 2 }, { type: "face", tokenId: "t1", facing: 0 }], alice));
+    expect(north.tokens.find((token) => token.id === "t1")).not.toHaveProperty("facing");
+  });
+
+  it("changes settings: the grid comes back, the fog stays on", () => {
+    const hidden = ok(apply(withParty(), [{ type: "settings", gridHidden: true, fog: true }]));
+    const shown = ok(apply(hidden, [{ type: "settings", gridHidden: false }]));
+    expect(shown).not.toHaveProperty("gridHidden");
+    expect(shown.fog).toBe(true);
+    expect(shown.explored).toBe(hidden.explored);
+  });
+
+  it("adds walls only inside the grid and up to the limit", () => {
+    expect(apply(emptyMapState(), [{ type: "add-walls", walls: [{ x1: 21, y1: 0, x2: 21, y2: 3 }] }])).toEqual({ ok: false, error: "invalid" });
+    const full: MapState = { ...emptyMapState(), walls: Array.from({ length: 300 }, (_, i) => ({ x1: i % 20, y1: Math.floor(i / 20), x2: (i % 20) + 1, y2: Math.floor(i / 20) })) };
+    expect(apply(full, [{ type: "add-walls", walls: [{ x1: 0, y1: 0, x2: 1, y2: 0, door: "closed" }] }]).ok).toBe(true); // drawn over an existing one
+    expect(apply(full, [{ type: "add-walls", walls: [{ x1: 5, y1: 0, x2: 5, y2: 1 }] }])).toEqual({ ok: false, error: "invalid" });
+  });
+
+  it("removes walls, keeps the rest, and is DM-only", () => {
+    const span = { x1: 2, y1: 0, x2: 2, y2: 4 };
+    expect(apply(emptyMapState(), [{ type: "remove-wall", ...span }], alice)).toEqual({ ok: false, error: "forbidden" });
+    const none = ok(apply(emptyMapState(), [{ type: "remove-wall", ...span }]));
+    expect(none).not.toHaveProperty("walls");
+    const two = ok(apply(emptyMapState(), [{ type: "add-walls", walls: [span, { x1: 0, y1: 1, x2: 3, y2: 1 }] }]));
+    expect(ok(apply(two, [{ type: "remove-wall", x1: 9, y1: 9, x2: 9, y2: 10 }])).walls).toHaveLength(2);
+    const last = ok(apply(two, [{ type: "remove-wall", ...span }, { type: "remove-wall", x1: 0, y1: 1, x2: 3, y2: 1 }]));
+    expect(last).not.toHaveProperty("walls");
+    expect(apply(two, [{ type: "clear-walls" }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(emptyMapState(), [{ type: "clear-walls" }]))).not.toHaveProperty("walls");
+  });
+
+  it("closes doors and keeps every other wall as it was", () => {
+    const state = ok(apply(emptyMapState(), [{ type: "add-walls", walls: [{ x1: 2, y1: 0, x2: 2, y2: 1, door: "open" }, { x1: 2, y1: 1, x2: 2, y2: 2 }] }]));
+    expect(ok(apply(state, [{ type: "door", x1: 2, y1: 0, x2: 2, y2: 1, open: false }])).walls).toEqual([{ x1: 2, y1: 0, x2: 2, y2: 1, door: "closed" }, { x1: 2, y1: 1, x2: 2, y2: 2 }]);
+    expect(apply(emptyMapState(), [{ type: "door", x1: 2, y1: 0, x2: 2, y2: 1, open: true }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(emptyMapState(), [{ type: "door", x1: 2, y1: 0, x2: 2, y2: 1, open: true }], alice)).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("removes a token that is already gone without complaint", () => {
+    const state = withParty();
+    expect(ok(apply(state, [{ type: "remove", tokenId: "nope" }], alice))).toEqual(state);
+    expect(apply(state, [{ type: "clear-monsters" }], alice)).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("resizes the grid, keeping walls that still fit and redoing the explored map", () => {
+    const state = ok(apply(withParty(), [{ type: "settings", fog: true }, { type: "add-walls", walls: [{ x1: 2, y1: 0, x2: 2, y2: 4 }, { x1: 15, y1: 1, x2: 15, y2: 3 }] }]));
+    const smaller = ok(apply(state, [{ type: "resize", cols: 12, rows: 10 }]));
+    expect(smaller).toMatchObject({ cols: 12, rows: 10, walls: [{ x1: 2, y1: 0, x2: 2, y2: 4 }] });
+    expect(smaller.explored).toBeDefined(); // worked out again for the new size, after the batch
+    expect(smaller.explored).not.toBe(state.explored);
+    expect(ok(apply(state, [{ type: "resize", cols: 12, rows: 10 }, { type: "settings", fog: false }]))).not.toHaveProperty("explored");
+    expect(ok(apply(withParty(), [{ type: "resize", cols: 30, rows: 30 }]))).not.toHaveProperty("walls");
+  });
+
+  it("starts a fight with nobody, then gives the turn to the first one added", () => {
+    const empty = ok(apply(withParty(), [{ type: "combat-start", entries: [] }]));
+    expect(empty.combat).toEqual({ round: 1, order: [] });
+    expect(apply(empty, [{ type: "turn", step: 1 }])).toEqual({ ok: false, error: "invalid" });
+    const joined = ok(apply(empty, [{ type: "combatant", tokenId: "t3", initiative: 9, speed: 6 }]));
+    expect(joined.combat).toEqual({ round: 1, active: "t3", order: [{ tokenId: "t3", initiative: 9, speed: 6 }] });
+  });
+
+  it("changes combatants only in a fight, on the map, with an initiative to join", () => {
+    expect(apply(withParty(), [{ type: "combatant", tokenId: "t1", initiative: 3 }])).toEqual({ ok: false, error: "invalid" });
+    const state = fight();
+    expect(apply(state, [{ type: "combatant", tokenId: "nope", initiative: 3 }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(state, [{ type: "combatant", tokenId: "t4", speed: 6 }])).toEqual({ ok: false, error: "invalid" });
+    const joined = ok(apply(state, [{ type: "combatant", tokenId: "t4", initiative: 10, moved: 3 }]));
+    expect(joined.combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
+    expect(combatantOf(joined, "t4")).toEqual({ tokenId: "t4", initiative: 10, moved: 3 });
+    const reset = ok(apply(joined, [{ type: "combatant", tokenId: "t4", moved: 0, speed: 4 }]));
+    expect(combatantOf(reset, "t4")).toEqual({ tokenId: "t4", initiative: 10, speed: 4 });
+    // Only speed or movement: it keeps its place among equal initiatives.
+    expect(reset.combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
+    expect(ok(apply(reset, [{ type: "combatant", tokenId: "t4", initiative: 10 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
+    expect(ok(apply(reset, [{ type: "combatant", tokenId: "t2", initiative: 10 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t4", "t2", "t3"]);
+    expect(ok(apply(reset, [{ type: "combatant", tokenId: "t2", speed: 3 }])).combat!.order.map((entry) => entry.tokenId)).toEqual(["t1", "t2", "t4", "t3"]);
+  });
+
+  it("gives the turn to the highest initiative when a stored fight has nobody active", () => {
+    const stored = normalizeMapState({ ...fight(), combat: { round: 2, active: "gone", order: [{ tokenId: "t1", initiative: 15 }, { tokenId: "t2", initiative: 10 }] } });
+    expect(stored.combat).not.toHaveProperty("active");
+    expect(ok(apply(stored, [{ type: "combatant", tokenId: "t2", speed: 5 }])).combat).toMatchObject({ round: 2, active: "t1" });
+  });
+
+  it("never lets a player pass the turn back, even on their own hero's turn", () => {
+    expect(apply(fight(), [{ type: "turn", step: -1 }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(fight(), [{ type: "turn", step: 1 }], alice)).combat).toMatchObject({ active: "t2" });
+  });
+
+  it("lets only the DM take creatures out of a fight or end it, and leaving no fight is harmless", () => {
+    const state = fight();
+    expect(apply(state, [{ type: "combat-leave", tokenId: "t1" }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(apply(state, [{ type: "combat-end" }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(ok(apply(withParty(), [{ type: "combat-leave", tokenId: "t1" }]))).toEqual(withParty());
+    expect(ok(apply(state, [{ type: "combat-leave", tokenId: "t4" }]))).toEqual(state);
+    expect(ok(apply(withParty(), [{ type: "combat-end" }]))).toEqual(withParty());
+  });
+
+  it("jumps the turn only for the DM and only to a creature in the fight", () => {
+    expect(apply(withParty(), [{ type: "turn", tokenId: "t1" }])).toEqual({ ok: false, error: "invalid" });
+    const state = fight();
+    expect(apply(state, [{ type: "turn", tokenId: "t3" }], alice)).toEqual({ ok: false, error: "forbidden" });
+    expect(apply(state, [{ type: "turn", tokenId: "t4" }])).toEqual({ ok: false, error: "invalid" });
+    // A player can't pass the turn while it belongs to a token that is gone.
+    expect(apply({ ...state, combat: { ...state.combat!, active: "gone" } }, [{ type: "turn", step: 1 }], alice)).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("dashes only for a creature in the fight, by its owner on its turn", () => {
+    const state = fight();
+    expect(apply(state, [{ type: "dash", tokenId: "nope", dash: true }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(state, [{ type: "dash", tokenId: "t4", dash: true }])).toEqual({ ok: false, error: "invalid" });
+    expect(apply(state, [{ type: "dash", tokenId: "t2", dash: true }], bob)).toEqual({ ok: false, error: "forbidden" });
+    expect(apply(state, [{ type: "dash", tokenId: "t1", dash: true }], bob)).toEqual({ ok: false, error: "forbidden" });
+    const dashed = ok(apply(state, [{ type: "dash", tokenId: "t2", dash: true }]));
+    expect(combatantOf(dashed, "t2")).toEqual({ tokenId: "t2", initiative: 10, dash: true });
+    expect(combatantOf(ok(apply(dashed, [{ type: "dash", tokenId: "t2", dash: false }])), "t2")).toEqual({ tokenId: "t2", initiative: 10 });
   });
 });

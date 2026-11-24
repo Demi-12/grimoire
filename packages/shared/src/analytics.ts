@@ -174,25 +174,29 @@ export function errorGroupKey(source: "server" | "client", report: Pick<ErrorRep
   return [source, report.name, message, report.route ?? ""].join("|");
 }
 
+/** First match wins: Edge and Opera also say "Chrome", and every Chromium browser also says "Safari". */
+const BROWSERS: [name: string, majorVersion: RegExp][] = [
+  ["Edge", /Edg\/(\d+)/], ["Opera", /OPR\/(\d+)/], ["Firefox", /Firefox\/(\d+)/], ["Chrome", /CriOS\/(\d+)/], ["Chrome", /Chrome\/(\d+)/],
+  ["Safari", /Version\/(\d+)[\d.]* .*Safari\//],
+];
+/** First match wins: Android and ChromeOS also say "Linux", iOS also says "Mac OS X". */
+const SYSTEMS: [name: string, pattern: RegExp][] = [
+  ["Android", /Android/], ["iOS", /iPhone|iPad|iPod/], ["Windows", /Windows/], ["macOS", /Mac OS X|Macintosh/], ["ChromeOS", /CrOS/], ["Linux", /Linux/],
+];
+
+function browserOf(userAgent: string): string {
+  for (const [name, pattern] of BROWSERS) {
+    const major = pattern.exec(userAgent)?.[1];
+    if (major) return `${name} ${major}`;
+  }
+  return /node|undici/i.test(userAgent) ? "Node" : "Other";
+}
+
 /** A short "Browser version · OS" label, enough to reproduce an error without keeping the full user agent. */
 export function summarizeUserAgent(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
-  const ua = userAgent;
-  const browser =
-    /Edg\/(\d+)/.exec(ua) ? `Edge ${/Edg\/(\d+)/.exec(ua)![1]}`
-    : /OPR\/(\d+)/.exec(ua) ? `Opera ${/OPR\/(\d+)/.exec(ua)![1]}`
-    : /Firefox\/(\d+)/.exec(ua) ? `Firefox ${/Firefox\/(\d+)/.exec(ua)![1]}`
-    : /CriOS\/(\d+)/.exec(ua) ? `Chrome ${/CriOS\/(\d+)/.exec(ua)![1]}`
-    : /Chrome\/(\d+)/.exec(ua) ? `Chrome ${/Chrome\/(\d+)/.exec(ua)![1]}`
-    : /Version\/(\d+)[\d.]* .*Safari\//.exec(ua) ? `Safari ${/Version\/(\d+)/.exec(ua)![1]}`
-    : /node|undici/i.test(ua) ? "Node" : "Other";
-  const os =
-    /Android/.test(ua) ? "Android"
-    : /iPhone|iPad|iPod/.test(ua) ? "iOS"
-    : /Windows/.test(ua) ? "Windows"
-    : /Mac OS X|Macintosh/.test(ua) ? "macOS"
-    : /CrOS/.test(ua) ? "ChromeOS"
-    : /Linux/.test(ua) ? "Linux" : null;
+  const browser = browserOf(userAgent);
+  const os = SYSTEMS.find(([, pattern]) => pattern.test(userAgent))?.[0];
   return (os ? `${browser} · ${os}` : browser).slice(0, 100);
 }
 
@@ -247,4 +251,82 @@ export interface AnalyticsReport {
     count: number; users: number; firstSeen: string; lastSeen: string;
     stack: string | null; digest: string | null; userAgent: string | null; method: string | null;
   }[];
+}
+
+// ---- Dashboard report: from the rows of admin/analytics.service.ts's queries to AnalyticsReport ----
+
+/** A count as PostgreSQL returns it: bigint arrives as a string. */
+type DbCount = string;
+
+/**
+ * What the report's SQL queries return, untouched. The single-row aggregates may be missing
+ * (undefined), and every missing count reads as 0.
+ */
+export interface AnalyticsRows {
+  /** Per event name (page views excluded): this period, the previous one, and new characters by creation mode. */
+  events: { name: string; current: DbCount; previous: DbCount; creator: DbCount; manual: DbCount }[];
+  /** Distinct users with any event: this period, the previous one and today. */
+  active: { current: DbCount; previous: DbCount; today: DbCount } | undefined;
+  /** Approved accounts, and accounts created this period and the previous one. */
+  users: { approved: DbCount; current: DbCount; previous: DbCount } | undefined;
+  /** Errors this period and the previous one, with this period's affected users and split by source. */
+  errorTotals: { current: DbCount; previous: DbCount; users: DbCount; server: DbCount; client: DbCount } | undefined;
+  /** One row per day of the period, oldest first. */
+  daily: { date: string; activeUsers: DbCount; characters: DbCount; encounters: DbCount; campaigns: DbCount; errors: DbCount }[];
+  /** Page views per section, most viewed first. */
+  sections: { section: string; views: DbCount; users: DbCount }[];
+  /** One row per error group: its latest occurrence plus the group's totals. */
+  errors: {
+    fingerprint: string; source: "server" | "client"; name: string; message: string; route: string | null;
+    count: DbCount; users: DbCount; firstSeen: Date; lastSeen: Date; stack: string | null; digest: string | null; userAgent: string | null; method: string | null;
+  }[];
+}
+
+/** Error groups the dashboard lists (the most recently seen). */
+const MAX_REPORTED_ERRORS = 50;
+
+const count = (value: DbCount | undefined) => Number(value ?? 0);
+const comparison = (row: { current: DbCount; previous: DbCount } | undefined): Comparison => ({ current: count(row?.current), previous: count(row?.previous) });
+const isSection = (value: string): value is Section => (SECTIONS as readonly string[]).includes(value);
+
+function reportKpis({ events, active, users, errorTotals }: AnalyticsRows): AnalyticsReport["kpis"] {
+  const byName = new Map(events.map((row) => [row.name, row]));
+  const compare = (name: EventName) => comparison(byName.get(name));
+  const created = byName.get("character.created");
+  return {
+    activeUsers: comparison(active),
+    activeToday: count(active?.today),
+    approvedUsers: count(users?.approved),
+    newUsers: comparison(users),
+    charactersCreated: { ...compare("character.created"), creator: count(created?.creator), manual: count(created?.manual) },
+    encountersGenerated: compare("encounter.generated"),
+    encountersSaved: compare("encounter.saved"),
+    campaignsCreated: compare("campaign.created"),
+    campaignsJoined: compare("campaign.joined"),
+    errors: { ...comparison(errorTotals), users: count(errorTotals?.users), server: count(errorTotals?.server), client: count(errorTotals?.client) },
+    wizard: { started: compare("character.wizard_started").current, completed: count(created?.creator) },
+  };
+}
+
+const errorGroup = (row: AnalyticsRows["errors"][number]): AnalyticsReport["errors"][number] => ({
+  fingerprint: row.fingerprint, source: row.source, name: row.name, message: row.message, route: row.route,
+  count: count(row.count), users: count(row.users), firstSeen: row.firstSeen.toISOString(), lastSeen: row.lastSeen.toISOString(),
+  stack: row.stack, digest: row.digest, userAgent: row.userAgent, method: row.method,
+});
+
+/**
+ * The admin dashboard's report from its query rows: counts become numbers, sections the app no
+ * longer has are left out, and only the most recently seen error groups are listed, newest first.
+ */
+export function shapeAnalyticsReport(range: Omit<AnalyticsReport["range"], "generatedAt">, rows: AnalyticsRows, now: Date): AnalyticsReport {
+  return {
+    range: { ...range, generatedAt: now.toISOString() },
+    kpis: reportKpis(rows),
+    daily: rows.daily.map((row) => ({
+      date: row.date, activeUsers: count(row.activeUsers), characters: count(row.characters),
+      encounters: count(row.encounters), campaigns: count(row.campaigns), errors: count(row.errors),
+    })),
+    sections: rows.sections.flatMap((row) => (isSection(row.section) ? [{ section: row.section, views: count(row.views), users: count(row.users) }] : [])),
+    errors: rows.errors.map(errorGroup).sort((a, b) => b.lastSeen.localeCompare(a.lastSeen)).slice(0, MAX_REPORTED_ERRORS),
+  };
 }

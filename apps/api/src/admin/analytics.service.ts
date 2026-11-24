@@ -1,9 +1,10 @@
-/** The admin dashboard's report: usage and error figures read from what data/analytics-server.ts records. */
+/**
+ * The admin dashboard's report: usage and error figures read from what data/analytics-server.ts records.
+ * Only the queries live here; shapeAnalyticsReport in @grimoire/shared/analytics turns their rows into the report.
+ */
 import { Injectable } from "@nestjs/common";
-import { SECTIONS, type AnalyticsRange, type AnalyticsReport, type EventName, type Section } from "@grimoire/shared/analytics";
+import { shapeAnalyticsReport, type AnalyticsRange, type AnalyticsReport, type AnalyticsRows } from "@grimoire/shared/analytics";
 import { pool } from "../database/db.js";
-
-const count = (value: unknown) => Number(value ?? 0);
 
 @Injectable()
 export class AnalyticsService {
@@ -21,7 +22,7 @@ export class AnalyticsService {
     const { fromDay, toDay, start, prevStart, todayStart } = bounds.rows[0];
 
     const [events, active, users, errorTotals, daily, sections, errors] = await Promise.all([
-      pool.query<{ name: string; current: string; previous: string; creator: string; manual: string }>(
+      pool.query<AnalyticsRows["events"][number]>(
         `SELECT "name",
                 count(*) FILTER (WHERE "occurredAt" >= $1) AS current,
                 count(*) FILTER (WHERE "occurredAt" < $1) AS previous,
@@ -31,21 +32,21 @@ export class AnalyticsService {
           GROUP BY "name"`,
         [start, prevStart],
       ),
-      pool.query<{ current: string; previous: string; today: string }>(
+      pool.query<NonNullable<AnalyticsRows["active"]>>(
         `SELECT count(DISTINCT "userId") FILTER (WHERE "occurredAt" >= $1) AS current,
                 count(DISTINCT "userId") FILTER (WHERE "occurredAt" < $1) AS previous,
                 count(DISTINCT "userId") FILTER (WHERE "occurredAt" >= $3) AS today
            FROM "usage_event" WHERE "occurredAt" >= $2`,
         [start, prevStart, todayStart],
       ),
-      pool.query<{ approved: string; current: string; previous: string }>(
+      pool.query<NonNullable<AnalyticsRows["users"]>>(
         `SELECT count(*) FILTER (WHERE "status" = 'approved') AS approved,
                 count(*) FILTER (WHERE "createdAt" >= $1) AS current,
                 count(*) FILTER (WHERE "createdAt" >= $2 AND "createdAt" < $1) AS previous
            FROM "user"`,
         [start, prevStart],
       ),
-      pool.query<{ current: string; previous: string; users: string; server: string; client: string }>(
+      pool.query<NonNullable<AnalyticsRows["errorTotals"]>>(
         `SELECT count(*) FILTER (WHERE "occurredAt" >= $1) AS current,
                 count(*) FILTER (WHERE "occurredAt" < $1) AS previous,
                 count(DISTINCT "userId") FILTER (WHERE "occurredAt" >= $1) AS users,
@@ -54,7 +55,7 @@ export class AnalyticsService {
            FROM "app_error" WHERE "occurredAt" >= $2`,
         [start, prevStart],
       ),
-      pool.query<{ date: string; activeUsers: string; characters: string; encounters: string; campaigns: string; errors: string }>(
+      pool.query<AnalyticsRows["daily"][number]>(
         `SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
                 coalesce(e."activeUsers", 0) AS "activeUsers", coalesce(e.characters, 0) AS characters,
                 coalesce(e.encounters, 0) AS encounters, coalesce(e.campaigns, 0) AS campaigns, coalesce(r.errors, 0) AS errors
@@ -74,16 +75,13 @@ export class AnalyticsService {
           ORDER BY d.day`,
         [fromDay, toDay, timeZone, start],
       ),
-      pool.query<{ section: string; views: string; users: string }>(
+      pool.query<AnalyticsRows["sections"][number]>(
         `SELECT "props"->>'section' AS section, count(*) AS views, count(DISTINCT "userId") AS users
            FROM "usage_event" WHERE "name" = 'page.view' AND "occurredAt" >= $1
           GROUP BY 1 ORDER BY views DESC`,
         [start],
       ),
-      pool.query<{
-        fingerprint: string; source: "server" | "client"; name: string; message: string; route: string | null;
-        count: string; users: string; firstSeen: Date; lastSeen: Date; stack: string | null; digest: string | null; userAgent: string | null; method: string | null;
-      }>(
+      pool.query<AnalyticsRows["errors"][number]>(
         `SELECT DISTINCT ON (g.fingerprint) g.fingerprint, a."source", a."name", a."message", a."route", g.count, g.users,
                 g."firstSeen", g."lastSeen", a."stack", a."digest", a."userAgent", a."method"
            FROM (
@@ -97,43 +95,13 @@ export class AnalyticsService {
       ),
     ]);
 
-    const byName = new Map(events.rows.map((row) => [row.name, row]));
-    const compare = (name: EventName) => ({ current: count(byName.get(name)?.current), previous: count(byName.get(name)?.previous) });
-    const created = byName.get("character.created");
-
-    return {
-      range: { days, timeZone, from: fromDay, to: toDay, generatedAt: new Date().toISOString() },
-      kpis: {
-        activeUsers: { current: count(active.rows[0]?.current), previous: count(active.rows[0]?.previous) },
-        activeToday: count(active.rows[0]?.today),
-        approvedUsers: count(users.rows[0]?.approved),
-        newUsers: { current: count(users.rows[0]?.current), previous: count(users.rows[0]?.previous) },
-        charactersCreated: { ...compare("character.created"), creator: count(created?.creator), manual: count(created?.manual) },
-        encountersGenerated: compare("encounter.generated"),
-        encountersSaved: compare("encounter.saved"),
-        campaignsCreated: compare("campaign.created"),
-        campaignsJoined: compare("campaign.joined"),
-        errors: {
-          current: count(errorTotals.rows[0]?.current), previous: count(errorTotals.rows[0]?.previous),
-          users: count(errorTotals.rows[0]?.users), server: count(errorTotals.rows[0]?.server), client: count(errorTotals.rows[0]?.client),
-        },
-        wizard: { started: compare("character.wizard_started").current, completed: count(created?.creator) },
+    return shapeAnalyticsReport(
+      { days, timeZone, from: fromDay, to: toDay },
+      {
+        events: events.rows, active: active.rows[0], users: users.rows[0], errorTotals: errorTotals.rows[0],
+        daily: daily.rows, sections: sections.rows, errors: errors.rows,
       },
-      daily: daily.rows.map((row) => ({
-        date: row.date, activeUsers: count(row.activeUsers), characters: count(row.characters),
-        encounters: count(row.encounters), campaigns: count(row.campaigns), errors: count(row.errors),
-      })),
-      sections: sections.rows
-        .filter((row): row is typeof row & { section: Section } => (SECTIONS as readonly string[]).includes(row.section))
-        .map((row) => ({ section: row.section, views: count(row.views), users: count(row.users) })),
-      errors: errors.rows
-        .map((row) => ({
-          fingerprint: row.fingerprint, source: row.source, name: row.name, message: row.message, route: row.route,
-          count: count(row.count), users: count(row.users), firstSeen: row.firstSeen.toISOString(), lastSeen: row.lastSeen.toISOString(),
-          stack: row.stack, digest: row.digest, userAgent: row.userAgent, method: row.method,
-        }))
-        .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
-        .slice(0, 50),
-    };
+      new Date(),
+    );
   }
 }

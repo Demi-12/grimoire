@@ -1,7 +1,7 @@
 /** /api/admin: the admin panel's accounts (approve, block, promote, sign out, delete) and the usage dashboard. */
 import { Controller, Delete, Get, HttpCode, Param, Patch } from "@nestjs/common";
 import { parseRange, parseTimeZone } from "@grimoire/shared/analytics";
-import { checkAdminChange, isAccountStatus, isSiteRole, type AdminChange, type AppUser } from "@grimoire/shared/permissions";
+import { checkAdminChange, parseAdminRequest, type AppUser } from "@grimoire/shared/permissions";
 import { ApiError } from "../common/api-error.js";
 import { Approved, CurrentUser } from "../common/auth.guard.js";
 import { JsonBody, QueryText } from "../common/params.js";
@@ -30,29 +30,18 @@ export class AdminController {
   @Patch("users/:id")
   @HttpCode(204)
   @RateLimit(WRITE_LIMIT)
-  async change(@CurrentUser() user: AppUser, @Param("id") id: string, @JsonBody() raw: unknown): Promise<void> {
+  async change(@CurrentUser() user: AppUser, @Param("id") id: string, @JsonBody() body: unknown): Promise<void> {
     const target = await this.admin.readUserForAdmin(id);
     if (!target) throw new ApiError(404, "Not found.");
-    const body = raw as { role?: unknown; status?: unknown; revokeSessions?: unknown } | null;
-    if (!body) throw new ApiError(400, "Invalid change.");
-
-    if (body.revokeSessions === true) {
+    const request = parseAdminRequest(body);
+    if (!request.ok) throw new ApiError(400, request.error);
+    if (request.value.kind === "revoke-sessions") {
       if (target.id === user.id) throw new ApiError(400, guardMessages.self);
       await this.admin.revokeUserSessions(id);
       return;
     }
 
-    const change: AdminChange = {};
-    if (body.role !== undefined) {
-      if (!isSiteRole(body.role)) throw new ApiError(400, "Invalid role.");
-      change.role = body.role;
-    }
-    if (body.status !== undefined) {
-      if (!isAccountStatus(body.status)) throw new ApiError(400, "Invalid status.");
-      change.status = body.status;
-    }
-    if (!change.role && !change.status) throw new ApiError(400, "Nothing to change.");
-
+    const { change } = request.value;
     const guard = checkAdminChange(user, target, change, await countApprovedAdmins());
     if (guard) throw new ApiError(409, guardMessages[guard]);
     await this.admin.applyAdminChange(id, change);

@@ -11,15 +11,24 @@
  * Every item gets a fingerprint (its natural key); items whose fingerprint already exists in the
  * account are skipped, the rest are created, all inside one transaction. Importing the same file
  * twice therefore creates nothing the second time.
+ *
+ * The decisions behind each SQL store (how a row reads back as a fingerprintable item, which campaign
+ * a restored item lands in, the per-section limits, the dates an encounter keeps) are also here, at
+ * the end, so the stores themselves only run queries. The one-time import of data an old version kept
+ * in the browser follows the same split: `parseLegacyImport` validates it and `runLegacyImport` drives a
+ * `LegacyImportStore`.
  */
 import {
+  canCreateCampaign,
   isCampaignRole,
   parseCampaignInput,
   parseCharacterInput,
   parseCreatureInput,
   parseEncounterInput,
+  type AppUser,
   type CampaignRole,
   type CharacterInput,
+  type CharacterScores,
   type CreatureInput,
   type EncounterInput,
 } from "./permissions.js";
@@ -186,6 +195,97 @@ export interface BackupFile {
 /** True when a JSON body is the versioned backup format rather than the legacy browser import. */
 export const looksLikeBackup = (body: unknown): body is Record<string, unknown> => isRecord(body) && "version" in body;
 
+// ---- Legacy import: the one-time move of data an old version kept in the browser ----
+
+const LEGACY_MAX_ITEMS = 200;
+const LEGACY_MAX_CREATURES = 500;
+
+export interface LegacyCampaign { name: string; description: string; characterIds: string[] }
+export interface LegacyImport {
+  /** `localId` is the id the browser gave the character; legacy campaigns point at it. */
+  characters: (CharacterInput & { localId: string })[];
+  campaigns: LegacyCampaign[];
+  creatures: CreatureInput[];
+}
+
+const optionalList = (value: unknown): unknown[] | null => value === undefined ? [] : Array.isArray(value) ? value : null;
+
+/**
+ * Validate the legacy browser payload (`{ characters, campaigns?, creatures? }`). Unlike a backup,
+ * entries that do not validate are dropped one by one: the old browser data was never checked.
+ */
+export function parseLegacyImport(body: unknown): { ok: true; value: LegacyImport } | { ok: false; error: "invalid" | "too-many" } {
+  if (!isRecord(body) || !Array.isArray(body.characters)) return { ok: false, error: "invalid" };
+  const rawCampaigns = optionalList(body.campaigns);
+  const rawCreatures = optionalList(body.creatures);
+  if (!rawCampaigns || !rawCreatures) return { ok: false, error: "invalid" };
+  if (body.characters.length > LEGACY_MAX_ITEMS || rawCampaigns.length > LEGACY_MAX_ITEMS || rawCreatures.length > LEGACY_MAX_CREATURES) {
+    return { ok: false, error: "too-many" };
+  }
+  const characters = body.characters.flatMap((raw) => {
+    const localId = isRecord(raw) && typeof raw.id === "string" ? raw.id : "";
+    const input = parseCharacterInput({ ...(isRecord(raw) ? raw : {}), campaignId: null });
+    return input && localId ? [{ ...input, localId }] : [];
+  });
+  const campaigns = rawCampaigns.flatMap((raw) => {
+    const input = parseCampaignInput(raw);
+    const ids = isRecord(raw) && Array.isArray(raw.characterIds) ? raw.characterIds : [];
+    return input ? [{ ...input, characterIds: ids.slice(0, LEGACY_MAX_ITEMS).filter((id): id is string => typeof id === "string") }] : [];
+  });
+  const creatures = rawCreatures.flatMap((raw) => {
+    const input = parseCreatureInput(raw);
+    return input ? [input] : [];
+  });
+  return { ok: true, value: { characters, campaigns, creatures } };
+}
+
+/** Where the legacy import writes, one item per call. A store answers false/null when the account refused that item. */
+export interface LegacyImportStore {
+  createCreature(item: CreatureInput): Promise<boolean>;
+  /** The new character's id. */
+  createCharacter(item: CharacterInput): Promise<string | null>;
+  /** The new campaign's id. */
+  createCampaign(item: { name: string; description: string }): Promise<string | null>;
+  /** Put characters that were just imported (their new ids) in a campaign. */
+  placeCharacters(campaignId: string, characterIds: string[]): Promise<void>;
+}
+
+export interface LegacyImportCounts { characters: number; campaigns: number; creatures: number }
+
+/**
+ * Copy validated legacy data through the store: creatures, then characters outside any campaign
+ * (remembering browser id -> new id), then, only for accounts that may create campaigns, each
+ * campaign with the characters it pointed at. Refused items are left out and not counted.
+ */
+export async function runLegacyImport(
+  { characters, campaigns, creatures }: LegacyImport, user: Pick<AppUser, "status">, store: LegacyImportStore,
+): Promise<LegacyImportCounts> {
+  let creatureCount = 0;
+  for (const creature of creatures) {
+    if (await store.createCreature(creature)) creatureCount += 1;
+  }
+  const idMap = new Map<string, string>();
+  for (const character of characters) {
+    const id = await store.createCharacter({ ...character, campaignId: null });
+    if (id !== null) idMap.set(character.localId, id);
+  }
+  const campaignCount = canCreateCampaign(user) ? await importLegacyCampaigns(campaigns, idMap, store) : 0;
+  return { characters: idMap.size, campaigns: campaignCount, creatures: creatureCount };
+}
+
+/** Create each legacy campaign and place in it the characters it pointed at that were imported; returns how many were created. */
+async function importLegacyCampaigns(campaigns: LegacyCampaign[], idMap: Map<string, string>, store: LegacyImportStore): Promise<number> {
+  let created = 0;
+  for (const campaign of campaigns) {
+    const id = await store.createCampaign(campaign);
+    if (id === null) continue;
+    created += 1;
+    const ids = campaign.characterIds.flatMap((localId) => idMap.get(localId) ?? []);
+    if (ids.length) await store.placeCharacters(id, ids);
+  }
+  return created;
+}
+
 export type BackupErrorCode = "invalid" | "version" | "section" | "item" | "too-many";
 export interface BackupError { code: BackupErrorCode; /** e.g. "characters[3]" */ path?: string }
 
@@ -297,3 +397,85 @@ export async function runRestore(backup: ParsedBackup, stores: Record<string, Se
   }
   return result;
 }
+
+// ---- Restore decisions the SQL stores in backup.service.ts delegate ----
+
+const sectionByKey = (sectionKey: string) => {
+  const found = backupSections.find((candidate) => candidate.key === sectionKey);
+  if (!found) throw new Error(`Unknown backup section ${sectionKey}`);
+  return found;
+};
+
+/** Existing rows are fingerprinted with their real ids, so no local->real mapping applies to them. */
+const noMap: IdMap = {};
+
+/**
+ * Fingerprint -> id of the rows an account already has, for `SectionStore.existing`. `toItem` reads a
+ * row as the section's item (the row itself by default). Rows come in the store's order and the first
+ * one wins: with two campaigns of the same name, the oldest is the one reused.
+ */
+export function indexExisting<Row extends { id: string }>(
+  sectionKey: string, rows: readonly Row[], toItem: (row: Row) => unknown = (row) => row,
+): Map<string, string> {
+  const section = sectionByKey(sectionKey);
+  const found = new Map<string, string>();
+  for (const row of rows) {
+    const fingerprint = section.fingerprint(toItem(row), noMap);
+    if (!found.has(fingerprint)) found.set(fingerprint, row.id);
+  }
+  return found;
+}
+
+/** A character row as the restore reads it. `data` is the jsonb column; quick-edit characters lack most of it. */
+export interface StoredCharacterRow {
+  name: string;
+  level: number;
+  data: { className?: string; species?: string; background?: string; scores?: Partial<CharacterScores>; notes?: string; build?: Record<string, unknown> };
+}
+
+const defaultScores: CharacterScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+
+/** A stored character as the backup item it fingerprints like (missing fields read as empty, scores as 10). */
+export function storedCharacter({ name, level, data }: StoredCharacterRow): Omit<BackupCharacter, "id" | "campaignId"> {
+  return {
+    name, level, className: data.className ?? "", species: data.species ?? "", background: data.background ?? "",
+    scores: { ...defaultScores, ...data.scores }, notes: data.notes ?? "", ...(data.build ? { build: data.build } : {}),
+  };
+}
+
+/** Real id of the campaign a restored item points at (a backup-local id), or null when it points at none or isn't mapped. */
+export const restoredCampaignId = (localId: string | null | undefined, idMap: IdMap): string | null =>
+  localId ? idMap.campaigns?.get(localId) ?? null : null;
+
+/** Real id of the campaign a restored encounter lands in; an encounter always belongs to one, so an unmapped link is a bug. */
+export function encounterCampaignId(item: BackupEncounter, idMap: IdMap): string {
+  const campaignId = restoredCampaignId(item.campaignId, idMap);
+  if (!campaignId) throw new Error("Encounter references an unknown campaign.");
+  return campaignId;
+}
+
+/**
+ * Per-restore count of what a section holds, per scope (the account, or one campaign). Stores `add`
+ * what `existing` found and `take` a slot before each insert, which throws once the limit is reached.
+ */
+export class RestoreQuota {
+  private readonly used = new Map<string, number>();
+  constructor(readonly section: string, readonly max: number) {}
+
+  add(scope: string, count = 1): void {
+    this.used.set(scope, (this.used.get(scope) ?? 0) + count);
+  }
+
+  take(scope: string): void {
+    if ((this.used.get(scope) ?? 0) >= this.max) throw new BackupRestoreError("limit", this.section);
+    this.add(scope);
+  }
+}
+
+/**
+ * Dates a restored encounter is inserted with. Null leaves the date to the database clock (now), and
+ * `playedAt` only counts when the encounter was played.
+ */
+export const encounterRestoreDates = (item: BackupEncounter) => ({
+  played: item.status === "played", playedAt: item.playedAt ?? null, createdAt: item.createdAt ?? null,
+});

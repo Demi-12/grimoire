@@ -29,6 +29,25 @@ export function parseAdminEmails(raw: string | undefined): Set<string> {
   return new Set((raw ?? "").split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
 
+/** Is this email in the GRIMOIRE_ADMIN_EMAILS list (`raw`)? Case doesn't matter. */
+export const isListedAdmin = (email: string, raw: string | undefined) => parseAdminEmails(raw).has(email.toLowerCase());
+
+/** A `user` row as the request's account; null when it's missing or holds a role or status the app doesn't know. */
+export function appUserFromRow(row: { id: string; name: string; email: string; role: string; status: string } | undefined): AppUser | null {
+  if (!row || !isSiteRole(row.role) || !isAccountStatus(row.status)) return null;
+  return { id: row.id, name: row.name, email: row.email, role: row.role, status: row.status };
+}
+
+/**
+ * Should this account become admin on its next request, provided the site still has no approved admin? Listed
+ * emails only, never a blocked account, and not one that already is an approved admin. Sign-up doesn't verify
+ * emails, so the list only bootstraps the first admin; after that, admins are named from the admin panel.
+ */
+export function awaitsAdminBootstrap(user: Pick<AppUser, "email" | "role" | "status">, raw: string | undefined): boolean {
+  if (user.status === "blocked" || (user.role === "admin" && user.status === "approved")) return false;
+  return isListedAdmin(user.email, raw);
+}
+
 /** Any approved account can open a campaign (becoming its DM) or join someone else's as a player. */
 export function canCreateCampaign(user: Pick<AppUser, "status">): boolean {
   return user.status === "approved";
@@ -48,7 +67,42 @@ export const INVITE_TTL_DAYS = 7;
 /** Invite tokens are 32 random bytes in base64url; reject anything else before touching the database. */
 export const isInviteToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 
+/** Account ids are better-auth's, not UUIDs: only their length is bounded. */
+export const isAccountId = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 128;
+
 export type AdminChange = { role?: SiteRole; status?: AccountStatus };
+export type AdminRequest = { kind: "revoke-sessions" } | { kind: "change"; change: AdminChange };
+
+/** Read an admin panel edit: `{ revokeSessions: true }`, or a new role and/or status. */
+export function parseAdminRequest(body: unknown): { ok: true; value: AdminRequest } | { ok: false; error: string } {
+  if (!body || typeof body !== "object") return { ok: false, error: "Invalid change." };
+  const value = body as Record<string, unknown>;
+  if (value.revokeSessions === true) return { ok: true, value: { kind: "revoke-sessions" } };
+  if (value.role !== undefined && !isSiteRole(value.role)) return { ok: false, error: "Invalid role." };
+  if (value.status !== undefined && !isAccountStatus(value.status)) return { ok: false, error: "Invalid status." };
+  const change: AdminChange = {
+    ...(value.role !== undefined ? { role: value.role as SiteRole } : {}),
+    ...(value.status !== undefined ? { status: value.status as AccountStatus } : {}),
+  };
+  if (!change.role && !change.status) return { ok: false, error: "Nothing to change." };
+  return { ok: true, value: { kind: "change", change } };
+}
+
+export type MemberRequest =
+  | { kind: "add"; /** Exact email or account name. */ query: string; role: CampaignRole }
+  | { kind: "set-role"; userId: string; role: CampaignRole };
+
+/** Read a campaign roster edit: add someone by email/name (`query`), or change a member's role (`userId`). */
+export function parseMemberRequest(body: unknown): MemberRequest | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  if (!isCampaignRole(value.role)) return null;
+  if (typeof value.query === "string") {
+    const query = value.query.trim();
+    return query && query.length <= 254 ? { kind: "add", query, role: value.role } : null;
+  }
+  return isAccountId(value.userId) ? { kind: "set-role", userId: value.userId, role: value.role } : null;
+}
 
 /**
  * Guard admin edits: an admin can't lock themselves out, and the site always keeps at least one
@@ -191,12 +245,15 @@ export interface EncounterInput {
   lines: EncounterLineInput[];
 }
 
+const ENCOUNTER_TITLE_MAX = 80;
+const ENCOUNTER_NOTES_MAX = 2000;
+
 /** Validate an encounter payload (a saved suggestion plus title/notes/status). Null when invalid. */
 export function parseEncounterInput(body: unknown): EncounterInput | null {
   if (!body || typeof body !== "object") return null;
   const value = body as Record<string, unknown>;
-  const title = text(value.title, 80);
-  const notes = text(value.notes, 2000);
+  const title = text(value.title, ENCOUNTER_TITLE_MAX);
+  const notes = text(value.notes, ENCOUNTER_NOTES_MAX);
   if (!title || notes === null) return null;
   const status = value.status === undefined ? "planned" : value.status;
   if (!encounterStatuses.includes(status as EncounterStatus)) return null;
@@ -226,6 +283,30 @@ export function parseEncounterInput(body: unknown): EncounterInput | null {
     title, notes, status: status as EncounterStatus, difficulty: value.difficulty as EncounterInput["difficulty"],
     budget: value.budget as number, totalXp: value.totalXp as number, partyLevels: value.partyLevels as number[], lines,
   };
+}
+
+export interface EncounterChange { title?: string; notes?: string; status?: EncounterStatus }
+
+const INVALID = Symbol("invalid");
+
+/** An optional trimmed string: undefined when absent, INVALID when not a string or too long. */
+function optionalText(value: unknown, max: number): string | undefined | typeof INVALID {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") return INVALID;
+  const trimmed = value.trim();
+  return trimmed.length <= max ? trimmed : INVALID;
+}
+
+/** Validate an edit of a saved encounter: at least one of title, notes or status. Null when invalid. */
+export function parseEncounterChange(body: unknown): EncounterChange | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as Record<string, unknown>;
+  const title = optionalText(value.title, ENCOUNTER_TITLE_MAX);
+  const notes = optionalText(value.notes, ENCOUNTER_NOTES_MAX);
+  const status = value.status === undefined || encounterStatuses.includes(value.status as EncounterStatus) ? value.status as EncounterStatus | undefined : INVALID;
+  if (title === INVALID || notes === INVALID || status === INVALID || title === "") return null;
+  if (title === undefined && notes === undefined && status === undefined) return null;
+  return { title, notes, status };
 }
 
 export interface PreferencesInput { locale?: "en" | "es"; theme?: "light" | "dark" }

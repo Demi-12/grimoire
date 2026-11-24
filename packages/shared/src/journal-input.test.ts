@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCreatureInput, parseEncounterInput, parsePreferencesInput } from "./permissions.js";
+import { parseCreatureInput, parseEncounterChange, parseEncounterInput, parsePreferencesInput } from "./permissions.js";
 
 const encounter = {
   title: "Emboscada goblin", notes: "", difficulty: "moderate", budget: 750, totalXp: 700, partyLevels: [3, 3, 3, 3],
@@ -42,5 +42,23 @@ describe("parsePreferencesInput", () => {
   it("rejects empty or unknown values", () => {
     expect(parsePreferencesInput({})).toBeNull();
     expect(parsePreferencesInput({ locale: "fr" })).toBeNull();
+  });
+});
+
+describe("parseEncounterChange", () => {
+  it("keeps only the fields that were sent, trimmed", () => {
+    expect(parseEncounterChange({ title: "  Emboscada  " })).toEqual({ title: "Emboscada", notes: undefined, status: undefined });
+    expect(parseEncounterChange({ notes: "", status: "played" })).toEqual({ title: undefined, notes: "", status: "played" });
+  });
+  it("rejects an empty change, wrong types, an empty title, oversized text and unknown statuses", () => {
+    expect(parseEncounterChange(null)).toBeNull();
+    expect(parseEncounterChange("title")).toBeNull();
+    expect(parseEncounterChange({})).toBeNull();
+    expect(parseEncounterChange({ title: "   " })).toBeNull();
+    expect(parseEncounterChange({ title: null })).toBeNull();
+    expect(parseEncounterChange({ notes: 3 })).toBeNull();
+    expect(parseEncounterChange({ title: "a".repeat(81) })).toBeNull();
+    expect(parseEncounterChange({ notes: "a".repeat(2001) })).toBeNull();
+    expect(parseEncounterChange({ status: "won" })).toBeNull();
   });
 });

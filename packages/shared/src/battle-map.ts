@@ -207,94 +207,181 @@ function label(value: unknown): string | null {
   return trimmed && trimmed.length <= TOKEN_LABEL_MAX ? trimmed : null;
 }
 
+type MapOpType = MapOp["type"];
+type MapOpOf<K extends MapOpType> = Extract<MapOp, { type: K }>;
+/** A change as it arrives from the browser, before it is checked. */
+type RawOp = Record<string, unknown>;
+type WallSpan = Pick<MapWall, "x1" | "y1" | "x2" | "y2">;
+
+const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isTrue = (value: unknown): value is true => value === true;
+const isUuid = (value: unknown): value is string => typeof value === "string" && uuidPattern.test(value);
+const isSquare = (value: unknown): value is number => isInt(value, 0, MAP_MAX_SIZE - 1);
+const isMoved = (value: unknown): value is number => isInt(value, 0, COMBAT_MAX_MOVED);
+/** A combatant's speed, or null to say it isn't known. */
+const isSpeedOrUnknown = (value: unknown): value is number | null => value === null || isSpeed(value);
+/** Left out, or there and accepted by the guard. */
+const isOptional = <T>(value: unknown, guard: (value: unknown) => value is T): value is T | undefined => value === undefined || guard(value);
+
+/** Reads one optional field of a change: its clean value, or undefined when the field is there but wrong. */
+type FieldReader<T> = (value: unknown) => T | undefined;
+/** A reader for each optional field of a change; the mapped type asks for one per field. */
+type FieldReaders<T> = { [K in keyof T]-?: FieldReader<Exclude<T[K], undefined>> };
+const checked = <T>(guard: (value: unknown) => value is T): FieldReader<T> => (value) => guard(value) ? value : undefined;
+const readLabel: FieldReader<string> = (value) => label(value) ?? undefined;
+const readVision: FieldReader<TokenVision> = (value) => parseVision(value) ?? undefined;
+
+/**
+ * The optional fields of a change that has to carry at least one: fields left out stay out, and one wrong
+ * field, or none at all, rejects the change.
+ */
+function someFields<T extends object>(op: RawOp, readers: FieldReaders<T>): Partial<T> | null {
+  const fields: Partial<T> = {};
+  for (const key in readers) {
+    if (op[key] === undefined) continue;
+    const value = readers[key](op[key]);
+    if (value === undefined) return null;
+    fields[key] = value;
+  }
+  return Object.keys(fields).length ? fields : null;
+}
+
+type FieldsOf<K extends MapOpType, Fixed extends string> = Omit<MapOpOf<K>, "type" | Fixed>;
+const updateFields: FieldReaders<FieldsOf<"update", "tokenId">> = {
+  label: readLabel, hidden: checked(isBoolean), defeated: checked(isBoolean), size: checked(isSize), vision: readVision, monsterSlug: checked(isMonsterSlug),
+};
+const settingsFields: FieldReaders<FieldsOf<"settings", never>> = { fog: checked(isBoolean), gridHidden: checked(isBoolean), resetExplored: checked(isTrue) };
+const combatantFields: FieldReaders<FieldsOf<"combatant", "tokenId">> = { initiative: checked(isInitiative), speed: checked(isSpeedOrUnknown), moved: checked(isMoved) };
+
+/** The wall a change points at, by its two corners in either order. */
+function parseSpan(op: RawOp): WallSpan | null {
+  const wall = parseWall({ x1: op.x1, y1: op.y1, x2: op.x2, y2: op.y2 });
+  return wall && { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+}
+
+function parseMoveOp(op: RawOp): MapOpOf<"move"> | null {
+  return isTokenId(op.tokenId) && isSquare(op.x) && isSquare(op.y) ? { type: "move", tokenId: op.tokenId, x: op.x, y: op.y } : null;
+}
+
+/** Without a square the hero goes to the first free one (or stays where it is). */
+function parsePlaceHeroOp(op: RawOp): MapOpOf<"place-hero"> | null {
+  if (!isUuid(op.characterId)) return null;
+  if (op.x === undefined && op.y === undefined) return { type: "place-hero", characterId: op.characterId };
+  return isSquare(op.x) && isSquare(op.y) ? { type: "place-hero", characterId: op.characterId, x: op.x, y: op.y } : null;
+}
+
+function parseAddMonsterOp(op: RawOp): MapOpOf<"add-monster"> | null {
+  const name = label(op.label);
+  const size = op.size === undefined ? 1 : op.size;
+  if (!name || !isInt(op.count, 1, MAP_MAX_MONSTERS_PER_ADD) || !isSize(size)) return null;
+  if (!isOptional(op.hidden, isBoolean) || !isOptional(op.monsterSlug, isMonsterSlug)) return null;
+  return { type: "add-monster", label: name, count: op.count, size, hidden: op.hidden === true, ...(op.monsterSlug ? { monsterSlug: op.monsterSlug } : {}) };
+}
+
+function parseUpdateOp(op: RawOp): MapOpOf<"update"> | null {
+  if (!isTokenId(op.tokenId)) return null;
+  const fields = someFields(op, updateFields);
+  return fields && { type: "update", tokenId: op.tokenId, ...fields };
+}
+
+function parseFaceOp(op: RawOp): MapOpOf<"face"> | null {
+  return isTokenId(op.tokenId) && isFacing(op.facing) ? { type: "face", tokenId: op.tokenId, facing: op.facing } : null;
+}
+
+function parseSettingsOp(op: RawOp): MapOpOf<"settings"> | null {
+  const fields = someFields(op, settingsFields);
+  return fields && { type: "settings", ...fields };
+}
+
+function parseAddWallsOp(op: RawOp): MapOpOf<"add-walls"> | null {
+  if (!Array.isArray(op.walls) || op.walls.length < 1 || op.walls.length > MAP_MAX_WALLS_PER_ADD) return null;
+  const walls = op.walls.map(parseWall);
+  return walls.every((wall): wall is MapWall => wall !== null) ? { type: "add-walls", walls } : null;
+}
+
+function parseRemoveWallOp(op: RawOp): MapOpOf<"remove-wall"> | null {
+  const span = parseSpan(op);
+  return span && { type: "remove-wall", ...span };
+}
+
+function parseDoorOp(op: RawOp): MapOpOf<"door"> | null {
+  const span = parseSpan(op);
+  return span && isBoolean(op.open) ? { type: "door", ...span, open: op.open } : null;
+}
+
+const parseClearWallsOp = (): MapOpOf<"clear-walls"> => ({ type: "clear-walls" });
+
+function parseRemoveOp(op: RawOp): MapOpOf<"remove"> | null {
+  return isTokenId(op.tokenId) ? { type: "remove", tokenId: op.tokenId } : null;
+}
+
+const parseClearMonstersOp = (): MapOpOf<"clear-monsters"> => ({ type: "clear-monsters" });
+
+function parseResizeOp(op: RawOp): MapOpOf<"resize"> | null {
+  return isInt(op.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) && isInt(op.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? { type: "resize", cols: op.cols, rows: op.rows } : null;
+}
+
+/** Everyone in the fight once, each with a valid initiative. */
+function parseCombatStartOp(op: RawOp): MapOpOf<"combat-start"> | null {
+  if (!Array.isArray(op.entries) || op.entries.length > MAP_MAX_TOKENS) return null;
+  const entries = op.entries.map(parseCombatEntry);
+  if (!entries.every((entry): entry is CombatEntry => entry !== null)) return null;
+  return new Set(entries.map((entry) => entry.tokenId)).size === entries.length ? { type: "combat-start", entries } : null;
+}
+
+function parseCombatantOp(op: RawOp): MapOpOf<"combatant"> | null {
+  if (!isTokenId(op.tokenId)) return null;
+  const fields = someFields(op, combatantFields);
+  return fields && { type: "combatant", tokenId: op.tokenId, ...fields };
+}
+
+function parseCombatLeaveOp(op: RawOp): MapOpOf<"combat-leave"> | null {
+  return isTokenId(op.tokenId) ? { type: "combat-leave", tokenId: op.tokenId } : null;
+}
+
+/** A step (1 or -1) or a creature, never both. */
+function parseTurnOp(op: RawOp): MapOpOf<"turn"> | null {
+  if (op.step === undefined) return isTokenId(op.tokenId) ? { type: "turn", tokenId: op.tokenId } : null;
+  return op.tokenId === undefined && (op.step === 1 || op.step === -1) ? { type: "turn", step: op.step } : null;
+}
+
+function parseDashOp(op: RawOp): MapOpOf<"dash"> | null {
+  return isTokenId(op.tokenId) && isBoolean(op.dash) ? { type: "dash", tokenId: op.tokenId, dash: op.dash } : null;
+}
+
+const parseCombatEndOp = (): MapOpOf<"combat-end"> => ({ type: "combat-end" });
+
+/** One parser per kind of change; the mapped type makes the compiler ask for one with every new variant. */
+const opParsers: { [K in MapOpType]: (op: RawOp) => MapOpOf<K> | null } = {
+  move: parseMoveOp,
+  "place-hero": parsePlaceHeroOp,
+  "add-monster": parseAddMonsterOp,
+  update: parseUpdateOp,
+  face: parseFaceOp,
+  settings: parseSettingsOp,
+  "add-walls": parseAddWallsOp,
+  "remove-wall": parseRemoveWallOp,
+  door: parseDoorOp,
+  "clear-walls": parseClearWallsOp,
+  remove: parseRemoveOp,
+  "clear-monsters": parseClearMonstersOp,
+  resize: parseResizeOp,
+  "combat-start": parseCombatStartOp,
+  combatant: parseCombatantOp,
+  "combat-leave": parseCombatLeaveOp,
+  turn: parseTurnOp,
+  dash: parseDashOp,
+  "combat-end": parseCombatEndOp,
+};
+
+/** A kind of change the map knows (own keys only, so "toString" and the like are not). */
+const isMapOpType = (value: unknown): value is MapOpType => typeof value === "string" && Object.hasOwn(opParsers, value);
+
 /** Validate one change from the browser. Null when anything is out of bounds. */
 export function parseMapOp(raw: unknown): MapOp | null {
   if (!raw || typeof raw !== "object") return null;
-  const op = raw as Record<string, unknown>;
-  switch (op.type) {
-    case "move":
-      return isTokenId(op.tokenId) && isInt(op.x, 0, MAP_MAX_SIZE - 1) && isInt(op.y, 0, MAP_MAX_SIZE - 1)
-        ? { type: "move", tokenId: op.tokenId, x: op.x, y: op.y } : null;
-    case "place-hero": {
-      if (typeof op.characterId !== "string" || !uuidPattern.test(op.characterId)) return null;
-      const hasPosition = op.x !== undefined || op.y !== undefined;
-      if (hasPosition && !(isInt(op.x, 0, MAP_MAX_SIZE - 1) && isInt(op.y, 0, MAP_MAX_SIZE - 1))) return null;
-      return { type: "place-hero", characterId: op.characterId, ...(hasPosition ? { x: op.x as number, y: op.y as number } : {}) };
-    }
-    case "add-monster": {
-      const name = label(op.label);
-      const size = op.size === undefined ? 1 : op.size;
-      if (!name || !isInt(op.count, 1, MAP_MAX_MONSTERS_PER_ADD) || !isSize(size)) return null;
-      if (op.hidden !== undefined && typeof op.hidden !== "boolean") return null;
-      if (op.monsterSlug !== undefined && !isMonsterSlug(op.monsterSlug)) return null;
-      return { type: "add-monster", label: name, count: op.count, size, hidden: op.hidden === true, ...(op.monsterSlug ? { monsterSlug: op.monsterSlug as string } : {}) };
-    }
-    case "update": {
-      if (!isTokenId(op.tokenId)) return null;
-      const result: Extract<MapOp, { type: "update" }> = { type: "update", tokenId: op.tokenId };
-      if (op.label !== undefined) { const name = label(op.label); if (!name) return null; result.label = name; }
-      if (op.hidden !== undefined) { if (typeof op.hidden !== "boolean") return null; result.hidden = op.hidden; }
-      if (op.defeated !== undefined) { if (typeof op.defeated !== "boolean") return null; result.defeated = op.defeated; }
-      if (op.size !== undefined) { if (!isSize(op.size)) return null; result.size = op.size; }
-      if (op.vision !== undefined) { const vision = parseVision(op.vision); if (!vision) return null; result.vision = vision; }
-      if (op.monsterSlug !== undefined) { if (!isMonsterSlug(op.monsterSlug)) return null; result.monsterSlug = op.monsterSlug; }
-      return Object.keys(result).length > 2 ? result : null;
-    }
-    case "face":
-      return isTokenId(op.tokenId) && isFacing(op.facing) ? { type: "face", tokenId: op.tokenId, facing: op.facing } : null;
-    case "settings": {
-      const result: Extract<MapOp, { type: "settings" }> = { type: "settings" };
-      if (op.fog !== undefined) { if (typeof op.fog !== "boolean") return null; result.fog = op.fog; }
-      if (op.gridHidden !== undefined) { if (typeof op.gridHidden !== "boolean") return null; result.gridHidden = op.gridHidden; }
-      if (op.resetExplored !== undefined) { if (op.resetExplored !== true) return null; result.resetExplored = true; }
-      return Object.keys(result).length > 1 ? result : null;
-    }
-    case "add-walls": {
-      if (!Array.isArray(op.walls) || op.walls.length < 1 || op.walls.length > MAP_MAX_WALLS_PER_ADD) return null;
-      const walls = op.walls.map(parseWall);
-      return walls.every((wall): wall is MapWall => wall !== null) ? { type: "add-walls", walls } : null;
-    }
-    case "remove-wall":
-    case "door": {
-      const wall = parseWall({ x1: op.x1, y1: op.y1, x2: op.x2, y2: op.y2 });
-      if (!wall) return null;
-      if (op.type === "remove-wall") return { type: "remove-wall", x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
-      return typeof op.open === "boolean" ? { type: "door", x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, open: op.open } : null;
-    }
-    case "clear-walls":
-      return { type: "clear-walls" };
-    case "remove":
-      return isTokenId(op.tokenId) ? { type: "remove", tokenId: op.tokenId } : null;
-    case "clear-monsters":
-      return { type: "clear-monsters" };
-    case "resize":
-      return isInt(op.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) && isInt(op.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? { type: "resize", cols: op.cols, rows: op.rows } : null;
-    case "combat-start": {
-      if (!Array.isArray(op.entries) || op.entries.length > MAP_MAX_TOKENS) return null;
-      const entries = op.entries.map(parseCombatEntry);
-      if (!entries.every((entry): entry is CombatEntry => entry !== null)) return null;
-      return new Set(entries.map((entry) => entry.tokenId)).size === entries.length ? { type: "combat-start", entries } : null;
-    }
-    case "combatant": {
-      if (!isTokenId(op.tokenId)) return null;
-      const result: Extract<MapOp, { type: "combatant" }> = { type: "combatant", tokenId: op.tokenId };
-      if (op.initiative !== undefined) { if (!isInitiative(op.initiative)) return null; result.initiative = op.initiative; }
-      if (op.speed !== undefined) { if (op.speed !== null && !isSpeed(op.speed)) return null; result.speed = op.speed; }
-      if (op.moved !== undefined) { if (!isInt(op.moved, 0, COMBAT_MAX_MOVED)) return null; result.moved = op.moved; }
-      return Object.keys(result).length > 2 ? result : null;
-    }
-    case "combat-leave":
-      return isTokenId(op.tokenId) ? { type: "combat-leave", tokenId: op.tokenId } : null;
-    case "turn":
-      if (op.step !== undefined) return op.tokenId === undefined && (op.step === 1 || op.step === -1) ? { type: "turn", step: op.step } : null;
-      return isTokenId(op.tokenId) ? { type: "turn", tokenId: op.tokenId } : null;
-    case "dash":
-      return isTokenId(op.tokenId) && typeof op.dash === "boolean" ? { type: "dash", tokenId: op.tokenId, dash: op.dash } : null;
-    case "combat-end":
-      return { type: "combat-end" };
-    default:
-      return null;
-  }
+  const op = raw as RawOp;
+  return isMapOpType(op.type) ? opParsers[op.type](op) : null;
 }
 
 /** Validate a batch of changes (`{ ops: [...] }`). Null when the batch or any change is invalid. */
@@ -594,6 +681,41 @@ export function visibleMapState(state: MapState, showHidden: boolean): MapState 
   return visible;
 }
 
+/** Who is looking: a DM sees hidden monsters unless they asked for the players' view (e.g. the table display). */
+export type MapAudience = "auto" | "players";
+
+/** A campaign's map as stored (the battle_map row); undefined before the campaign has one. */
+export interface StoredMap { state: unknown; version: number; updatedAt: Date }
+
+/** The map as one viewer receives it; the API adds which campaign it belongs to. */
+export interface MapViewerState {
+  version: number;
+  /** Owner, co-DM or site admin: may add monsters, hide/reveal, resize. */
+  isDm: boolean;
+  /** Hidden monsters are included (DM with the DM view). */
+  showsHidden: boolean;
+  heroes: (MapHero & { mine: boolean })[];
+  state: MapState;
+  updatedAt: string;
+}
+
+/**
+ * What one viewer receives of a stored map: the state read safely (an empty map before there is one),
+ * hero tokens in step with the campaign, and only what this viewer and audience may see.
+ */
+export function viewMap(stored: StoredMap | undefined, heroes: MapHero[], viewer: MapActor & { audience: MapAudience }): MapViewerState {
+  const showsHidden = viewer.isDm && viewer.audience !== "players";
+  const state = syncHeroes(normalizeMapState(stored?.state ?? emptyMapState()), heroes);
+  return {
+    version: stored?.version ?? 0,
+    isDm: viewer.isDm,
+    showsHidden,
+    heroes: heroes.map((hero) => ({ ...hero, mine: hero.ownerId === viewer.userId })),
+    state: visibleMapState(state, showsHidden),
+    updatedAt: (stored?.updatedAt ?? new Date(0)).toISOString(),
+  };
+}
+
 /** May a token take one step of (dx, dy) squares? Diagonal steps can't slip past the end or the corner of a wall. */
 function stepIsClear(token: Pick<MapToken, "x" | "y" | "size">, dx: number, dy: number, blocked: Set<string>): boolean {
   for (let i = 0; i < token.size; i++) for (let j = 0; j < token.size; j++) {
@@ -761,239 +883,352 @@ export function canControlToken(actor: MapActor, token: MapToken, heroes: MapHer
   return heroes.some((hero) => hero.id === token.characterId && hero.ownerId === actor.userId);
 }
 
+/** Who makes a batch of changes, and what applying it needs from outside the map. */
+interface ApplyContext {
+  actor: MapActor;
+  heroes: MapHero[];
+  newId: () => string;
+}
+/** Applies one change to the state so far; never touches the state it is given. */
+type Applier<K extends MapOpType> = (state: MapState, op: MapOpOf<K>, context: ApplyContext) => MapApplyResult;
+/** A creature in the fight: the fight itself and its place in the order. */
+interface Fighter { combat: MapCombat; entry: Combatant }
+
+const done = (state: MapState): MapApplyResult => ({ ok: true, state });
+const refuse = (error: MapOpError): MapApplyResult => ({ ok: false, error });
+
+const findToken = (state: MapState, tokenId: string | undefined) => state.tokens.find((token) => token.id === tokenId);
+/** The state with `change` made to the token(s) with this id. */
+const changeToken = (state: MapState, tokenId: string, change: (token: MapToken) => MapToken): MapState =>
+  ({ ...state, tokens: state.tokens.map((token) => token.id === tokenId ? change(token) : token) });
+
+/** The state with these walls; with none at all the field goes. */
+function withWalls(state: MapState, walls: MapWall[]): MapState {
+  const next: MapState = { ...state, walls };
+  if (!walls.length) delete next.walls;
+  return next;
+}
+
+/** Token flags are stored only while true. */
+function withTokenFlag(token: MapToken, flag: "hidden" | "defeated", on: boolean | undefined): MapToken {
+  if (on === undefined) return token;
+  const next = { ...token };
+  if (on) next[flag] = true; else delete next[flag];
+  return next;
+}
+
+/** The token's fight and place in it, when it's in one. */
+function fighterOf(state: MapState, tokenId: string): Fighter | null {
+  const entry = combatantOf(state, tokenId);
+  return state.combat && entry ? { combat: state.combat, entry } : null;
+}
+
+/** The fight with one creature's entry changed. */
+const changeEntry = (combat: MapCombat, tokenId: string, change: (entry: Combatant) => Combatant): MapCombat =>
+  ({ ...combat, order: combat.order.map((entry) => entry.tokenId === tokenId ? change(entry) : entry) });
+
+/** Would walking `cost` more squares take the combatant past its movement for the turn? */
+function overBudget(entry: Combatant, cost: number): boolean {
+  const budget = movementBudget(entry);
+  return budget !== null && (entry.moved ?? 0) + cost > budget;
+}
+
+/** Squares a walk costs: the way round the walls or, when there is none, straight there for the DM (null for players). */
+function walkCost(state: MapState, token: MapToken, moved: MapToken, isDm: boolean): number | null {
+  const path = pathLength(state, token, moved.x, moved.y);
+  if (path !== null || !isDm) return path;
+  return Math.max(Math.abs(moved.x - token.x), Math.abs(moved.y - token.y));
+}
+
+/**
+ * Walk a token to (x, y). Walls hold players back and, in a fight, so do whose turn it is and the movement
+ * left; the DM can still put anything anywhere. Movement in a fight is counted for everyone.
+ */
+function walk(state: MapState, token: MapToken, x: number, y: number, isDm: boolean): MapApplyResult {
+  const moved = clampToken({ ...token, x, y }, state.cols, state.rows);
+  if (moved.x === token.x && moved.y === token.y) return done(state);
+  const fighter = fighterOf(state, token.id);
+  if (fighter) return walkInFight(state, fighter, token, moved, isDm);
+  return isDm || canReach(state, token, moved.x, moved.y) ? done(changeToken(state, token.id, () => moved)) : refuse("blocked");
+}
+
+function walkInFight(state: MapState, { combat, entry }: Fighter, token: MapToken, moved: MapToken, isDm: boolean): MapApplyResult {
+  if (!isDm && combat.active !== token.id) return refuse("turn");
+  const cost = walkCost(state, token, moved, isDm);
+  if (cost === null) return refuse("blocked");
+  if (!isDm && overBudget(entry, cost)) return refuse("movement");
+  const spent = changeEntry(combat, token.id, (item) => ({ ...item, moved: Math.min(COMBAT_MAX_MOVED, (item.moved ?? 0) + cost) }));
+  return done(changeToken({ ...state, combat: spent }, token.id, () => moved));
+}
+
+function applyMove(state: MapState, op: MapOpOf<"move">, { actor, heroes }: ApplyContext): MapApplyResult {
+  const token = findToken(state, op.tokenId);
+  if (!token) return refuse("invalid");
+  if (!canControlToken(actor, token, heroes)) return refuse("forbidden");
+  return walk(state, token, op.x, op.y, actor.isDm);
+}
+
+/** Where a hero goes: the square asked for, else where it already stands, else the first free one from the left. */
+function heroSpot(state: MapState, op: MapOpOf<"place-hero">, existing: MapToken | undefined): { x: number; y: number } {
+  if (op.x !== undefined && op.y !== undefined) return { x: op.x, y: op.y };
+  return existing ?? findFreeSpot(state, 1, "left");
+}
+
+function addHero(state: MapState, hero: MapHero, spot: { x: number; y: number }, newId: () => string): MapApplyResult {
+  if (state.tokens.length >= MAP_MAX_TOKENS) return refuse("invalid");
+  const token = clampToken({ id: newId(), kind: "hero", label: label(hero.name) ?? "?", characterId: hero.id, size: 1, ...spot }, state.cols, state.rows);
+  return done({ ...state, tokens: [...state.tokens, token] });
+}
+
+/** Each character has one hero token: placing it again walks it there. */
+function applyPlaceHero(state: MapState, op: MapOpOf<"place-hero">, { actor, heroes, newId }: ApplyContext): MapApplyResult {
+  const hero = heroes.find((item) => item.id === op.characterId);
+  if (!hero) return refuse("invalid");
+  if (!actor.isDm && hero.ownerId !== actor.userId) return refuse("forbidden");
+  const existing = state.tokens.find((item) => item.kind === "hero" && item.characterId === hero.id);
+  const spot = heroSpot(state, op, existing);
+  return existing ? walk(state, existing, spot.x, spot.y, actor.isDm) : addHero(state, hero, spot, newId);
+}
+
+/** Several monsters at once are numbered on from the ones already on the map ("Goblin 3", "Goblin 4"…). */
+function applyAddMonster(state: MapState, op: MapOpOf<"add-monster">, { newId }: ApplyContext): MapApplyResult {
+  if (state.tokens.length + op.count > MAP_MAX_TOKENS) return refuse("invalid");
+  const first = nextNumber(state, op.label);
+  let next = state;
+  for (let index = 0; index < op.count; index++) {
+    const name = op.count > 1 ? `${op.label.slice(0, TOKEN_LABEL_MAX - 4)} ${first + index}` : op.label;
+    const spot = findFreeSpot(next, op.size, "right");
+    next = { ...next, tokens: [...next.tokens, clampToken({
+      id: newId(), kind: "monster", label: name, size: op.size, ...spot,
+      ...(op.hidden ? { hidden: true } : {}), ...(op.monsterSlug ? { monsterSlug: op.monsterSlug } : {}),
+    }, next.cols, next.rows)] };
+  }
+  return done(next);
+}
+
+/** Heroes take their name and stat block from their character, and are never hidden. */
+const touchesMonsterFields = (op: MapOpOf<"update">) => op.label !== undefined || op.hidden !== undefined || op.monsterSlug !== undefined;
+
+function updatedToken(token: MapToken, op: MapOpOf<"update">): MapToken {
+  const next: MapToken = {
+    ...token, ...(op.label !== undefined ? { label: op.label } : {}), ...(op.size !== undefined ? { size: op.size } : {}),
+    ...(op.vision !== undefined ? { vision: op.vision } : {}), ...(op.monsterSlug !== undefined ? { monsterSlug: op.monsterSlug } : {}),
+  };
+  return withTokenFlag(withTokenFlag(next, "hidden", op.hidden), "defeated", op.defeated);
+}
+
+function applyUpdate(state: MapState, op: MapOpOf<"update">): MapApplyResult {
+  const token = findToken(state, op.tokenId);
+  if (!token) return refuse("invalid");
+  if (token.kind === "hero" && touchesMonsterFields(op)) return refuse("invalid");
+  return done(changeToken(state, token.id, (item) => clampToken(updatedToken(item, op), state.cols, state.rows)));
+}
+
+/** Facing north is the default and isn't stored. */
+function withFacing(token: MapToken, facing: Facing): MapToken {
+  const next: MapToken = { ...token, facing };
+  if (facing === 0) delete next.facing;
+  return next;
+}
+
+function applyFace(state: MapState, op: MapOpOf<"face">, { actor, heroes }: ApplyContext): MapApplyResult {
+  const token = findToken(state, op.tokenId);
+  if (!token) return refuse("invalid");
+  if (!canControlToken(actor, token, heroes)) return refuse("forbidden");
+  return done(changeToken(state, token.id, (item) => withFacing(item, op.facing)));
+}
+
+/** Switching the fog off, or asking to, forgets what the party explored. */
+function applySettings(state: MapState, op: MapOpOf<"settings">): MapApplyResult {
+  const next: MapState = { ...state };
+  if (op.fog !== undefined) { if (op.fog) next.fog = true; else delete next.fog; }
+  if (op.gridHidden !== undefined) { if (op.gridHidden) next.gridHidden = true; else delete next.gridHidden; }
+  if (op.resetExplored || !next.fog) delete next.explored;
+  return done(next);
+}
+
+function applyAddWalls(state: MapState, op: MapOpOf<"add-walls">): MapApplyResult {
+  const walls = [...state.walls ?? []];
+  for (const added of op.walls) {
+    const wall = clipWall(added, state.cols, state.rows);
+    if (!wall) return refuse("invalid");
+    const same = walls.findIndex((item) => sameSpan(item, wall));
+    if (same >= 0) walls[same] = wall; // drawing over a wall turns it into a door or back
+    else walls.push(wall);
+  }
+  return walls.length > MAP_MAX_WALLS ? refuse("invalid") : done({ ...state, walls });
+}
+
+function applyRemoveWall(state: MapState, op: MapOpOf<"remove-wall">): MapApplyResult {
+  return done(withWalls(state, (state.walls ?? []).filter((wall) => !sameSpan(wall, op))));
+}
+
+/**
+ * The DM uses any door; players only one next to a hero of their own. A missing door is out of a player's reach
+ * too, so probing coordinates can't reveal doors hidden in the fog.
+ */
+function mayUseDoor(state: MapState, door: MapWall | undefined, { actor, heroes }: ApplyContext): boolean {
+  if (actor.isDm) return true;
+  return door !== undefined && state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door));
+}
+
+function applyDoor(state: MapState, op: MapOpOf<"door">, context: ApplyContext): MapApplyResult {
+  const walls = state.walls ?? [];
+  const door = walls.find((wall) => wall.door && sameSpan(wall, op));
+  if (!mayUseDoor(state, door, context)) return refuse("forbidden");
+  if (!door) return refuse("invalid");
+  const turned: MapWall = { ...door, door: op.open ? "open" : "closed" };
+  return done({ ...state, walls: walls.map((wall) => wall === door ? turned : wall) });
+}
+
+function applyClearWalls(state: MapState): MapApplyResult {
+  return done(withWalls(state, []));
+}
+
+function applyRemove(state: MapState, op: MapOpOf<"remove">, { actor, heroes }: ApplyContext): MapApplyResult {
+  const token = findToken(state, op.tokenId);
+  if (!token) return done(state); // already gone: removing twice is harmless
+  if (!canControlToken(actor, token, heroes)) return refuse("forbidden");
+  return done({ ...state, tokens: state.tokens.filter((item) => item.id !== token.id) });
+}
+
+function applyClearMonsters(state: MapState): MapApplyResult {
+  return done({ ...state, tokens: state.tokens.filter((token) => token.kind !== "monster") });
+}
+
+/** Tokens and walls are cut to the new grid. */
+function applyResize(state: MapState, op: MapOpOf<"resize">): MapApplyResult {
+  const walls = (state.walls ?? []).map((wall) => clipWall(wall, op.cols, op.rows)).filter((wall): wall is MapWall => wall !== null);
+  const next = withWalls({ ...state, cols: op.cols, rows: op.rows, tokens: state.tokens.map((token) => clampToken(token, op.cols, op.rows)) }, walls);
+  delete next.explored; // the bitmap is laid out for the old size
+  return done(next);
+}
+
+function applyCombatStart(state: MapState, op: MapOpOf<"combat-start">): MapApplyResult {
+  const ids = new Set(state.tokens.map((token) => token.id));
+  if (!op.entries.every((entry) => ids.has(entry.tokenId))) return refuse("invalid");
+  return done({ ...state, combat: passTurn({ round: 1, order: sortOrder(op.entries.map((entry) => ({ ...entry }))) }, state.tokens, 1, -1) });
+}
+
+/** The entry with the change made; speed null forgets it, movement 0 resets it. */
+function editedCombatant(entry: Combatant, op: MapOpOf<"combatant">): Combatant {
+  const next: Combatant = { ...entry };
+  if (op.initiative !== undefined) next.initiative = op.initiative;
+  if (op.speed === null) delete next.speed; else if (op.speed !== undefined) next.speed = op.speed;
+  if (op.moved === 0) delete next.moved; else if (op.moved !== undefined) next.moved = op.moved;
+  return next;
+}
+
+/** The order with the entry in it: in its old place when its initiative didn't change, else sorted in. */
+function placeInOrder(order: Combatant[], entry: Combatant, keepPlace: boolean): Combatant[] {
+  if (keepPlace) return order.map((item) => item.tokenId === entry.tokenId ? entry : item);
+  return sortOrder([...order.filter((item) => item.tokenId !== entry.tokenId), entry]);
+}
+
+/** A creature joins the fight (it needs an initiative for that) or its entry changes. */
+function applyCombatant(state: MapState, op: MapOpOf<"combatant">): MapApplyResult {
+  const combat = state.combat;
+  if (!combat || !findToken(state, op.tokenId)) return refuse("invalid");
+  const existing = combatantOf(state, op.tokenId);
+  const base = existing ?? (op.initiative === undefined ? null : { tokenId: op.tokenId, initiative: op.initiative });
+  if (!base) return refuse("invalid");
+  const order = placeInOrder(combat.order, editedCombatant(base, op), existing !== undefined && op.initiative === undefined);
+  const next = { ...combat, order };
+  return done({ ...state, combat: next.active ? next : passTurn(next, state.tokens, 1, -1) });
+}
+
+function applyCombatLeave(state: MapState, op: MapOpOf<"combat-leave">): MapApplyResult {
+  return done(state.combat ? { ...state, combat: dropCombatants(state.combat, state.tokens, (id) => id !== op.tokenId) } : state);
+}
+
+/** The DM hands the turn straight to a creature in the fight. */
+function jumpTurn(state: MapState, combat: MapCombat, tokenId: string, actor: MapActor): MapApplyResult {
+  if (!actor.isDm) return refuse("forbidden");
+  if (!combatantOf(state, tokenId)) return refuse("invalid");
+  return done({ ...state, combat: startTurn({ ...combat, active: tokenId }) });
+}
+
+/** Players end their own hero's turn; only the DM goes back. */
+function stepTurn(state: MapState, combat: MapCombat, step: 1 | -1, { actor, heroes }: ApplyContext): MapApplyResult {
+  const active = findToken(state, combat.active);
+  if (!actor.isDm && (step === -1 || !active || !canControlToken(actor, active, heroes))) return refuse("forbidden");
+  return done({ ...state, combat: passTurn(combat, state.tokens, step) });
+}
+
+function applyTurn(state: MapState, op: MapOpOf<"turn">, context: ApplyContext): MapApplyResult {
+  const combat = state.combat;
+  if (!combat?.order.length) return refuse("invalid");
+  return "tokenId" in op ? jumpTurn(state, combat, op.tokenId, context.actor) : stepTurn(state, combat, op.step, context);
+}
+
+function withDash(entry: Combatant, dash: boolean): Combatant {
+  const next = { ...entry };
+  if (dash) next.dash = true; else delete next.dash;
+  return next;
+}
+
+/** A player dashes with their own hero on its turn. */
+function applyDash(state: MapState, op: MapOpOf<"dash">, { actor, heroes }: ApplyContext): MapApplyResult {
+  const token = findToken(state, op.tokenId);
+  const fighter = fighterOf(state, op.tokenId);
+  if (!token || !fighter) return refuse("invalid");
+  if (!actor.isDm && (!canControlToken(actor, token, heroes) || fighter.combat.active !== token.id)) return refuse("forbidden");
+  return done({ ...state, combat: changeEntry(fighter.combat, token.id, (entry) => withDash(entry, op.dash)) });
+}
+
+function applyCombatEnd(state: MapState): MapApplyResult {
+  const next: MapState = { ...state };
+  delete next.combat;
+  return done(next);
+}
+
+/** Changes only the DM may make: a player is refused before anything else is looked at. */
+const dmOnly = <K extends MapOpType>(apply: Applier<K>): Applier<K> => (state, op, context) => context.actor.isDm ? apply(state, op, context) : refuse("forbidden");
+
+/**
+ * One applier per kind of change; the mapped type makes the compiler ask for one with every new variant.
+ * The DM-only ones are wrapped in dmOnly; the rest check for themselves whose token, hero, door or turn it is.
+ */
+const opAppliers: { [K in MapOpType]: Applier<K> } = {
+  move: applyMove,
+  "place-hero": applyPlaceHero,
+  "add-monster": dmOnly(applyAddMonster),
+  update: dmOnly(applyUpdate),
+  face: applyFace,
+  settings: dmOnly(applySettings),
+  "add-walls": dmOnly(applyAddWalls),
+  "remove-wall": dmOnly(applyRemoveWall),
+  door: applyDoor,
+  "clear-walls": dmOnly(applyClearWalls),
+  remove: applyRemove,
+  "clear-monsters": dmOnly(applyClearMonsters),
+  resize: dmOnly(applyResize),
+  "combat-start": dmOnly(applyCombatStart),
+  combatant: dmOnly(applyCombatant),
+  "combat-leave": dmOnly(applyCombatLeave),
+  turn: applyTurn,
+  dash: applyDash,
+  "combat-end": dmOnly(applyCombatEnd),
+};
+
+function applyOp<K extends MapOpType>(state: MapState, op: MapOpOf<K>, context: ApplyContext): MapApplyResult {
+  const apply: Applier<K> = opAppliers[op.type];
+  return apply(state, op, context);
+}
+
 /**
  * Apply a batch of changes atomically: if any one is not allowed the whole batch is rejected.
  * `newId` makes token ids (random on the server, predictable in tests).
  */
 export function applyMapOps(start: MapState, ops: MapOp[], actor: MapActor, heroes: MapHero[], newId: () => string): MapApplyResult {
+  const context: ApplyContext = { actor, heroes, newId };
   let state: MapState = { ...start, tokens: [...start.tokens] };
-  const fail = (error: MapOpError): MapApplyResult => ({ ok: false, error });
-  const replace = (id: string, change: (token: MapToken) => MapToken) => {
-    state = { ...state, tokens: state.tokens.map((token) => token.id === id ? change(token) : token) };
-  };
-  const changeCombatant = (id: string, change: (entry: Combatant) => Combatant) => {
-    if (state.combat) state = { ...state, combat: { ...state.combat, order: state.combat.order.map((entry) => entry.tokenId === id ? change(entry) : entry) } };
-  };
-  const setCombat = (combat: MapCombat) => { state = { ...state, combat }; };
-  /**
-   * Walk a token to (x, y). Walls hold players back and, in a fight, so do whose turn it is and the movement
-   * left; the DM can still put anything anywhere. Movement in a fight is counted for everyone.
-   */
-  const walk = (token: MapToken, x: number, y: number): MapOpError | null => {
-    const moved = clampToken({ ...token, x, y }, state.cols, state.rows);
-    if (moved.x === token.x && moved.y === token.y) return null;
-    const entry = combatantOf(state, token.id);
-    if (entry && !actor.isDm && state.combat?.active !== token.id) return "turn";
-    const path = entry || !actor.isDm ? pathLength(state, token, moved.x, moved.y) : 0;
-    if (path === null && !actor.isDm) return "blocked";
-    if (entry) {
-      const cost = path ?? Math.max(Math.abs(moved.x - token.x), Math.abs(moved.y - token.y));
-      const budget = movementBudget(entry);
-      if (!actor.isDm && budget !== null && (entry.moved ?? 0) + cost > budget) return "movement";
-      changeCombatant(token.id, (item) => ({ ...item, moved: Math.min(COMBAT_MAX_MOVED, (item.moved ?? 0) + cost) }));
-    }
-    replace(token.id, () => moved);
-    return null;
-  };
-
   for (const op of ops) {
-    switch (op.type) {
-      case "move": {
-        const token = state.tokens.find((item) => item.id === op.tokenId);
-        if (!token) return fail("invalid");
-        if (!canControlToken(actor, token, heroes)) return fail("forbidden");
-        const error = walk(token, op.x, op.y);
-        if (error) return fail(error);
-        break;
-      }
-      case "place-hero": {
-        const hero = heroes.find((item) => item.id === op.characterId);
-        if (!hero) return fail("invalid");
-        if (!actor.isDm && hero.ownerId !== actor.userId) return fail("forbidden");
-        const existing = state.tokens.find((item) => item.kind === "hero" && item.characterId === hero.id);
-        const spot = op.x !== undefined && op.y !== undefined ? { x: op.x, y: op.y } : existing ?? findFreeSpot(state, 1, "left");
-        if (existing) {
-          const error = walk(existing, spot.x, spot.y);
-          if (error) return fail(error);
-        }
-        else {
-          if (state.tokens.length >= MAP_MAX_TOKENS) return fail("invalid");
-          state = { ...state, tokens: [...state.tokens, clampToken({ id: newId(), kind: "hero", label: label(hero.name) ?? "?", characterId: hero.id, size: 1, ...spot }, state.cols, state.rows)] };
-        }
-        break;
-      }
-      case "add-monster": {
-        if (!actor.isDm) return fail("forbidden");
-        if (state.tokens.length + op.count > MAP_MAX_TOKENS) return fail("invalid");
-        const first = op.count > 1 ? nextNumber(state, op.label) : 0;
-        for (let index = 0; index < op.count; index++) {
-          const name = op.count > 1 ? `${op.label.slice(0, TOKEN_LABEL_MAX - 4)} ${first + index}` : op.label;
-          const spot = findFreeSpot(state, op.size, "right");
-          state = { ...state, tokens: [...state.tokens, clampToken({
-            id: newId(), kind: "monster", label: name, size: op.size, ...spot,
-            ...(op.hidden ? { hidden: true } : {}), ...(op.monsterSlug ? { monsterSlug: op.monsterSlug } : {}),
-          }, state.cols, state.rows)] };
-        }
-        break;
-      }
-      case "update": {
-        if (!actor.isDm) return fail("forbidden");
-        const token = state.tokens.find((item) => item.id === op.tokenId);
-        if (!token) return fail("invalid");
-        if (token.kind === "hero" && (op.label !== undefined || op.hidden !== undefined || op.monsterSlug !== undefined)) return fail("invalid");
-        replace(token.id, (item) => {
-          const next: MapToken = {
-            ...item, ...(op.label !== undefined ? { label: op.label } : {}), ...(op.size !== undefined ? { size: op.size } : {}),
-            ...(op.vision !== undefined ? { vision: op.vision } : {}), ...(op.monsterSlug !== undefined ? { monsterSlug: op.monsterSlug } : {}),
-          };
-          if (op.hidden !== undefined) { if (op.hidden) next.hidden = true; else delete next.hidden; }
-          if (op.defeated !== undefined) { if (op.defeated) next.defeated = true; else delete next.defeated; }
-          return clampToken(next, state.cols, state.rows);
-        });
-        break;
-      }
-      case "face": {
-        const token = state.tokens.find((item) => item.id === op.tokenId);
-        if (!token) return fail("invalid");
-        if (!canControlToken(actor, token, heroes)) return fail("forbidden");
-        replace(token.id, (item) => {
-          const next: MapToken = { ...item, facing: op.facing };
-          if (op.facing === 0) delete next.facing;
-          return next;
-        });
-        break;
-      }
-      case "settings": {
-        if (!actor.isDm) return fail("forbidden");
-        const next: MapState = { ...state };
-        if (op.fog !== undefined) { if (op.fog) next.fog = true; else delete next.fog; }
-        if (op.gridHidden !== undefined) { if (op.gridHidden) next.gridHidden = true; else delete next.gridHidden; }
-        if (op.resetExplored || !next.fog) delete next.explored;
-        state = next;
-        break;
-      }
-      case "add-walls": {
-        if (!actor.isDm) return fail("forbidden");
-        const walls = [...state.walls ?? []];
-        for (const added of op.walls) {
-          const wall = clipWall(added, state.cols, state.rows);
-          if (!wall) return fail("invalid");
-          const same = walls.findIndex((item) => sameSpan(item, wall));
-          if (same >= 0) walls[same] = wall; // drawing over a wall turns it into a door or back
-          else walls.push(wall);
-        }
-        if (walls.length > MAP_MAX_WALLS) return fail("invalid");
-        state = { ...state, walls };
-        break;
-      }
-      case "remove-wall": {
-        if (!actor.isDm) return fail("forbidden");
-        const walls = (state.walls ?? []).filter((wall) => !sameSpan(wall, op));
-        const next: MapState = { ...state, walls };
-        if (!walls.length) delete next.walls;
-        state = next;
-        break;
-      }
-      case "door": {
-        const door = state.walls?.find((wall) => wall.door && sameSpan(wall, op));
-        // Players open and close doors next to one of their own heroes. They get "forbidden" for a missing door
-        // too, so probing coordinates can't reveal doors hidden in the fog.
-        if (!actor.isDm && !(door && state.tokens.some((token) => token.kind === "hero" && canControlToken(actor, token, heroes) && nearDoor(token, door)))) return fail("forbidden");
-        if (!door) return fail("invalid");
-        state = { ...state, walls: state.walls!.map((wall) => wall === door ? { ...wall, door: op.open ? "open" as const : "closed" as const } : wall) };
-        break;
-      }
-      case "clear-walls": {
-        if (!actor.isDm) return fail("forbidden");
-        const next: MapState = { ...state };
-        delete next.walls;
-        state = next;
-        break;
-      }
-      case "remove": {
-        const token = state.tokens.find((item) => item.id === op.tokenId);
-        if (!token) break; // already gone: removing twice is harmless
-        if (!canControlToken(actor, token, heroes)) return fail("forbidden");
-        state = { ...state, tokens: state.tokens.filter((item) => item.id !== token.id) };
-        break;
-      }
-      case "clear-monsters":
-        if (!actor.isDm) return fail("forbidden");
-        state = { ...state, tokens: state.tokens.filter((token) => token.kind !== "monster") };
-        break;
-      case "resize": {
-        if (!actor.isDm) return fail("forbidden");
-        const walls = (state.walls ?? []).map((wall) => clipWall(wall, op.cols, op.rows)).filter((wall): wall is MapWall => wall !== null);
-        const next: MapState = { ...state, cols: op.cols, rows: op.rows, tokens: state.tokens.map((token) => clampToken(token, op.cols, op.rows)), walls };
-        if (!walls.length) delete next.walls;
-        delete next.explored; // the bitmap is laid out for the old size
-        state = next;
-        break;
-      }
-      case "combat-start": {
-        if (!actor.isDm) return fail("forbidden");
-        const ids = new Set(state.tokens.map((token) => token.id));
-        if (!op.entries.every((entry) => ids.has(entry.tokenId))) return fail("invalid");
-        setCombat(passTurn({ round: 1, order: sortOrder(op.entries.map((entry) => ({ ...entry }))) }, state.tokens, 1, -1));
-        break;
-      }
-      case "combatant": {
-        if (!actor.isDm) return fail("forbidden");
-        if (!state.combat || !state.tokens.some((token) => token.id === op.tokenId)) return fail("invalid");
-        const existing = combatantOf(state, op.tokenId);
-        if (!existing && op.initiative === undefined) return fail("invalid");
-        const entry: Combatant = { ...existing ?? { tokenId: op.tokenId, initiative: op.initiative! } };
-        if (op.initiative !== undefined) entry.initiative = op.initiative;
-        if (op.speed === null) delete entry.speed; else if (op.speed !== undefined) entry.speed = op.speed;
-        if (op.moved === 0) delete entry.moved; else if (op.moved !== undefined) entry.moved = op.moved;
-        const others = state.combat.order.filter((item) => item.tokenId !== op.tokenId);
-        // Keep its place among equal initiatives when only its speed or movement changed.
-        const order = existing && op.initiative === undefined ? state.combat.order.map((item) => item.tokenId === op.tokenId ? entry : item) : sortOrder([...others, entry]);
-        const combat = { ...state.combat, order };
-        setCombat(combat.active ? combat : passTurn(combat, state.tokens, 1, -1));
-        break;
-      }
-      case "combat-leave": {
-        if (!actor.isDm) return fail("forbidden");
-        if (state.combat) setCombat(dropCombatants(state.combat, state.tokens, (id) => id !== op.tokenId));
-        break;
-      }
-      case "turn": {
-        const combat = state.combat;
-        if (!combat?.order.length) return fail("invalid");
-        if ("tokenId" in op) {
-          if (!actor.isDm) return fail("forbidden");
-          if (!combatantOf(state, op.tokenId)) return fail("invalid");
-          setCombat(startTurn({ ...combat, active: op.tokenId }));
-          break;
-        }
-        // Players end their own hero's turn; only the DM goes back.
-        const active = state.tokens.find((token) => token.id === combat.active);
-        if (!actor.isDm && (op.step === -1 || !active || !canControlToken(actor, active, heroes))) return fail("forbidden");
-        setCombat(passTurn(combat, state.tokens, op.step));
-        break;
-      }
-      case "dash": {
-        const token = state.tokens.find((item) => item.id === op.tokenId);
-        if (!token || !combatantOf(state, token.id)) return fail("invalid");
-        if (!actor.isDm && (!canControlToken(actor, token, heroes) || state.combat?.active !== token.id)) return fail("forbidden");
-        changeCombatant(token.id, (entry) => {
-          const next = { ...entry };
-          if (op.dash) next.dash = true; else delete next.dash;
-          return next;
-        });
-        break;
-      }
-      case "combat-end": {
-        if (!actor.isDm) return fail("forbidden");
-        const next: MapState = { ...state };
-        delete next.combat;
-        state = next;
-        break;
-      }
-    }
+    const result = applyOp(state, op, context);
+    if (!result.ok) return result;
+    state = result.state;
   }
-  return { ok: true, state: remember(pruneCombat(state)) };
+  return done(remember(pruneCombat(state)));
 }
 
 /** Spreadsheet-style column name for a 0-based index: A…Z, then AA, AB… */
@@ -1028,4 +1263,42 @@ export function sniffImageType(bytes: Uint8Array): MapImageType | null {
 export function rowsForImage(cols: number, width: number, height: number): number {
   if (!(width > 0 && height > 0)) return MAP_DEFAULT_ROWS;
   return Math.max(MAP_MIN_SIZE, Math.min(MAP_MAX_SIZE, Math.round(cols * height / width)));
+}
+
+// ---- Saved maps: the decisions behind the saves routes of apps/api/src/map/map.service.ts ----
+
+/** Saved maps a campaign may keep, and the longest name. */
+export const MAP_MAX_SAVES = 20;
+export const MAP_SAVE_NAME_MAX = 60;
+
+/** Does a campaign already keep as many saved maps as it may? `storedCount` is count(*) as PostgreSQL returns it. */
+export const mapSavesFull = (storedCount: string | undefined) => Number(storedCount ?? 0) >= MAP_MAX_SAVES;
+
+/** The state a save keeps: the map as it is, minus the background key (the picture itself is copied next to it). */
+export function mapStateToSave(state: MapState): MapState {
+  const stored: MapState = { ...state };
+  delete stored.background;
+  return stored;
+}
+
+/** DM-only map routes: someone outside the campaign (no viewer) gets not-found, so it doesn't show; a player gets forbidden. */
+export function requireDm<Viewer extends { isDm: boolean }>(viewer: Viewer | null): { ok: true; value: Viewer } | { ok: false; error: "not-found" | "forbidden" } {
+  if (!viewer) return { ok: false, error: "not-found" };
+  if (!viewer.isDm) return { ok: false, error: "forbidden" };
+  return { ok: true, value: viewer };
+}
+
+/** A saved map as stored: its state and the background picture kept with it. `Image` is the picture's bytes. */
+export interface MapSaveRow<Image> { state: unknown; image: Image | null; mimeType: MapImageType | null }
+
+/**
+ * What loading a save (or, with null, clearing the table) puts on the table: the state read safely, hero tokens
+ * of characters that left the campaign dropped, and no background key, since the old one points at the previous
+ * picture. `picture` is the save's own background, to store again under a new key; null when it has none.
+ */
+export function mapFromSave<Image>(save: MapSaveRow<Image> | null, heroes: MapHero[]): { state: MapState; picture: { image: Image; mimeType: MapImageType } | null } {
+  const state = syncHeroes({ ...(save ? normalizeMapState(save.state) : emptyMapState()) }, heroes);
+  delete state.background;
+  const picture = save?.image && save.mimeType ? { image: save.image, mimeType: save.mimeType } : null;
+  return { state, picture };
 }

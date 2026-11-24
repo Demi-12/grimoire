@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  appUserFromRow,
+  awaitsAdminBootstrap,
   canCreateCampaign,
   canManageCampaign,
   checkAdminChange,
+  isAccountId,
   isInviteToken,
+  isListedAdmin,
   parseAdminEmails,
   parseCampaignInput,
+  parseAdminRequest,
   parseCharacterInput,
+  parseMemberRequest,
 } from "./permissions.js";
 
 const scores = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 };
@@ -15,6 +21,35 @@ describe("parseAdminEmails", () => {
   it("normalises case and separators and ignores blanks", () => {
     expect([...parseAdminEmails(" Owner@Example.com, friend@example.com;; ")]).toEqual(["owner@example.com", "friend@example.com"]);
     expect(parseAdminEmails(undefined).size).toBe(0);
+  });
+});
+
+describe("the account behind a request", () => {
+  const row = { id: "u1", name: "Ana", email: "Ana@Example.com", role: "user", status: "pending" };
+  const listed = " ana@example.com, friend@example.com ";
+
+  it("reads the stored account only when its role and status are ones the app knows", () => {
+    expect(appUserFromRow(row)).toEqual({ id: "u1", name: "Ana", email: "Ana@Example.com", role: "user", status: "pending" });
+    expect(appUserFromRow({ ...row, role: "superuser" })).toBeNull();
+    expect(appUserFromRow({ ...row, status: "deleted" })).toBeNull();
+    expect(appUserFromRow(undefined)).toBeNull();
+  });
+
+  it("recognises the emails listed as admins whatever their case", () => {
+    expect(isListedAdmin("ANA@example.com", listed)).toBe(true);
+    expect(isListedAdmin("someone@example.com", listed)).toBe(false);
+    expect(isListedAdmin("ana@example.com", undefined)).toBe(false);
+  });
+
+  it("promotes a listed account that isn't an approved admin yet, but never a blocked one", () => {
+    const user = appUserFromRow(row)!;
+    expect(awaitsAdminBootstrap(user, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, status: "approved" }, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, role: "admin" }, listed)).toBe(true);
+    expect(awaitsAdminBootstrap({ ...user, role: "admin", status: "approved" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap({ ...user, status: "blocked" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap({ ...user, email: "someone@example.com" }, listed)).toBe(false);
+    expect(awaitsAdminBootstrap(user, undefined)).toBe(false);
   });
 });
 
@@ -114,5 +149,50 @@ describe("input size limits", () => {
     expect(parseCharacterInput({ ...base, build: ["x"] })).toBeNull();
     expect(parseCampaignInput({ name: "a".repeat(81), description: "" })).toBeNull();
     expect(parseCampaignInput({ name: "ok", description: "a".repeat(1001) })).toBeNull();
+  });
+});
+
+describe("isAccountId", () => {
+  it("accepts better-auth's ids, which are not UUIDs, up to 128 characters", () => {
+    expect(isAccountId("Xk3pQ9vT2mL8")).toBe(true);
+    expect(isAccountId("a".repeat(128))).toBe(true);
+    expect(isAccountId("a".repeat(129))).toBe(false);
+    expect(isAccountId("")).toBe(false);
+    expect(isAccountId(7)).toBe(false);
+  });
+});
+
+describe("parseMemberRequest", () => {
+  it("adds by trimmed email or exact name when a query is sent", () => {
+    expect(parseMemberRequest({ query: "  ana@example.com ", role: "player" })).toEqual({ kind: "add", query: "ana@example.com", role: "player" });
+    expect(parseMemberRequest({ query: "Ana", userId: "u1", role: "dm" })).toEqual({ kind: "add", query: "Ana", role: "dm" });
+  });
+  it("changes the role of an existing member by account id otherwise", () => {
+    expect(parseMemberRequest({ userId: "u1", role: "dm" })).toEqual({ kind: "set-role", userId: "u1", role: "dm" });
+  });
+  it("rejects unknown roles, empty or long queries and bad account ids", () => {
+    expect(parseMemberRequest(null)).toBeNull();
+    expect(parseMemberRequest({ query: "Ana", role: "owner" })).toBeNull();
+    expect(parseMemberRequest({ query: "   ", role: "player" })).toBeNull();
+    expect(parseMemberRequest({ query: "a".repeat(255), role: "player" })).toBeNull();
+    expect(parseMemberRequest({ userId: "", role: "player" })).toBeNull();
+    expect(parseMemberRequest({ userId: "a".repeat(129), role: "player" })).toBeNull();
+    expect(parseMemberRequest({ role: "player" })).toBeNull();
+  });
+});
+
+describe("parseAdminRequest", () => {
+  it("revokes sessions when asked, whatever else is sent", () => {
+    expect(parseAdminRequest({ revokeSessions: true, role: "nope" })).toEqual({ ok: true, value: { kind: "revoke-sessions" } });
+  });
+  it("collects a role and/or status change", () => {
+    expect(parseAdminRequest({ role: "admin" })).toEqual({ ok: true, value: { kind: "change", change: { role: "admin" } } });
+    expect(parseAdminRequest({ role: "user", status: "blocked" })).toEqual({ ok: true, value: { kind: "change", change: { role: "user", status: "blocked" } } });
+  });
+  it("says what is wrong with an invalid change", () => {
+    expect(parseAdminRequest(null)).toEqual({ ok: false, error: "Invalid change." });
+    expect(parseAdminRequest({ role: "dm" })).toEqual({ ok: false, error: "Invalid role." });
+    expect(parseAdminRequest({ status: "gone" })).toEqual({ ok: false, error: "Invalid status." });
+    expect(parseAdminRequest({ revokeSessions: "yes" })).toEqual({ ok: false, error: "Nothing to change." });
   });
 });

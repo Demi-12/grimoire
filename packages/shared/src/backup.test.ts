@@ -1,13 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   BACKUP_VERSION,
+  BackupRestoreError,
   backupFilename,
   backupSections,
+  encounterCampaignId,
+  encounterRestoreDates,
+  indexExisting,
   looksLikeBackup,
   parseBackup,
+  parseLegacyImport,
+  restoredCampaignId,
+  RestoreQuota,
+  runLegacyImport,
   runRestore,
   serializeBackup,
+  storedCharacter,
+  type BackupCharacter,
+  type BackupEncounter,
   type IdMap,
+  type LegacyImport,
+  type LegacyImportStore,
   type SectionStore,
 } from "./backup.js";
 
@@ -265,5 +278,202 @@ describe("runRestore idempotence", () => {
     const counts = await runRestore(result.value, account.stores);
     expect(counts.creatures.created).toBe(1);
     expect(account.rows.campaigns).toHaveLength(0);
+  });
+});
+
+describe("parseLegacyImport", () => {
+  const character = { id: "local-1", name: "Mira", level: 3, className: "Wizard", species: "Elf", background: "Sage", scores, notes: "", campaignId };
+  const valueOf = (body: unknown) => {
+    const result = parseLegacyImport(body);
+    return result.ok ? result.value : null;
+  };
+  const errorOf = (body: unknown) => {
+    const result = parseLegacyImport(body);
+    return result.ok ? null : result.error;
+  };
+
+  it("keeps valid characters with their browser id, outside any campaign", () => {
+    expect(valueOf({ characters: [character] })).toEqual({
+      characters: [expect.objectContaining({ name: "Mira", localId: "local-1", campaignId: null })], campaigns: [], creatures: [],
+    });
+  });
+
+  it("drops entries that do not validate instead of failing the whole import", () => {
+    const value = valueOf({
+      characters: [character, { ...character, id: undefined }, { ...character, id: "local-2", level: 99 }, null],
+      campaigns: [{ name: "", description: "" }, "x"],
+      creatures: [{ name: "Troll", xp: 1800 }, { name: "", xp: 1 }],
+    });
+    expect(value?.characters.map((item) => item.localId)).toEqual(["local-1"]);
+    expect(value?.campaigns).toEqual([]);
+    expect(value?.creatures.map((item) => item.name)).toEqual(["Troll"]);
+  });
+
+  it("keeps only string character ids on campaigns", () => {
+    expect(valueOf({ characters: [], campaigns: [{ name: "Costa", description: "", characterIds: ["local-1", 7] }] })?.campaigns)
+      .toEqual([{ name: "Costa", description: "", characterIds: ["local-1"] }]);
+    expect(valueOf({ characters: [], campaigns: [{ name: "Costa", description: "" }] })?.campaigns[0].characterIds).toEqual([]);
+  });
+
+  it("rejects payloads without a characters list or with lists of the wrong type", () => {
+    expect(errorOf(null)).toBe("invalid");
+    expect(errorOf({})).toBe("invalid");
+    expect(errorOf({ characters: [], campaigns: {} })).toBe("invalid");
+    expect(errorOf({ characters: [], creatures: "x" })).toBe("invalid");
+  });
+
+  it("rejects payloads with too many items", () => {
+    expect(errorOf({ characters: Array(201).fill(character) })).toBe("too-many");
+    expect(errorOf({ characters: [], campaigns: Array(201).fill({ name: "x" }) })).toBe("too-many");
+    expect(errorOf({ characters: [], creatures: Array(501).fill({ name: "x", xp: 1 }) })).toBe("too-many");
+    expect(errorOf({ characters: Array(200).fill(character), creatures: Array(500).fill({ name: "x", xp: 1 }) })).toBeNull();
+  });
+});
+
+describe("runLegacyImport", () => {
+  const character = (localId: string, name: string) => ({ localId, name, level: 1, className: "", species: "", background: "", scores, notes: "", campaignId: null });
+  const legacy = (): LegacyImport => ({
+    creatures: [{ name: "Troll", xp: 1800, source: "", monsterSlug: null, cr: null, type: null, roleTags: [] }, { name: "Refused", xp: 10, source: "", monsterSlug: null, cr: null, type: null, roleTags: [] }],
+    characters: [character("local-1", "Mira"), character("local-2", "Refused"), character("local-3", "Tor")],
+    campaigns: [
+      { name: "Costa", description: "", characterIds: ["local-1", "local-2", "local-9"] },
+      { name: "Refused", description: "", characterIds: ["local-3"] },
+      { name: "Empty", description: "", characterIds: ["local-2"] },
+    ],
+  });
+  /** In-memory account that refuses any item named "Refused", like a service answering { ok: false }. */
+  function memoryStore() {
+    let nextId = 1;
+    const written = { creatures: [] as string[], characters: [] as { id: string; name: string; campaignId: string | null }[], campaigns: [] as { id: string; name: string }[], placed: [] as [string, string[]][] };
+    const store: LegacyImportStore = {
+      async createCreature(item) {
+        if (item.name === "Refused") return false;
+        written.creatures.push(item.name);
+        return true;
+      },
+      async createCharacter(item) {
+        if (item.name === "Refused") return null;
+        const id = `db-${nextId++}`;
+        written.characters.push({ id, name: item.name, campaignId: item.campaignId });
+        return id;
+      },
+      async createCampaign(item) {
+        if (item.name === "Refused") return null;
+        const id = `db-${nextId++}`;
+        written.campaigns.push({ id, name: item.name });
+        return id;
+      },
+      async placeCharacters(campaignId, characterIds) {
+        written.placed.push([campaignId, characterIds]);
+      },
+    };
+    return { store, written };
+  }
+
+  it("imports what the account accepts and counts only that", async () => {
+    const { store, written } = memoryStore();
+    expect(await runLegacyImport(legacy(), { status: "approved" }, store)).toEqual({ characters: 2, campaigns: 2, creatures: 1 });
+    expect(written.creatures).toEqual(["Troll"]);
+    expect(written.characters.map((row) => [row.name, row.campaignId])).toEqual([["Mira", null], ["Tor", null]]);
+    expect(written.campaigns.map((row) => row.name)).toEqual(["Costa", "Empty"]);
+  });
+
+  it("places each campaign's characters by their new ids, leaving out those that weren't imported", async () => {
+    const { store, written } = memoryStore();
+    await runLegacyImport(legacy(), { status: "approved" }, store);
+    const mira = written.characters.find((row) => row.name === "Mira")!;
+    const costa = written.campaigns.find((row) => row.name === "Costa")!;
+    // "Empty" only pointed at a refused character, so nothing is placed there.
+    expect(written.placed).toEqual([[costa.id, [mira.id]]]);
+  });
+
+  it("imports no campaigns for accounts that may not create them", async () => {
+    const { store, written } = memoryStore();
+    expect(await runLegacyImport(legacy(), { status: "pending" }, store)).toEqual({ characters: 2, campaigns: 0, creatures: 1 });
+    expect(written.campaigns).toEqual([]);
+    expect(written.placed).toEqual([]);
+  });
+});
+
+describe("restore decisions behind the SQL stores", () => {
+  const fingerprintOf = (sectionKey: string, item: unknown) => backupSections.find((section) => section.key === sectionKey)!.fingerprint(item, {});
+  const restored = () => {
+    const result = parseBackup(JSON.parse(JSON.stringify(serializeBackup(views, now))));
+    if (!result.ok) throw new Error("fixture must be valid");
+    return result.value.sections;
+  };
+
+  it("indexes what the account has by fingerprint, reusing the oldest of two same-named campaigns", () => {
+    const index = indexExisting("campaigns", [{ id: "older", name: "Lost Mine" }, { id: "newer", name: "  lost   MINE " }, { id: "other", name: "Curse" }]);
+    expect(index.size).toBe(2);
+    expect(index.get(fingerprintOf("campaigns", { name: "Lost Mine" }))).toBe("older");
+    expect(index.get(fingerprintOf("campaigns", { name: "Curse" }))).toBe("other");
+  });
+
+  it("fingerprints rows with their real campaign id, not through any backup mapping", () => {
+    const [encounter] = restored().encounters as BackupEncounter[];
+    const row = { ...encounter, id: "db-encounter", campaignId: "real-campaign" };
+    const index = indexExisting("encounters", [row]);
+    expect(index.get(fingerprintOf("encounters", { ...encounter, campaignId: "real-campaign" }))).toBe("db-encounter");
+  });
+
+  it("refuses sections it doesn't know", () => {
+    expect(() => indexExisting("spells", [])).toThrow("Unknown backup section spells");
+  });
+
+  it("reads a stored character back as the backup item it was restored from", () => {
+    const characters = restored().characters as BackupCharacter[];
+    for (const item of characters) {
+      // What the characters table keeps in its jsonb "data" column, with keys reordered as jsonb does.
+      const data = Object.fromEntries(Object.entries({ className: item.className, species: item.species, background: item.background, scores: item.scores, notes: item.notes, ...(item.build ? { build: item.build } : {}) }).reverse());
+      const index = indexExisting("characters", [{ id: "db-character", name: item.name, level: item.level, data }], storedCharacter);
+      expect(index.get(fingerprintOf("characters", item))).toBe("db-character");
+    }
+  });
+
+  it("fills the fields a quick-edit character never stored", () => {
+    const character = storedCharacter({ name: "Tor", level: 2, data: { scores: { str: 16 } } });
+    expect(character).toEqual({
+      name: "Tor", level: 2, className: "", species: "", background: "", notes: "",
+      scores: { str: 16, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    });
+    expect("build" in character).toBe(false);
+  });
+
+  it("links a restored item to the real id of its campaign, or to none", () => {
+    const idMap: IdMap = { campaigns: new Map([["local-campaign", "real-campaign"]]) };
+    expect(restoredCampaignId("local-campaign", idMap)).toBe("real-campaign");
+    expect(restoredCampaignId("missing", idMap)).toBeNull();
+    expect(restoredCampaignId(null, idMap)).toBeNull();
+    expect(restoredCampaignId("local-campaign", {})).toBeNull();
+  });
+
+  it("restores an encounter only into a campaign the restore knows", () => {
+    const [encounter] = restored().encounters as BackupEncounter[];
+    const idMap: IdMap = { campaigns: new Map([[encounter.campaignId, "real-campaign"]]) };
+    expect(encounterCampaignId(encounter, idMap)).toBe("real-campaign");
+    expect(() => encounterCampaignId(encounter, { campaigns: new Map() })).toThrow("Encounter references an unknown campaign.");
+  });
+
+  it("stops a section at its limit, counted per scope", () => {
+    const quota = new RestoreQuota("encounters", 3);
+    quota.add("campaign-a", 2);
+    quota.take("campaign-a");
+    expect(() => quota.take("campaign-a")).toThrow(BackupRestoreError);
+    expect(() => quota.take("campaign-a")).toThrow(expect.objectContaining({ code: "limit", section: "encounters" }));
+    quota.take("campaign-b");
+    quota.take("campaign-b");
+    quota.take("campaign-b");
+    expect(() => quota.take("campaign-b")).toThrow("Backup restore failed: limit in encounters");
+  });
+
+  it("restores the dates of played encounters and leaves missing ones to the database clock", () => {
+    const [played] = restored().encounters as BackupEncounter[];
+    expect(encounterRestoreDates(played)).toEqual({ played: true, playedAt: "2026-10-01T18:00:00.000Z", createdAt: "2026-09-30T12:00:00.000Z" });
+    const undated: BackupEncounter = { ...played };
+    delete undated.playedAt;
+    delete undated.createdAt;
+    expect(encounterRestoreDates({ ...undated, status: "planned" })).toEqual({ played: false, playedAt: null, createdAt: null });
+    expect(encounterRestoreDates({ ...undated, playedAt: null })).toEqual({ played: true, playedAt: null, createdAt: null });
   });
 });

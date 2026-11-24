@@ -31,10 +31,10 @@ Si el cuerpo trae `version` se trata como copia de seguridad; si no, como la imp
 ## Añadir una sección nueva (p. ej. monstruos homebrew)
 
 1. En `packages/shared/src/backup.ts`, define un `BackupSection` (`parse`, `serialize`, `fingerprint`, `localId` si otras secciones la referencian, `maxItems`) y añádelo a `backupSections` (el orden importa: las referencias van detrás de lo que referencian).
-2. En `apps/api/src/backup/backup.service.ts`, añade su `SectionStore` (`existing` y `create`) en `createStores` y su lectura en `exportBackup`.
+2. En `apps/api/src/backup/backup.service.ts`, escribe su `SectionStore` (`existing` y `create`, solo las consultas) como una función `…Store(context)`, regístrala en `createStores` y añade su lectura en `exportBackup`. Lo que se decide al restaurar va en `backup.ts` con su test: `indexExisting` (huella → id de lo que ya hay, gana la fila más antigua), cómo se lee una fila como elemento de la copia (`storedCharacter`), a qué campaña real apunta (`restoredCampaignId`, `encounterCampaignId`), el tope por cuenta o por campaña (`RestoreQuota`) y las fechas (`encounterRestoreDates`).
 
 El validador, los límites, la exportación y la restauración idempotente recorren el registro; no hay que tocar nada más.
 
 ## Pruebas
 
-`packages/shared/src/backup.test.ts` cubre el serializador (sin fugas), el validador y la idempotencia de `runRestore` con una cuenta en memoria. Las consultas SQL se probaron además a mano contra PostgreSQL 16 (ver la descripción del PR).
+`packages/shared/src/backup.test.ts` cubre el serializador (sin fugas), el validador, la idempotencia de `runRestore` con una cuenta en memoria y las decisiones de los almacenes SQL (huellas de lo ya guardado, enlaces a campañas, topes y fechas). Las consultas SQL se probaron además a mano contra PostgreSQL 16 (ver la descripción del PR).

@@ -4,7 +4,7 @@
  */
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { isCampaignRole, parseCampaignInput, type AppUser } from "@grimoire/shared/permissions";
+import { isAccountId, parseCampaignInput, parseMemberRequest, type AppUser } from "@grimoire/shared/permissions";
 import { ApiError, dataError, unwrap } from "../common/api-error.js";
 import { Approved, CurrentUser } from "../common/auth.guard.js";
 import { JsonBody, UuidParam } from "../common/params.js";
@@ -61,14 +61,12 @@ export class CampaignsController {
    */
   @Post(":id/members")
   @RateLimit(MEMBER_LOOKUP_LIMIT)
-  async addOrChangeMember(@CurrentUser() user: AppUser, @Param("id", UuidParam) id: string, @JsonBody() raw: unknown, @Res() response: Response): Promise<void> {
-    const body = raw as { userId?: unknown; query?: unknown; role?: unknown } | null;
-    if (!body || !isCampaignRole(body.role)) throw new ApiError(400, "Invalid member.");
+  async addOrChangeMember(@CurrentUser() user: AppUser, @Param("id", UuidParam) id: string, @JsonBody() body: unknown, @Res() response: Response): Promise<void> {
+    const member = parseMemberRequest(body);
+    if (!member) throw new ApiError(400, "Invalid member.");
 
-    if (typeof body.query === "string") {
-      const query = body.query.trim();
-      if (!query || query.length > 254) throw new ApiError(400, "Invalid member.");
-      const added = await this.campaigns.addCampaignMemberByQuery(user, id, query, body.role);
+    if (member.kind === "add") {
+      const added = await this.campaigns.addCampaignMemberByQuery(user, id, member.query, member.role);
       if (!added.ok) {
         if (added.error === "no-user" || added.error === "ambiguous" || added.error === "already-member") {
           const [status, message] = addMessages[added.error];
@@ -81,8 +79,7 @@ export class CampaignsController {
       return;
     }
 
-    if (typeof body.userId !== "string" || !body.userId || body.userId.length > 128) throw new ApiError(400, "Invalid member.");
-    unwrap(await this.campaigns.setCampaignMemberRole(user, id, body.userId, body.role));
+    unwrap(await this.campaigns.setCampaignMemberRole(user, id, member.userId, member.role));
     response.status(204).end();
   }
 
@@ -91,8 +88,7 @@ export class CampaignsController {
   @HttpCode(204)
   @RateLimit(WRITE_LIMIT)
   async removeMember(@CurrentUser() user: AppUser, @Param("id", UuidParam) id: string, @Param("userId") userId: string): Promise<void> {
-    // Account ids are better-auth's, not UUIDs: only their length is bounded.
-    if (userId.length > 128) throw new ApiError(404, "Not found.");
+    if (!isAccountId(userId)) throw new ApiError(404, "Not found.");
     unwrap(await this.campaigns.removeCampaignMember(user, id, userId));
   }
 

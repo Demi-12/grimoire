@@ -3,18 +3,8 @@
  * searched and paged here, and single stat blocks.
  */
 import { Injectable } from "@nestjs/common";
+import type { MonsterSearch } from "@grimoire/shared/open5e";
 import { fetchMonsterCatalog, fetchMonsterDetail, type CompactMonster } from "./monster-upstream.js";
-
-export interface MonsterSearch {
-  /** Challenge rating to keep; undefined for any. */
-  rating: number | undefined;
-  /** Book key to keep; empty for any. */
-  source: string;
-  /** Lower-cased text the name must contain; empty for any. */
-  search: string;
-  page: number;
-  limit: number;
-}
 
 @Injectable()
 export class MonstersService {

@@ -4,7 +4,7 @@
  */
 import type { Request } from "express";
 import { fromNodeHeaders } from "better-auth/node";
-import { isAccountStatus, isSiteRole, parseAdminEmails, type AppUser } from "@grimoire/shared/permissions";
+import { appUserFromRow, awaitsAdminBootstrap, type AppUser } from "@grimoire/shared/permissions";
 import { auth } from "../auth/auth.js";
 import { countApprovedAdmins } from "../admin/admin-count.js";
 import { pool } from "../database/db.js";
@@ -31,17 +31,11 @@ async function lookUp(request: Request): Promise<AppUser | null> {
     'SELECT "id", "name", "email", "role", "status" FROM "user" WHERE "id" = $1',
     [session.user.id],
   );
-  const row = result.rows[0];
-  if (!row) return null;
-  const { role, status } = row;
-  if (!isSiteRole(role) || !isAccountStatus(status)) return null;
-  const user: AppUser = { id: row.id, name: row.name, email: row.email, role, status };
+  const user = appUserFromRow(result.rows[0]);
+  if (!user) return null;
 
-  // Accounts that existed before the email was listed get promoted on their next request. Sign-up doesn't verify
-  // emails, so the list only bootstraps the first admin; after that, admins are named from the admin panel.
-  if (user.status !== "blocked" && (user.role !== "admin" || user.status !== "approved")
-    && parseAdminEmails(process.env.GRIMOIRE_ADMIN_EMAILS).has(user.email.toLowerCase())
-    && await countApprovedAdmins() === 0) {
+  // Accounts that existed before the email was listed get promoted on their next request (see awaitsAdminBootstrap).
+  if (awaitsAdminBootstrap(user, process.env.GRIMOIRE_ADMIN_EMAILS) && await countApprovedAdmins() === 0) {
     await pool.query('UPDATE "user" SET "role" = \'admin\', "status" = \'approved\', "updatedAt" = now() WHERE "id" = $1', [user.id]);
     return { ...user, role: "admin", status: "approved" };
   }

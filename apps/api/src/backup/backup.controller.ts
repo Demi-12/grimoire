@@ -4,16 +4,14 @@
  */
 import { Controller, Get, HttpCode, Post, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { backupFilename, BackupRestoreError, looksLikeBackup, MAX_BACKUP_BYTES, parseBackup } from "@grimoire/shared/backup";
-import { parseCampaignInput, parseCharacterInput, parseCreatureInput, type AppUser, type CharacterInput, type CreatureInput } from "@grimoire/shared/permissions";
+import { backupFilename, BackupRestoreError, looksLikeBackup, MAX_BACKUP_BYTES, parseBackup, parseLegacyImport } from "@grimoire/shared/backup";
+import type { AppUser } from "@grimoire/shared/permissions";
 import { ApiError } from "../common/api-error.js";
 import { Approved, CurrentUser } from "../common/auth.guard.js";
 import { JsonBody } from "../common/params.js";
 import { RateLimit } from "../common/rate-limit.guard.js";
 import { IMPORT_LIMIT } from "../common/rate-limit.js";
 import { BackupService } from "./backup.service.js";
-
-const MAX_ITEMS = 200;
 
 const backupError = (status: number, error: string, code: string, path?: string) => new ApiError(status, error, code, path ? { path } : {});
 
@@ -47,34 +45,11 @@ export class BackupController {
   // Backups can be larger than the legacy browser import; item counts still cap the legacy payload.
   async import(@CurrentUser() user: AppUser, @JsonBody(MAX_BACKUP_BYTES) parsedBody: unknown) {
     if (looksLikeBackup(parsedBody)) return this.restoreBackup(user, parsedBody);
-    const body = parsedBody as { characters?: unknown; campaigns?: unknown; creatures?: unknown } | null;
-    if (!body || !Array.isArray(body.characters) || (body.campaigns !== undefined && !Array.isArray(body.campaigns)) || (body.creatures !== undefined && !Array.isArray(body.creatures))) {
-      throw new ApiError(400, "Invalid import, or the data is too large.");
+    const legacy = parseLegacyImport(parsedBody);
+    if (!legacy.ok) {
+      throw legacy.error === "too-many" ? new ApiError(413, "Too many items to import at once.") : new ApiError(400, "Invalid import, or the data is too large.");
     }
-    if (body.characters.length > MAX_ITEMS || (Array.isArray(body.campaigns) && body.campaigns.length > MAX_ITEMS) || (Array.isArray(body.creatures) && body.creatures.length > 500)) {
-      throw new ApiError(413, "Too many items to import at once.");
-    }
-
-    const characters: (CharacterInput & { localId: string })[] = [];
-    for (const raw of body.characters as unknown[]) {
-      const localId = raw && typeof raw === "object" && typeof (raw as { id?: unknown }).id === "string" ? (raw as { id: string }).id : "";
-      const input = parseCharacterInput({ ...(raw as object), campaignId: null });
-      if (input && localId) characters.push({ ...input, localId });
-    }
-    const campaigns: { name: string; description: string; characterIds: string[] }[] = [];
-    for (const raw of (body.campaigns ?? []) as unknown[]) {
-      const input = parseCampaignInput(raw);
-      const ids = raw && typeof raw === "object" ? (raw as { characterIds?: unknown }).characterIds : undefined;
-      if (input) campaigns.push({ ...input, characterIds: Array.isArray(ids) ? ids.slice(0, MAX_ITEMS).filter((id): id is string => typeof id === "string") : [] });
-    }
-
-    const creatures: CreatureInput[] = [];
-    for (const raw of (body.creatures ?? []) as unknown[]) {
-      const input = parseCreatureInput(raw);
-      if (input) creatures.push(input);
-    }
-
-    const imported = await this.backups.importLocalData(user, characters, campaigns, creatures);
+    const imported = await this.backups.importLocalData(user, legacy.value);
     return { imported };
   }
 

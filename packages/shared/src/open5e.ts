@@ -3,9 +3,39 @@
  * Open5e only serves openly licensed content (SRD 5.1/5.2 under CC-BY-4.0, third-party books under the OGL),
  * and every creature carries the book it comes from, which the bestiary shows next to it.
  */
+import { xpForChallengeRating } from "./homebrew.js";
 import type { MonsterAction, MonsterSource, MonsterStatBlock } from "./monster-api.js";
 
 export const OPEN5E_ROOT = "https://api.open5e.com";
+
+/** Filters of a bestiary search (GET /api/monsters), already validated. */
+export interface MonsterSearch {
+  /** Challenge rating to keep; undefined for any. */
+  rating: number | undefined;
+  /** Book key to keep; empty for any. */
+  source: string;
+  /** Lowercase name fragment; empty for any. */
+  search: string;
+  page: number;
+  limit: number;
+}
+
+type MonsterSearchQuery = Record<"challenge_rating" | "source" | "search" | "page" | "limit", string | null>;
+
+/** Read the bestiary search query string (what fetchMonsterCatalog sends), or say which part is invalid. */
+export function parseMonsterSearch(query: MonsterSearchQuery): { ok: true; value: MonsterSearch } | { ok: false; error: string } {
+  const rating = query.challenge_rating?.trim() ?? "";
+  const source = query.source?.trim() ?? "";
+  const search = (query.search ?? "").trim().toLocaleLowerCase("en-US");
+  const page = Number(query.page ?? "1");
+  const limit = Number(query.limit ?? "12");
+  const isStandardRating = String(Number(rating)) === rating && xpForChallengeRating(Number(rating)) !== null;
+  if (search.length > 100) return { ok: false, error: "Search text is too long." };
+  if (source.length > 60 || !/^[a-z0-9-]*$/i.test(source)) return { ok: false, error: "Invalid book filter." };
+  if (rating && !isStandardRating) return { ok: false, error: "Invalid challenge rating filter." };
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 50) return { ok: false, error: "Invalid pagination values." };
+  return { ok: true, value: { rating: rating ? Number(rating) : undefined, source, search, page, limit } };
+}
 
 type Named = { name?: string; key?: string };
 type Scores = Partial<Record<"strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma", number>>;
