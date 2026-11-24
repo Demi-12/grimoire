@@ -109,9 +109,13 @@ export interface CompactMonster {
 
 export interface MonsterCatalogData { monsters: CompactMonster[]; sources: SourceSummary[] }
 
-/** Only what the catalog needs: Open5e trims the rest of each creature server-side. */
+/**
+ * Only what the catalog needs: Open5e trims the rest of each creature server-side. The role rules
+ * (monster-roles.ts) read size, HP, AC, speed, Stealth, truesight, tremorsense, traits and every action,
+ * legendary ones included (`action_type`), so catalog roles match the roles of the full stat block.
+ */
 const CATALOG_FIELDS = [
-  "fields=key,name,document,type,size,challenge_rating,experience_points,armor_class,hit_points,speed,actions,traits",
+  "fields=key,name,document,type,size,challenge_rating,experience_points,armor_class,hit_points,speed,skill_bonuses,truesight_range,tremorsense_range,actions,traits",
   "document__fields=key,name,display_name,publisher",
   "document__publisher__fields=name",
   "actions__fields=name,desc,action_type",
