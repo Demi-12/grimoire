@@ -1235,6 +1235,15 @@ describe("moving round walls, edge cases", () => {
     const stub = movementSteps(open(6, 6, [{ x1: 3, y1: 0, x2: 3, y2: 1 }]), one(1, 1, 2), 1);
     expect(stub.has("2,1") && stub.has("1,0")).toBe(true);
     expect(stub.has("2,0")).toBe(false);
+    // A wall along the bottom edge of a big token stops it going down.
+    expect([...movementSteps(open(6, 6, [{ x1: 0, y1: 3, x2: 6, y2: 3 }]), one(1, 1, 2)).keys()].every((spot) => Number(spot.split(",")[1]) <= 1)).toBe(true);
+  });
+
+  it("lets a big token standing over a wall step off it either way", () => {
+    // A cross of walls through the middle of a 2×2 token (the DM may put one there): its own squares don't count.
+    const cross = open(6, 6, [{ x1: 2, y1: 1, x2: 2, y2: 3 }, { x1: 1, y1: 2, x2: 3, y2: 2 }]);
+    const steps = movementSteps(cross, one(1, 1, 2), 1);
+    expect(["2,1", "0,1", "1,0", "1,2"].map((spot) => steps.has(spot))).toEqual([true, true, true, true]);
   });
 });
 
@@ -1248,6 +1257,9 @@ describe("finding a free spot, edge cases", () => {
     const right: MapState = { ...state, tokens: [rat("a", 3, 0), rat("b", 2, 1)] };
     expect(findFreeSpot(right, 1, "right")).toEqual({ x: 3, y: 1 });
     expect(findFreeSpot(right, 2, "right")).toEqual({ x: 2, y: 2 });
+    // Right beside another token is free, and the last column is scanned too.
+    expect(findFreeSpot({ ...state, tokens: [rat("a", 1, 0)] }, 1, "left")).toEqual({ x: 0, y: 0 });
+    expect(findFreeSpot({ ...state, tokens: [rat("big", 0, 0, 3), rat("a", 0, 3), rat("b", 1, 3), rat("c", 2, 3)] }, 1, "left")).toEqual({ x: 3, y: 0 });
   });
 
   it("falls back to the first column on its side when the map is full", () => {
