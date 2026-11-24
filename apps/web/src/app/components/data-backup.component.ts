@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, inject, input, signal, viewChild } from "@angular/core";
 import { backupFilename, MAX_BACKUP_BYTES, parseBackup, type BackupError, type ParsedBackup } from "@grimoire/shared/backup";
+import { backupPathText } from "@grimoire/shared/error-text";
 import { api, ApiError } from "../core/api-client";
 import { FeedbackService } from "../core/feedback.service";
 import { I18nService } from "../core/i18n.service";
@@ -39,14 +40,16 @@ export class DataBackupComponent {
   protected readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>("file");
   protected readonly busy = signal<"download" | "restore" | null>(null);
 
-  private errorText(code: string | undefined, path?: string): string {
+  private errorText(code: string | undefined, rawPath?: string): string {
+    // "characters[3]" reads as "personaje n.º 4".
+    const path = backupPathText(this.i18n.locale(), rawPath);
     switch (code) {
       case "version": return this.t("backup.error.version");
-      case "item": return this.t("backup.error.item", { path: path ?? "" });
-      case "section": return this.t("backup.error.section", { path: path ?? "" });
-      case "too-many": return this.t("backup.error.tooMany", { path: path ?? "" });
+      case "item": return this.t("backup.error.item", { path });
+      case "section": return this.t("backup.error.section", { path });
+      case "too-many": return this.t("backup.error.tooMany", { path });
       case "too-large": return this.t("backup.error.tooLarge", { size: MAX_BACKUP_BYTES / 1024 / 1024 });
-      case "limit": return this.t("backup.error.limit", { path: path ?? "" });
+      case "limit": return this.t("backup.error.limit", { path });
       case "invalid": return this.t("backup.error.invalid");
       default: return this.t("backup.error.generic");
     }
@@ -117,7 +120,7 @@ export class DataBackupComponent {
       }));
       await Promise.resolve(this.onRestored()?.()).catch(() => undefined);
     } catch (error) {
-      this.feedback.toast.error(error instanceof ApiError ? this.errorText(error.code, error.path) : this.t("backup.error.generic"));
+      this.feedback.toast.error(error instanceof ApiError && error.code ? this.errorText(error.code, error.path) : this.i18n.errorText(error, this.t("backup.error.generic")));
     } finally {
       this.busy.set(null);
     }

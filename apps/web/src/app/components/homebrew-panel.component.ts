@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from "@angular/core";
 import { homebrewSlug } from "@grimoire/shared/homebrew";
-import { api, ApiError, type Campaign, type CatalogCreature, type HomebrewMonster, type Me } from "../core/api-client";
+import { api, type Campaign, type CatalogCreature, type HomebrewMonster, type Me } from "../core/api-client";
 import { FeedbackService } from "../core/feedback.service";
 import { I18nService } from "../core/i18n.service";
 import { HomebrewEditorComponent } from "./homebrew-editor.component";
@@ -114,7 +114,7 @@ export class HomebrewPanelComponent {
 
   private async run(work: () => Promise<void>, success: string): Promise<void> {
     this.busy.set(true);
-    try { await work(); this.feedback.toast.success(success); } catch (cause) { this.feedback.toast.error(cause instanceof ApiError ? cause.message : this.t().actionError); } finally { this.busy.set(false); }
+    try { await work(); this.feedback.toast.success(success); } catch (cause) { this.feedback.toast.error(this.i18n.errorText(cause, this.t().actionError)); } finally { this.busy.set(false); }
   }
 
   protected async remove(monster: HomebrewMonster): Promise<void> {

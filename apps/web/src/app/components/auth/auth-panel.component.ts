@@ -1,6 +1,7 @@
 import {
   afterRenderEffect, ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, model, OnInit, signal, viewChild,
 } from "@angular/core";
+import { authErrorKind } from "@grimoire/shared/error-text";
 import { authClient } from "../../core/auth-client";
 import { I18nService } from "../../core/i18n.service";
 import { SessionService } from "../../core/session.service";
@@ -20,7 +21,7 @@ const copy = {
     forgotTitle: "Recover your password", twoFactorTitle: "Two-step verification", backupLabel: "Backup code", or: "or",
     ledeSignUp: "An admin approves new accounts before they can enter.", ledeForgot: "Enter your account email and we’ll send you a link to choose a new password.",
     ledeReset: "A phrase of a few words is easy to remember and hard to guess.",
-    ledeTotp: "Open your authenticator app and enter the code it shows for Grimoire.", ledeBackup: "Enter one of the backup codes you saved when you turned on 2FA. Each one works once.",
+    ledeTotp: "Open your authenticator app and enter the code it shows for Grimoire.", ledeBackup: "Enter one of the backup codes you saved when you turned on two-step verification. Each one works once.",
     newHere: "New to the Grimoire?", haveAccount: "Already have an account?", backToSignIn: "Back to sign in", showPassword: "Show password",
     passwordHint: "At least 12 characters.", account: "Account",
     title: "Enter the Grimoire", kicker: "YOUR CAMPAIGN BOOK", name: "Adventurer name", email: "Email",
@@ -32,21 +33,21 @@ const copy = {
     verify: "Verify code", backup: "Use a backup code", useTotp: "Use an authenticator code", passkey: "Sign in with a passkey",
     processing: "Working…", passwordMismatch: "The passwords do not match.", genericError: "We could not complete that request. Check the details and try again.",
     settings: "Account security", addPasskey: "Add a passkey", passkeys: "Saved passkeys", noPasskeys: "No passkeys saved yet.",
-    remove: "Remove", enableTwoFactor: "Set up authenticator 2FA", disableTwoFactor: "Turn off 2FA",
+    remove: "Remove", enableTwoFactor: "Set up two-step verification", disableTwoFactor: "Turn off two-step verification", twoFactorSection: "Two-step verification",
     changePassword: "Change password", currentPassword: "Current password", newPassword: "New password", savePassword: "Update password", rotateCodes: "Generate new backup codes",
     enterPassword: "Confirm your password", setup: "Scan the code with an authenticator app, or enter this key manually:",
-    totpCode: "6-digit authenticator code", confirmSetup: "Confirm and enable 2FA", backupCodes: "Save these backup codes somewhere safe. Each can be used once.",
-    twoFactorOn: "Authenticator-based 2FA is enabled.", signedIn: "Signed in as", signOut: "Sign out", copySecret: "Copy setup key",
-    invalidCode: "That code isn't valid. Check it and try again.", twoFactorExpired: "That sign-in attempt has expired. Enter your email and password again.",
-    tooManyRequests: "Too many attempts. Wait a few seconds and try again.", accountLocked: "Too many wrong codes. Your account is locked for a few minutes.",
+    totpCode: "6-digit authenticator code", confirmSetup: "Confirm and turn on", backupCodes: "Save these backup codes somewhere safe. Each can be used once.",
+    twoFactorOn: "Two-step verification with an authenticator app is on.", signedIn: "Signed in as", signOut: "Sign out", copySecret: "Copy setup key",
     sessionNotLoaded: "You're signed in, but the session couldn't be loaded. Reload the page.",
+    twoFactorOff: "Two-step verification has been turned off.", newPasswordMismatch: "The new passwords do not match.", passwordChanged: "Password updated; other sessions were signed out.",
+    codesRotated: "The previous backup codes are no longer valid.", passkeySaved: "Passkey saved.", passkeyName: "Passkey", passwordReset: "Password updated. You can sign in now.",
   },
   es: {
     kickerSignIn: "DE VUELTA A LA MESA", kickerSignUp: "UNA NUEVA AVENTURA", kickerForgot: "UNA LLAVE PERDIDA", kickerReset: "UNA LLAVE NUEVA", kickerTwoFactor: "EL SEGUNDO SELLO",
     forgotTitle: "Recupera tu contraseña", twoFactorTitle: "Verificación en dos pasos", backupLabel: "Código de recuperación", or: "o",
     ledeSignUp: "Un admin aprueba las cuentas nuevas antes de que puedan entrar.", ledeForgot: "Escribe el correo de tu cuenta y te enviaremos un enlace para elegir una contraseña nueva.",
     ledeReset: "Una frase de varias palabras es fácil de recordar y difícil de adivinar.",
-    ledeTotp: "Abre tu app autenticadora y escribe el código de 6 cifras que muestra para Grimoire.", ledeBackup: "Escribe uno de los códigos de recuperación que guardaste al activar 2FA. Cada uno sirve una sola vez.",
+    ledeTotp: "Abre tu app autenticadora y escribe el código de 6 cifras que muestra para Grimoire.", ledeBackup: "Escribe uno de los códigos de recuperación que guardaste al activar la verificación en dos pasos. Cada uno sirve una sola vez.",
     newHere: "¿Primera vez en el grimorio?", haveAccount: "¿Ya tienes cuenta?", backToSignIn: "Volver a iniciar sesión", showPassword: "Mostrar contraseña",
     passwordHint: "Mínimo 12 caracteres.", account: "Cuenta",
     title: "Abre el grimorio", kicker: "TU CUADERNO DE CAMPAÑA", name: "Nombre de aventurero", email: "Correo electrónico",
@@ -58,36 +59,19 @@ const copy = {
     verify: "Verificar código", backup: "Usar un código de recuperación", useTotp: "Usar código de autenticación", passkey: "Iniciar con una clave de acceso",
     processing: "Procesando…", passwordMismatch: "Las contraseñas no coinciden.", genericError: "No se pudo completar la solicitud. Revisa los datos e inténtalo de nuevo.",
     settings: "Seguridad de la cuenta", addPasskey: "Añadir clave de acceso", passkeys: "Claves guardadas", noPasskeys: "Todavía no hay claves guardadas.",
-    remove: "Eliminar", enableTwoFactor: "Configurar autenticación en dos pasos", disableTwoFactor: "Desactivar 2FA",
+    remove: "Eliminar", enableTwoFactor: "Configurar la verificación en dos pasos", disableTwoFactor: "Desactivar la verificación en dos pasos", twoFactorSection: "Verificación en dos pasos",
     changePassword: "Cambiar contraseña", currentPassword: "Contraseña actual", newPassword: "Contraseña nueva", savePassword: "Actualizar contraseña", rotateCodes: "Generar nuevos códigos de recuperación",
     enterPassword: "Confirma tu contraseña", setup: "Escanea el código con una app autenticadora o introduce esta clave manualmente:",
-    totpCode: "Código autenticador de 6 cifras", confirmSetup: "Confirmar y activar 2FA", backupCodes: "Guarda estos códigos de recuperación en un lugar seguro. Cada uno se puede usar una vez.",
-    twoFactorOn: "La autenticación en dos pasos está activada.", signedIn: "Sesión iniciada como", signOut: "Cerrar sesión", copySecret: "Copiar clave de configuración",
-    invalidCode: "El código no es válido. Revísalo e inténtalo de nuevo.", twoFactorExpired: "Ese inicio de sesión ha caducado. Vuelve a introducir tu correo y contraseña.",
-    tooManyRequests: "Demasiados intentos. Espera unos segundos y vuelve a probar.", accountLocked: "Demasiados códigos incorrectos. La cuenta queda bloqueada unos minutos.",
+    totpCode: "Código de 6 cifras de la app autenticadora", confirmSetup: "Confirmar y activar", backupCodes: "Guarda estos códigos de recuperación en un lugar seguro. Cada uno se puede usar una vez.",
+    twoFactorOn: "La verificación en dos pasos con app autenticadora está activada.", signedIn: "Sesión iniciada como", signOut: "Cerrar sesión", copySecret: "Copiar clave de configuración",
     sessionNotLoaded: "Has iniciado sesión, pero no se pudo cargar la sesión. Recarga la página.",
+    twoFactorOff: "La verificación en dos pasos se ha desactivado.", newPasswordMismatch: "Las contraseñas nuevas no coinciden.", passwordChanged: "Contraseña actualizada; se cerraron las demás sesiones.",
+    codesRotated: "Los códigos anteriores ya no sirven.", passkeySaved: "Clave de acceso guardada.", passkeyName: "Clave de acceso", passwordReset: "Contraseña actualizada. Ya puedes iniciar sesión.",
   },
 } as const;
 
-function errorText(error: unknown, fallback: string) {
-  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
-  return fallback;
-}
-
-/** Map a failed 2FA verification to our own (translated) message; better-auth's messages are English-only. */
-function twoFactorProblem(error: { code?: string; status?: number }): "expired" | "invalidCode" | "tooManyRequests" | "accountLocked" | null {
-  switch (error.code) {
-    case "INVALID_TWO_FACTOR_COOKIE":
-    case "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE":
-      return "expired";
-    case "INVALID_CODE":
-    case "INVALID_BACKUP_CODE":
-      return "invalidCode";
-    case "ACCOUNT_TEMPORARILY_LOCKED":
-      return "accountLocked";
-  }
-  return error.status === 429 ? "tooManyRequests" : null;
-}
+/** A problem this file found itself (passwords that don't match…), already in the interface language. */
+class Shown extends Error {}
 
 /** An authenticator code keeps only digits, six at most. */
 const totpDigits = (value: string) => value.replace(/\D/g, "").slice(0, 6);
@@ -161,7 +145,7 @@ class PasswordInputComponent {
             <ul class="auth-keys">
               @for (key of passkeys(); track key.id) {
                 <li>
-                  <span>{{ key.name || (i18n.locale() === "es" ? "Clave de acceso" : "Passkey") }}</span>
+                  <span>{{ key.name || t().passkeyName }}</span>
                   <button type="button" class="button button-quiet" [disabled]="busy()" (click)="removePasskey(key.id)">{{ t().remove }}</button>
                 </li>
               }
@@ -171,7 +155,7 @@ class PasswordInputComponent {
         </section>
 
         <section class="auth-section">
-          <h3 class="auth-section-title">2FA · TOTP</h3>
+          <h3 class="auth-section-title">{{ t().twoFactorSection }}</h3>
           @if (twoFactorEnabled()) { <p class="auth-section-note auth-section-ok">{{ t().twoFactorOn }}</p> }
           <div class="auth-field">
             <label class="auth-label" for="security-2fa-password">{{ t().enterPassword }}</label>
@@ -278,8 +262,8 @@ class AccountSecurityComponent {
     this.busy.set(true); this.error.set(""); this.message.set("");
   }
 
-  private get spanish(): boolean {
-    return this.i18n.locale() === "es";
+  private fail(cause: unknown): void {
+    this.error.set(cause instanceof Shown ? cause.message : this.i18n.authErrorText(cause, this.t().genericError));
   }
 
   protected changeTotpCode(field: HTMLInputElement): void {
@@ -303,7 +287,7 @@ class AccountSecurityComponent {
         this.backupCodes.set(result.data.backupCodes);
         this.message.set(this.t().setup);
       }
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
@@ -315,7 +299,7 @@ class AccountSecurityComponent {
       this.totpUri.set(""); this.totpCode.set(""); this.password.set("");
       this.message.set(this.t().twoFactorOn);
       await this.refetchSession();
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
@@ -324,21 +308,21 @@ class AccountSecurityComponent {
     try {
       const result = await authClient.twoFactor.disable({ password: this.password() });
       if (result.error) throw result.error;
-      this.password.set(""); this.message.set(this.spanish ? "La autenticación en dos pasos se ha desactivado." : "Two-factor authentication has been disabled.");
+      this.password.set(""); this.message.set(this.t().twoFactorOff);
       await this.refetchSession();
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
   protected async changePassword(event: Event): Promise<void> {
     event.preventDefault(); this.begin();
     try {
-      if (this.newPassword() !== this.newPasswordConfirm()) throw new Error(this.spanish ? "Las contraseñas nuevas no coinciden." : "The new passwords do not match.");
+      if (this.newPassword() !== this.newPasswordConfirm()) throw new Shown(this.t().newPasswordMismatch);
       const result = await authClient.changePassword({ newPassword: this.newPassword(), currentPassword: this.password(), revokeOtherSessions: true });
       if (result.error) throw result.error;
       this.password.set(""); this.newPassword.set(""); this.newPasswordConfirm.set("");
-      this.message.set(this.spanish ? "Contraseña actualizada; se cerraron las demás sesiones." : "Password updated; other sessions were signed out.");
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+      this.message.set(this.t().passwordChanged);
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
@@ -348,8 +332,8 @@ class AccountSecurityComponent {
       const result = await authClient.twoFactor.generateBackupCodes({ password: this.password() });
       if (result.error) throw result.error;
       this.backupCodes.set(result.data?.backupCodes ?? []);
-      this.message.set(this.spanish ? "Los códigos anteriores ya no sirven." : "The previous backup codes are no longer valid.");
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+      this.message.set(this.t().codesRotated);
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
@@ -359,9 +343,9 @@ class AccountSecurityComponent {
       const result = await authClient.passkey.addPasskey({ name: `Grimoire · ${new Date().toLocaleDateString()}` });
       const responseError = result.data && "error" in result.data ? result.data.error : undefined;
       if (result.error || responseError) throw result.error ?? responseError;
-      this.message.set(this.spanish ? "Clave de acceso guardada." : "Passkey saved.");
+      this.message.set(this.t().passkeySaved);
       await this.loadPasskeys();
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 
@@ -371,7 +355,7 @@ class AccountSecurityComponent {
       const result = await authClient.passkey.deletePasskey({ id });
       if (result.error) throw result.error;
       await this.loadPasskeys();
-    } catch (cause) { this.error.set(errorText(cause, this.t().genericError)); }
+    } catch (cause) { this.fail(cause); }
     finally { this.busy.set(false); }
   }
 }
@@ -452,7 +436,7 @@ export class AuthPanelComponent implements OnInit {
   private async finishSignIn(): Promise<void> {
     await authClient.useSession.get().refetch();
     const loaded = (authClient.$store.atoms.session?.get() as { data?: { user?: unknown } | null } | undefined)?.data?.user;
-    if (!loaded) throw new Error(this.t().sessionNotLoaded);
+    if (!loaded) throw new Shown(this.t().sessionNotLoaded);
   }
 
   private startTwoFactor(): void {
@@ -461,6 +445,10 @@ export class AuthPanelComponent implements OnInit {
     this.code.set("");
     this.backupMode.set(false);
     this.mode.set("two-factor");
+  }
+
+  private fail(cause: unknown): void {
+    this.error.set(cause instanceof Shown ? cause.message : this.i18n.authErrorText(cause, this.t().genericError));
   }
 
   private notice(text: string): void {
@@ -497,7 +485,7 @@ export class AuthPanelComponent implements OnInit {
     try {
       const mode = this.mode();
       if (mode === "sign-up") {
-        if (this.password() !== this.confirmation()) throw new Error(t.passwordMismatch);
+        if (this.password() !== this.confirmation()) throw new Shown(t.passwordMismatch);
         const result = await authClient.signUp.email({ name: this.name().trim(), email: this.email().trim(), password: this.password(), fetchOptions: { disableSignal: true } });
         if (result.error) throw result.error;
         // The server signs the new account in directly.
@@ -514,11 +502,11 @@ export class AuthPanelComponent implements OnInit {
         if (result.error) throw result.error;
         this.notice(t.checkEmail);
       } else if (mode === "reset-password") {
-        if (!this.resetToken()) throw new Error(t.genericError);
-        if (this.password() !== this.confirmation()) throw new Error(t.passwordMismatch);
+        if (!this.resetToken()) throw new Shown(t.genericError);
+        if (this.password() !== this.confirmation()) throw new Shown(t.passwordMismatch);
         const result = await authClient.resetPassword({ newPassword: this.password(), token: this.resetToken() });
         if (result.error) throw result.error;
-        this.notice(this.i18n.locale() === "es" ? "Contraseña actualizada. Ya puedes iniciar sesión." : "Password updated. You can sign in now.");
+        this.notice(t.passwordReset);
         this.mode.set("sign-in");
       } else if (mode === "two-factor") {
         const fetchOptions = { disableSignal: true };
@@ -527,20 +515,19 @@ export class AuthPanelComponent implements OnInit {
           // Authenticator apps often show "123 456".
           : await authClient.twoFactor.verifyTotp({ code: this.code().replace(/\s+/g, ""), trustDevice: false, fetchOptions });
         if (result.error) {
-          const problem = twoFactorProblem(result.error);
-          if (problem === "expired") {
+          if (authErrorKind(result.error) === "expired") {
             // The server consumed or expired the challenge: only a new password sign-in can start another one.
             this.code.set("");
             this.mode.set("sign-in");
-            this.error.set(t.twoFactorExpired);
+            this.fail(result.error);
             return;
           }
-          throw problem ? new Error(t[problem]) : result.error;
+          throw result.error;
         }
         await this.finishSignIn();
       }
     } catch (cause) {
-      this.error.set(errorText(cause, t.genericError));
+      this.fail(cause);
     } finally {
       this.busy.set(false);
     }
@@ -555,7 +542,7 @@ export class AuthPanelComponent implements OnInit {
       if (result.error || responseError) throw result.error ?? responseError;
       await this.finishSignIn();
     } catch (cause) {
-      this.error.set(errorText(cause, this.t().genericError));
+      this.fail(cause);
     } finally {
       this.busy.set(false);
     }

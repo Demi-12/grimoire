@@ -6,6 +6,7 @@ import { sendAuthEmail } from "./auth-email.js";
 import { resetPasswordEmail } from "./auth-email-templates.js";
 import { countApprovedAdmins } from "../admin/admin-count.js";
 import { pool } from "../database/db.js";
+import { detectLocale } from "@grimoire/shared/i18n";
 import { isListedAdmin } from "@grimoire/shared/permissions";
 
 const RESET_PASSWORD_MINUTES = 30;
@@ -15,6 +16,13 @@ const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
   .split(",").map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
 
 /** Without SMTP (e.g. a fresh home server) accounts work but password reset by email is off. */
+
+/** The language of an account's emails: its saved choice, else the language of the browser that asked. */
+async function emailLocale(userId: string, request?: Request) {
+  const saved = await pool.query<{ locale: string | null }>('SELECT "locale" FROM "user" WHERE "id" = $1', [userId]);
+  const locale = saved.rows[0]?.locale;
+  return locale === "es" || locale === "en" ? locale : detectLocale(request?.headers.get("accept-language"));
+}
 
 export const auth = betterAuth({
   appName: "Grimoire",
@@ -45,7 +53,8 @@ export const auth = betterAuth({
         before: async (session) => {
           const result = await pool.query<{ status: string }>('SELECT "status" FROM "user" WHERE "id" = $1', [session.userId]);
           if (result.rows[0]?.status === "blocked") {
-            throw new APIError("FORBIDDEN", { message: "This account has been blocked by an administrator." });
+            // The code is what the browser reads (packages/shared/src/error-text.ts) to say it in the person's language.
+            throw new APIError("FORBIDDEN", { message: "This account has been blocked by an administrator.", code: "ACCOUNT_BLOCKED" });
           }
           return { data: session };
         },
@@ -58,8 +67,9 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
     resetPasswordTokenExpiresIn: RESET_PASSWORD_MINUTES * 60,
     revokeSessionsOnPasswordReset: true,
-    sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmail({ to: user.email, ...resetPasswordEmail({ name: user.name, url, expiresInMinutes: RESET_PASSWORD_MINUTES }) });
+    sendResetPassword: async ({ user, url }, request) => {
+      const locale = await emailLocale(user.id, request);
+      await sendAuthEmail({ to: user.email, ...resetPasswordEmail({ name: user.name, url, expiresInMinutes: RESET_PASSWORD_MINUTES, locale }) });
     },
   },
   session: {

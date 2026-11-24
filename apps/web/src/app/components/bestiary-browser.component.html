@@ -32,7 +32,7 @@
   } @else if (error()) {
     <div [class]="notice + ' mt-4'" role="alert"><strong class="text-danger not-italic">{{ t().errorTitle }}</strong><p class="mt-1.5 mb-3">{{ t().errorBody }}</p><button type="button" class="button button-quiet button-sm" (click)="retry()">{{ t().retry }}</button></div>
   } @else {
-    <div class="mt-4 mb-2 flex items-center justify-between gap-3 font-label text-xs font-bold tracking-[.09em] text-muted uppercase"><span>{{ t().count(catalogCount()) }}{{ rating() ? " · CR " + t().ratingLabel(rating()) : "" }}</span><small class="font-normal">{{ bookName() }}</small></div>
+    <div class="mt-4 mb-2 flex items-center justify-between gap-3 font-label text-xs font-bold tracking-[.09em] text-muted uppercase"><span>{{ t().count(catalogCount()) }}{{ rating() ? " · " + t().ratingShort + " " + t().ratingLabel(rating()) : "" }}</span><small class="font-normal">{{ bookName() }}</small></div>
     @if (rows().length) {
       <div [class]="list">
         @for (row of rows(); track row.creature.index) {

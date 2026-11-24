@@ -5,7 +5,7 @@ import {
   type HomebrewDraft,
 } from "@grimoire/shared/homebrew-draft";
 import { translateTerms, type VocabularyKind } from "@grimoire/shared/monster-i18n";
-import { api, ApiError, type Campaign, type HomebrewMonster } from "../core/api-client";
+import { api, type Campaign, type HomebrewMonster } from "../core/api-client";
 import { I18nService } from "../core/i18n.service";
 import { MonsterSheetComponent } from "./monster-sheet.component";
 
@@ -154,7 +154,7 @@ export class HomebrewEditorComponent implements OnInit {
       const { monster } = await api<{ monster: HomebrewMonster }>(initial ? `/api/homebrew/${initial.id}` : "/api/homebrew", { method: initial ? "PUT" : "POST", body });
       this.onSaved()(monster);
     } catch (cause) {
-      this.error.set(cause instanceof ApiError ? cause.message : this.t().errorGeneric);
+      this.error.set(this.i18n.errorText(cause, this.t().errorGeneric));
     } finally {
       this.busy.set(false);
     }
