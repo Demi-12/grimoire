@@ -154,6 +154,8 @@ export interface MapActor {
 export const emptyMapState = (): MapState => ({ cols: MAP_DEFAULT_COLS, rows: MAP_DEFAULT_ROWS, tokens: [] });
 
 const isInt = (value: unknown, min: number, max: number): value is number => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+/** Any object (arrays too), to read its fields one by one. */
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object";
 const isSize = (value: unknown): value is TokenSize => isInt(value, 1, 4);
 const tokenIdPattern = /^[A-Za-z0-9_-]{1,40}$/;
 const isTokenId = (value: unknown): value is string => typeof value === "string" && tokenIdPattern.test(value);
@@ -395,63 +397,120 @@ export function parseMapOps(body: unknown): MapOp[] | null {
 
 /** Read a stored state defensively: drop anything malformed instead of failing the whole map. */
 export function normalizeMapState(raw: unknown): MapState {
-  const fallback = emptyMapState();
-  if (!raw || typeof raw !== "object") return fallback;
-  const value = raw as Record<string, unknown>;
-  const cols = isInt(value.cols, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value.cols : fallback.cols;
-  const rows = isInt(value.rows, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value.rows : fallback.rows;
-  const tokens: MapToken[] = [];
-  for (const item of Array.isArray(value.tokens) ? value.tokens : []) {
-    if (!item || typeof item !== "object") continue;
-    const token = item as Record<string, unknown>;
-    const name = label(token.label);
-    if (!isTokenId(token.id) || (token.kind !== "hero" && token.kind !== "monster") || !name || !isSize(token.size)) continue;
-    if (!isInt(token.x, 0, MAP_MAX_SIZE - 1) || !isInt(token.y, 0, MAP_MAX_SIZE - 1)) continue;
-    if (token.kind === "hero" && (typeof token.characterId !== "string" || !uuidPattern.test(token.characterId))) continue;
-    const vision = parseVision(token.vision);
-    tokens.push(clampToken({
-      id: token.id, kind: token.kind, label: name, x: token.x, y: token.y, size: token.size,
-      ...(token.kind === "hero" ? { characterId: token.characterId as string } : {}),
-      ...(typeof token.monsterSlug === "string" ? { monsterSlug: token.monsterSlug } : {}),
-      ...(token.hidden === true ? { hidden: true } : {}),
-      ...(token.defeated === true ? { defeated: true } : {}),
-      ...(isFacing(token.facing) && token.facing !== 0 ? { facing: token.facing } : {}),
-      ...(vision ? { vision } : {}),
-    }, cols, rows));
-  }
-  const background = value.background && typeof value.background === "object" ? (value.background as Record<string, unknown>).key : undefined;
-  const walls = (Array.isArray(value.walls) ? value.walls : []).map(parseWall)
-    .map((wall) => wall && clipWall(wall, cols, rows)).filter((wall): wall is MapWall => wall !== null).slice(0, MAP_MAX_WALLS);
-  const explored = typeof value.explored === "string" && value.explored.length === Math.ceil(cols * rows / 4) && /^[0-9a-f]*$/.test(value.explored) ? value.explored : null;
-  const kept = tokens.slice(0, MAP_MAX_TOKENS);
-  const combat = normalizeCombat(value.combat, new Set(kept.map((token) => token.id)));
+  if (!isRecord(raw)) return emptyMapState();
+  const cols = storedGridSize(raw.cols, MAP_DEFAULT_COLS);
+  const rows = storedGridSize(raw.rows, MAP_DEFAULT_ROWS);
+  const tokens = storedTokens(raw.tokens, cols, rows);
+  const combat = normalizeCombat(raw.combat, new Set(tokens.map((token) => token.id)));
+  const walls = storedWalls(raw.walls, cols, rows);
+  const explored = storedExplored(raw.explored, cols, rows);
+  const background = storedBackground(raw.background);
   return {
-    cols, rows, tokens: kept,
+    cols, rows, tokens,
     ...(combat ? { combat } : {}),
     ...(walls.length ? { walls } : {}),
     ...(explored ? { explored } : {}),
-    ...(typeof background === "string" && backgroundKeyPattern.test(background) ? { background: { key: background } } : {}),
-    ...(value.fog === true ? { fog: true } : {}),
-    ...(value.gridHidden === true ? { gridHidden: true } : {}),
+    ...(background ? { background } : {}),
+    ...(raw.fog === true ? { fog: true } : {}),
+    ...(raw.gridHidden === true ? { gridHidden: true } : {}),
   };
+}
+
+/** Columns or rows of a stored grid: a whole number within the limits, else the default. */
+function storedGridSize(value: unknown, fallback: number): number {
+  return isInt(value, MAP_MIN_SIZE, MAP_MAX_SIZE) ? value : fallback;
+}
+
+/** The stored tokens that are well formed, pulled inside the grid, up to MAP_MAX_TOKENS. */
+function storedTokens(value: unknown, cols: number, rows: number): MapToken[] {
+  const tokens: MapToken[] = [];
+  for (const item of Array.isArray(value) ? value : []) {
+    const token = storedToken(item);
+    if (token) tokens.push(clampToken(token, cols, rows));
+  }
+  return tokens.slice(0, MAP_MAX_TOKENS);
+}
+
+/** One stored token, or null when a field every token needs is wrong or a hero has no character. */
+function storedToken(item: unknown): MapToken | null {
+  if (!isRecord(item)) return null;
+  const core = storedTokenCore(item);
+  const link = core && storedCharacterLink(core.kind, item.characterId);
+  return core && link ? { ...core, ...link, ...storedTokenExtras(item) } : null;
+}
+
+/** The fields every token needs (id, kind, label, square and size); null when one is missing or wrong. */
+function storedTokenCore(item: Record<string, unknown>): Pick<MapToken, "id" | "kind" | "label" | "x" | "y" | "size"> | null {
+  const { id, kind, x, y, size } = item;
+  const name = label(item.label);
+  if (!isTokenId(id) || !isTokenKind(kind) || !name || !isSize(size)) return null;
+  return isSquare(x) && isSquare(y) ? { id, kind, label: name, x, y, size } : null;
+}
+
+const isTokenKind = (value: unknown): value is TokenKind => value === "hero" || value === "monster";
+
+/** A hero's link to its character (null when it has none that is valid); monsters have no link. */
+function storedCharacterLink(kind: TokenKind, characterId: unknown): Pick<MapToken, "characterId"> | null {
+  if (kind !== "hero") return {};
+  return isUuid(characterId) ? { characterId } : null;
+}
+
+/** A stored token's optional fields, each kept only with a valid value; facing north and false flags are left out. */
+function storedTokenExtras(item: Record<string, unknown>): Pick<MapToken, "monsterSlug" | "hidden" | "defeated" | "facing" | "vision"> {
+  const vision = parseVision(item.vision);
+  return {
+    ...(typeof item.monsterSlug === "string" ? { monsterSlug: item.monsterSlug } : {}),
+    ...(item.hidden === true ? { hidden: true } : {}),
+    ...(item.defeated === true ? { defeated: true } : {}),
+    ...(isFacing(item.facing) && item.facing !== 0 ? { facing: item.facing } : {}),
+    ...(vision ? { vision } : {}),
+  };
+}
+
+/** The stored walls that are well formed, cut to the grid (those left outside dropped), up to MAP_MAX_WALLS. */
+function storedWalls(value: unknown, cols: number, rows: number): MapWall[] {
+  return (Array.isArray(value) ? value : []).map(parseWall)
+    .map((wall) => wall && clipWall(wall, cols, rows)).filter((wall): wall is MapWall => wall !== null).slice(0, MAP_MAX_WALLS);
+}
+
+/** The explored bitmap when it is lowercase hex exactly as long as the grid needs; null otherwise. */
+function storedExplored(value: unknown, cols: number, rows: number): string | null {
+  return typeof value === "string" && value.length === Math.ceil(cols * rows / 4) && /^[0-9a-f]*$/.test(value) ? value : null;
+}
+
+/** The background picture when its key is well formed; null otherwise. */
+function storedBackground(value: unknown): MapBackground | null {
+  const key = isRecord(value) ? value.key : undefined;
+  return typeof key === "string" && backgroundKeyPattern.test(key) ? { key } : null;
 }
 
 /** A stored fight: only creatures still on the map, each once, in initiative order. */
 function normalizeCombat(raw: unknown, tokenIds: Set<string>): MapCombat | null {
-  if (!raw || typeof raw !== "object") return null;
-  const value = raw as Record<string, unknown>;
-  const order: Combatant[] = [];
-  for (const item of Array.isArray(value.order) ? value.order : []) {
-    const entry = parseCombatEntry(item);
-    if (!entry || !tokenIds.has(entry.tokenId) || order.some((other) => other.tokenId === entry.tokenId)) continue;
-    const { moved, dash } = item as Record<string, unknown>;
-    order.push({ ...entry, ...(isInt(moved, 1, COMBAT_MAX_MOVED) ? { moved } : {}), ...(dash === true ? { dash: true } : {}) });
-  }
+  if (!isRecord(raw)) return null;
+  const order = storedOrder(raw.order, tokenIds);
   return {
-    round: isInt(value.round, 1, COMBAT_MAX_ROUND) ? value.round : 1,
+    round: isInt(raw.round, 1, COMBAT_MAX_ROUND) ? raw.round : 1,
     order: sortOrder(order),
-    ...(typeof value.active === "string" && order.some((entry) => entry.tokenId === value.active) ? { active: value.active } : {}),
+    ...(typeof raw.active === "string" && order.some((entry) => entry.tokenId === raw.active) ? { active: raw.active } : {}),
   };
+}
+
+/** The stored initiative order as it was stored: valid entries for creatures on the map, the first one of each. */
+function storedOrder(value: unknown, tokenIds: Set<string>): Combatant[] {
+  const order: Combatant[] = [];
+  for (const item of Array.isArray(value) ? value : []) {
+    const entry = storedCombatant(item);
+    if (entry && tokenIds.has(entry.tokenId) && !order.some((other) => other.tokenId === entry.tokenId)) order.push(entry);
+  }
+  return order;
+}
+
+/** One stored combatant with the movement it has used (if any) and its Dash; null when its entry is malformed. */
+function storedCombatant(item: unknown): Combatant | null {
+  const entry = parseCombatEntry(item);
+  if (!entry) return null;
+  const { moved, dash } = item as Record<string, unknown>;
+  return { ...entry, ...(isInt(moved, 1, COMBAT_MAX_MOVED) ? { moved } : {}), ...(dash === true ? { dash: true } : {}) };
 }
 
 /** Highest initiative first; ties keep the order they had. */
