@@ -61,6 +61,10 @@ export function canManageCampaign(
   return user.role === "admin" || campaign.ownerId === user.id || campaign.myRole === "dm";
 }
 
+/** Per-account caps the API enforces on every write, a backup restore included. */
+export const MAX_CREATURES_PER_USER = 500;
+export const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
+
 /** Invite links stay valid for a week. */
 export const INVITE_TTL_DAYS = 7;
 

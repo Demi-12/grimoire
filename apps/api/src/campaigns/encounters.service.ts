@@ -1,6 +1,6 @@
 /** The encounter journal of a campaign: saved encounters, planned or played. DM material, start to finish. */
 import { Injectable } from "@nestjs/common";
-import type { AppUser, EncounterChange, EncounterInput, EncounterLineInput, EncounterStatus } from "@grimoire/shared/permissions";
+import { MAX_ENCOUNTERS_PER_CAMPAIGN, type AppUser, type EncounterChange, type EncounterInput, type EncounterLineInput, type EncounterStatus } from "@grimoire/shared/permissions";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, transaction, type Queryable } from "../database/db.js";
 import { CampaignsService } from "./campaigns.service.js";
@@ -23,7 +23,6 @@ const toEncounterView = (row: EncounterRow): EncounterView => ({
 const encounterColumns = `e."id", e."campaignId", u."name" AS "createdByName", e."title", e."notes", e."status", e."difficulty",
   e."budget", e."totalXp", e."partyLevels", e."lines", e."playedAt", e."createdAt", e."updatedAt"`;
 
-const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
 
 @Injectable()
 export class EncountersService {
