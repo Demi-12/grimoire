@@ -1,6 +1,6 @@
 /** The personal creature catalog of an account: what its encounter builder offers next to the bestiary. */
 import { Injectable } from "@nestjs/common";
-import type { AppUser, CreatureInput } from "@grimoire/shared/permissions";
+import { MAX_CREATURES_PER_USER, type AppUser, type CreatureInput } from "@grimoire/shared/permissions";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, transaction, type Queryable } from "../database/db.js";
 
@@ -20,7 +20,6 @@ const toCreatureView = (row: CreatureRow): CreatureView => ({
 });
 
 const creatureColumns = '"id", "name", "xp", "source", "monsterSlug", "cr", "type", "roleTags"';
-const MAX_CREATURES_PER_USER = 500;
 
 @Injectable()
 export class CreaturesService {

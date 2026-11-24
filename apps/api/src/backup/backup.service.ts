@@ -24,7 +24,7 @@ import {
   type SectionStore,
   type StoredCharacterRow,
 } from "@grimoire/shared/backup";
-import type { AppUser, CreatureInput, EncounterInput } from "@grimoire/shared/permissions";
+import { MAX_CREATURES_PER_USER, MAX_ENCOUNTERS_PER_CAMPAIGN, type AppUser, type CreatureInput, type EncounterInput } from "@grimoire/shared/permissions";
 import { CampaignsService } from "../campaigns/campaigns.service.js";
 import { EncountersService } from "../campaigns/encounters.service.js";
 import { CharactersService } from "../characters/characters.service.js";
@@ -35,8 +35,6 @@ import { transaction } from "../database/db.js";
 /** Id of what a service call created, or null when it refused. */
 const idOf = (result: DataResult<{ id: string }>) => (result.ok ? result.value.id : null);
 
-const MAX_CREATURES_PER_USER = 500;
-const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
 
 type Db = Pick<PoolClient, "query">;
 

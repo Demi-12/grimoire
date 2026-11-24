@@ -4,6 +4,8 @@ import {
   awaitsAdminBootstrap,
   canCreateCampaign,
   canManageCampaign,
+  characterDataOf,
+  characterFieldsOf,
   checkAdminChange,
   isAccountId,
   isInviteToken,
@@ -194,5 +196,26 @@ describe("parseAdminRequest", () => {
     expect(parseAdminRequest({ role: "dm" })).toEqual({ ok: false, error: "Invalid role." });
     expect(parseAdminRequest({ status: "gone" })).toEqual({ ok: false, error: "Invalid status." });
     expect(parseAdminRequest({ revokeSessions: "yes" })).toEqual({ ok: false, error: "Nothing to change." });
+  });
+});
+
+describe("characterDataOf and characterFieldsOf", () => {
+  const fields = { className: "Wizard", species: "Elf", background: "Sage", scores, notes: "Curious", build: { classId: "wizard" } };
+
+  it("stores everything but name, level and campaign, and reads it back unchanged", () => {
+    const input = { ...fields, name: "Mira", level: 3, campaignId: null };
+    expect(characterDataOf(input)).toEqual(fields);
+    expect(characterFieldsOf(characterDataOf(input))).toEqual(fields);
+  });
+
+  it("leaves the build out of quick-edit characters", () => {
+    const { build: _build, ...quick } = fields;
+    expect(characterDataOf(quick)).not.toHaveProperty("build");
+    expect(characterFieldsOf(quick)).not.toHaveProperty("build");
+  });
+
+  it("reads missing text as empty and missing scores as 10", () => {
+    expect(characterFieldsOf({})).toEqual({ className: "", species: "", background: "", scores: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, notes: "" });
+    expect(characterFieldsOf({ scores: { str: 18 } }).scores).toEqual({ str: 18, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
   });
 });

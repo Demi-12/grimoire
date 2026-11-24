@@ -173,12 +173,18 @@ const creatureTypes: Record<string, { en: string; es: string }> = {
   plant: { en: "Plant", es: "Planta" }, undead: { en: "Undead", es: "Muerto viviente" }, swarm: { en: "Swarm", es: "Enjambre" },
 };
 
+/** Key for a creature with no type. Kept out of `creatureTypes` so no real type is filed under it by prefix. */
+const OTHER_TYPE = "other";
+const otherLabel = { en: "Other", es: "Otro" };
+
 /** Files a type under the known type it starts with ("swarm of tiny beasts" → "swarm", "humanoid (goblinoid)" → "humanoid"). */
 export function creatureTypeKey(type: string) {
   const lower = type.toLowerCase().trim();
-  return Object.keys(creatureTypes).find((key) => lower.startsWith(key)) ?? (lower || "other");
+  return Object.keys(creatureTypes).find((key) => lower.startsWith(key)) ?? (lower || OTHER_TYPE);
 }
 
+/** Known types and the no-type bucket in the reader's language; other types (Open5e text is English) capitalised. */
 export function creatureTypeLabel(key: string, locale: "en" | "es") {
-  return creatureTypes[key]?.[locale] ?? key.charAt(0).toUpperCase() + key.slice(1);
+  const label = key === OTHER_TYPE ? otherLabel : creatureTypes[key];
+  return label?.[locale] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }

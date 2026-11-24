@@ -61,6 +61,10 @@ export function canManageCampaign(
   return user.role === "admin" || campaign.ownerId === user.id || campaign.myRole === "dm";
 }
 
+/** Per-account caps the API enforces on every write, a backup restore included. */
+export const MAX_CREATURES_PER_USER = 500;
+export const MAX_ENCOUNTERS_PER_CAMPAIGN = 500;
+
 /** Invite links stay valid for a week. */
 export const INVITE_TTL_DAYS = 7;
 
@@ -140,6 +144,28 @@ export interface CharacterInput {
 }
 
 const MAX_BUILD_JSON = 16_000;
+
+/** What a character keeps in its jsonb `data` column: everything but name, level and campaign. Quick-edit characters lack most of it. */
+export interface CharacterData {
+  className?: string; species?: string; background?: string; scores?: Partial<CharacterScores>; notes?: string; build?: Record<string, unknown>;
+}
+export type CharacterFields = Pick<CharacterInput, "className" | "species" | "background" | "scores" | "notes" | "build">;
+
+const defaultScores: CharacterScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+
+/** The `data` column for a validated character. */
+export function characterDataOf(input: CharacterFields): CharacterData {
+  const { className, species, background, scores, notes, build } = input;
+  return { className, species, background, scores, notes, ...(build ? { build } : {}) };
+}
+
+/** A stored `data` column read back as character fields: missing text is empty and missing scores are 10. */
+export function characterFieldsOf(data: CharacterData): CharacterFields {
+  return {
+    className: data.className ?? "", species: data.species ?? "", background: data.background ?? "",
+    scores: { ...defaultScores, ...data.scores }, notes: data.notes ?? "", ...(data.build ? { build: data.build } : {}),
+  };
+}
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: unknown): value is string => typeof value === "string" && uuidPattern.test(value);

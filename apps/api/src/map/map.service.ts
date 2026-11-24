@@ -76,6 +76,25 @@ async function writeMap(client: Queryable, user: AppUser, campaignId: string, co
 
 const newBackgroundKey = () => randomBytes(9).toString("base64url");
 
+/**
+ * Put `picture` on the table as the campaign's background under a fresh key (null removes it), and point `state`
+ * at it. The new key makes browsers fetch the new picture instead of a cached one.
+ */
+async function replaceBackground(client: Queryable, campaignId: string, state: MapState, picture: { image: Buffer; mimeType: MapImageType } | null): Promise<void> {
+  if (!picture) {
+    await client.query('DELETE FROM "battle_map_background" WHERE "campaignId" = $1', [campaignId]);
+    delete state.background;
+    return;
+  }
+  const key = newBackgroundKey();
+  await client.query(
+    `INSERT INTO "battle_map_background" ("campaignId", "image", "mimeType", "key") VALUES ($1, $2, $3, $4)
+     ON CONFLICT ("campaignId") DO UPDATE SET "image" = EXCLUDED."image", "mimeType" = EXCLUDED."mimeType", "key" = EXCLUDED."key", "updatedAt" = now()`,
+    [campaignId, picture.image, picture.mimeType, key],
+  );
+  state.background = { key };
+}
+
 export type { MapSaveSummary } from "@grimoire/shared/api-types";
 
 @Injectable()
@@ -143,18 +162,7 @@ export class MapService {
       if (!access.ok) return access;
       const context = access.value;
       const state: MapState = { ...await lockMap(client, campaignId) };
-      if (image) {
-        const key = newBackgroundKey();
-        await client.query(
-          `INSERT INTO "battle_map_background" ("campaignId", "image", "mimeType", "key") VALUES ($1, $2, $3, $4)
-           ON CONFLICT ("campaignId") DO UPDATE SET "image" = EXCLUDED."image", "mimeType" = EXCLUDED."mimeType", "key" = EXCLUDED."key", "updatedAt" = now()`,
-          [campaignId, image.bytes, image.mimeType, key],
-        );
-        state.background = { key };
-      } else {
-        await client.query('DELETE FROM "battle_map_background" WHERE "campaignId" = $1', [campaignId]);
-        delete state.background;
-      }
+      await replaceBackground(client, campaignId, state, image && { image: image.bytes, mimeType: image.mimeType });
       return { ok: true as const, value: await writeMap(client, user, campaignId, context, state, audience) };
     });
   }
@@ -217,17 +225,7 @@ export class MapService {
       if (save === undefined) return { ok: false as const, error: "not-found" as const };
       await lockMap(client, campaignId);
       const { state, picture } = mapFromSave(save, context.heroes);
-      if (picture) {
-        const key = newBackgroundKey();
-        await client.query(
-          `INSERT INTO "battle_map_background" ("campaignId", "image", "mimeType", "key") VALUES ($1, $2, $3, $4)
-           ON CONFLICT ("campaignId") DO UPDATE SET "image" = EXCLUDED."image", "mimeType" = EXCLUDED."mimeType", "key" = EXCLUDED."key", "updatedAt" = now()`,
-          [campaignId, picture.image, picture.mimeType, key],
-        );
-        state.background = { key };
-      } else {
-        await client.query('DELETE FROM "battle_map_background" WHERE "campaignId" = $1', [campaignId]);
-      }
+      await replaceBackground(client, campaignId, state, picture);
       return { ok: true as const, value: await writeMap(client, user, campaignId, context, state, audience) };
     });
   }

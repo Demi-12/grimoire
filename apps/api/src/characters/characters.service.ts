@@ -3,7 +3,7 @@
  * deletes one; putting it in a campaign needs membership there.
  */
 import { Injectable } from "@nestjs/common";
-import type { AppUser, CharacterInput, CharacterScores } from "@grimoire/shared/permissions";
+import { characterDataOf, characterFieldsOf, type AppUser, type CharacterData, type CharacterInput, type CharacterScores } from "@grimoire/shared/permissions";
 import { CampaignsService } from "../campaigns/campaigns.service.js";
 import { fail, type DataResult } from "../common/data-result.js";
 import { pool, type Queryable } from "../database/db.js";
@@ -26,10 +26,8 @@ export interface CharacterView {
 
 type CharacterRow = {
   id: string; ownerId: string; ownerName: string; campaignId: string | null; name: string; level: number;
-  data: { className?: string; species?: string; background?: string; scores?: CharacterScores; notes?: string; build?: Record<string, unknown> };
+  data: CharacterData;
 };
-
-const defaultScores: CharacterScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
 function toCharacterView(row: CharacterRow, viewerId: string): CharacterView {
   return {
@@ -39,21 +37,12 @@ function toCharacterView(row: CharacterRow, viewerId: string): CharacterView {
     campaignId: row.campaignId,
     name: row.name,
     level: row.level,
-    className: row.data.className ?? "",
-    species: row.data.species ?? "",
-    background: row.data.background ?? "",
-    scores: { ...defaultScores, ...row.data.scores },
-    notes: row.data.notes ?? "",
-    ...(row.data.build ? { build: row.data.build } : {}),
+    ...characterFieldsOf(row.data),
     editable: row.ownerId === viewerId,
   };
 }
 
 const characterColumns = `c."id", c."ownerId", u."name" AS "ownerName", c."campaignId", c."name", c."level", c."data"`;
-
-function characterData(input: CharacterInput) {
-  return { className: input.className, species: input.species, background: input.background, scores: input.scores, notes: input.notes, ...(input.build ? { build: input.build } : {}) };
-}
 
 async function readCharacter(db: Queryable, id: string, viewerId: string): Promise<CharacterView | null> {
   const result = await db.query<CharacterRow>(
@@ -84,7 +73,7 @@ export class CharactersService {
     if (input.campaignId && !(await this.campaigns.membershipRole(db, input.campaignId, user.id))) return fail("forbidden");
     const result = await db.query<{ id: string }>(
       `INSERT INTO "character" ("ownerId", "campaignId", "name", "level", "data") VALUES ($1, $2, $3, $4, $5) RETURNING "id"`,
-      [user.id, input.campaignId, input.name, input.level, JSON.stringify(characterData(input))],
+      [user.id, input.campaignId, input.name, input.level, JSON.stringify(characterDataOf(input))],
     );
     const created = await readCharacter(db, result.rows[0].id, user.id);
     return created ? { ok: true, value: created } : fail("not-found");
@@ -99,7 +88,7 @@ export class CharactersService {
     }
     await pool.query(
       `UPDATE "character" SET "campaignId" = $2, "name" = $3, "level" = $4, "data" = $5, "updatedAt" = now() WHERE "id" = $1`,
-      [id, input.campaignId, input.name, input.level, JSON.stringify(characterData(input))],
+      [id, input.campaignId, input.name, input.level, JSON.stringify(characterDataOf(input))],
     );
     const updated = await readCharacter(pool, id, user.id);
     return updated ? { ok: true, value: updated } : fail("not-found");

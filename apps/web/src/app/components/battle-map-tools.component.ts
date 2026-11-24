@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, input, linkedSignal, signal, untracked, viewChild } from "@angular/core";
 import {
   currentSight, isMonsterSlug, rowsForImage, squareName, tokenInSight, tokenSizeFor,
-  MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX,
+  MAP_MAX_MONSTERS_PER_ADD, MAP_MAX_SAVES, MAP_MAX_SIZE, MAP_MIN_SIZE, TOKEN_LABEL_MAX,
   type MapHero, type MapOp, type MapState, type MapToken, type TokenSize, type VisionAngle,
 } from "@grimoire/shared/battle-map";
 import { api, ApiError, type MapSaveSummary, type SavedEncounter } from "../core/api-client";
@@ -87,7 +87,7 @@ export const text = {
     newMap: "Start an empty map", newMapConfirm: "Clear the table and start an empty map?",
     savedMap: (name: string) => `Map "${name}" saved.`, loadedMap: (name: string) => `"${name}" is on the table.`,
     deletedMap: (name: string) => `Saved map "${name}" deleted.`, newMapDone: "The table is clear.",
-    noSaves: "No saved maps yet.", saveError: "That couldn't be done. A campaign keeps up to 20 saved maps.",
+    noSaves: "No saved maps yet.", saveError: `That couldn't be done. A campaign keeps up to ${MAP_MAX_SAVES} saved maps.`,
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} tokens · ${save.walls} walls${save.hasBackground ? " · picture" : ""} · ${date}`,
     turn: "It isn't this hero's turn yet: wait for the DM to pass it on.", movement: "Not enough movement left this turn. Dash if you need more, or ask the DM.",
     sheet: "Sheet", autoSheet: "Open the sheet when picking a token",
@@ -150,7 +150,7 @@ export const text = {
     newMap: "Empezar un mapa vacío", newMapConfirm: "¿Vaciar la mesa y empezar un mapa vacío?",
     savedMap: (name: string) => `Mapa «${name}» guardado.`, loadedMap: (name: string) => `«${name}» está en la mesa.`,
     deletedMap: (name: string) => `Mapa guardado «${name}» borrado.`, newMapDone: "La mesa está vacía.",
-    noSaves: "Aún no hay mapas guardados.", saveError: "No se pudo hacer. Una campaña guarda hasta 20 mapas.",
+    noSaves: "Aún no hay mapas guardados.", saveError: `No se pudo hacer. Una campaña guarda hasta ${MAP_MAX_SAVES} mapas.`,
     saveSummary: (save: MapSaveSummary, date: string) => `${save.cols}×${save.rows} · ${save.tokens} fichas · ${save.walls} muros${save.hasBackground ? " · imagen" : ""} · ${date}`,
     turn: "Aún no es el turno de este héroe: espera a que el DM lo pase.", movement: "No te queda movimiento suficiente este turno. Usa Correr si necesitas más o pídeselo al DM.",
     sheet: "Ficha", autoSheet: "Abrir la ficha al elegir una ficha del mapa",

@@ -20,6 +20,7 @@
  */
 import {
   canCreateCampaign,
+  characterFieldsOf,
   isCampaignRole,
   parseCampaignInput,
   parseCharacterInput,
@@ -27,8 +28,8 @@ import {
   parseEncounterInput,
   type AppUser,
   type CampaignRole,
+  type CharacterData,
   type CharacterInput,
-  type CharacterScores,
   type CreatureInput,
   type EncounterInput,
 } from "./permissions.js";
@@ -430,17 +431,12 @@ export function indexExisting<Row extends { id: string }>(
 export interface StoredCharacterRow {
   name: string;
   level: number;
-  data: { className?: string; species?: string; background?: string; scores?: Partial<CharacterScores>; notes?: string; build?: Record<string, unknown> };
+  data: CharacterData;
 }
 
-const defaultScores: CharacterScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
-
-/** A stored character as the backup item it fingerprints like (missing fields read as empty, scores as 10). */
+/** A stored character as the backup item it fingerprints like (see characterFieldsOf for the defaults). */
 export function storedCharacter({ name, level, data }: StoredCharacterRow): Omit<BackupCharacter, "id" | "campaignId"> {
-  return {
-    name, level, className: data.className ?? "", species: data.species ?? "", background: data.background ?? "",
-    scores: { ...defaultScores, ...data.scores }, notes: data.notes ?? "", ...(data.build ? { build: data.build } : {}),
-  };
+  return { name, level, ...characterFieldsOf(data) };
 }
 
 /** Real id of the campaign a restored item points at (a backup-local id), or null when it points at none or isn't mapped. */
