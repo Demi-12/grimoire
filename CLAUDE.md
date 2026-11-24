@@ -46,7 +46,7 @@ Patrón que se repite: **reglas puras** en `packages/shared` (con su `*.test.ts`
 | `open5e.ts`, `monster-api.ts` | `monsters/monster-upstream.ts`, `spells/spells.service.ts` |
 | `api-types.ts` (forma de las respuestas) | lo que devuelven los controladores |
 | `error-text.ts` (errores de la API y de better-auth → texto en el idioma de la interfaz) | los mensajes de `ApiError` y el `code` de `auth/auth.ts` |
-| — | `auth/auth-email-templates.ts` (puro, con test), `auth/auth-email.ts`, `auth/auth.ts` |
+| — | `auth/auth-email-templates.ts` y `auth/auth-email-config.ts` (puros, con test), `auth/auth-email.ts`, `auth/auth.ts` |
 
 ## Web (`apps/web/src/app`)
 
@@ -114,7 +114,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `packages/shared/src/permissions.ts`: roles de sitio (`admin`/`user`), estados (`pending`/`approved`/`blocked`), roles de campaña (`dm`/`player`; el dueño es `campaign.ownerId`), `checkAdminChange`, `isAccountId`, los topes por cuenta (`MAX_CREATURES_PER_USER`, `MAX_ENCOUNTERS_PER_CAMPAIGN`, que usan también la restauración de copias), la cuenta de una petición (`appUserFromRow`) y el primer admin (`isListedAdmin`, que también usa el alta de `auth.ts`, y `awaitsAdminBootstrap`), y **todos los validadores de entrada** (`parseCharacterInput`, `parseCampaignInput`, `parseCreatureInput`, `parseEncounterInput`, `parseEncounterChange`, `parsePreferencesInput`, `parseMemberRequest`, `parseAdminRequest`).
 - **DM y jugador son por campaña**, no por cuenta. Todas las herramientas están abiertas a cualquier cuenta aprobada; solo el diario de encuentros y los controles de DM del mapa dependen del rol en esa campaña.
 - UI: `components/auth/auth-panel.component.*` (entrar, registro, 2FA, passkeys, recuperación, seguridad de la cuenta), `components/admin-users.component.*`.
-- Correo: `auth/auth-email.ts` (SMTP con nodemailer, opcional) y `auth/auth-email-templates.ts`.
+- Correo: `auth/auth-email.ts` (envío con nodemailer, opcional; nunca lanza ni registra el contenido), `auth/auth-email-config.ts` (puro, con test: qué variables `SMTP_*` se leen, puerto 587 por defecto, TLS implícito solo en el 465, credenciales solo con usuario y contraseña, y cuándo el correo queda apagado) y `auth/auth-email-templates.ts`.
 
 ### Personajes (creador, ficha, subida de nivel)
 - Un personaje es una fila de `character` con campos básicos + `build` (JSON, `CharacterBuild` en `character-sheet.ts`). La columna `data` es `CharacterData` de `permissions.ts`: se escribe con `characterDataOf` y se lee con `characterFieldsOf` (texto ausente vacío, características a 10), que usan la API y la copia de seguridad. **Sin `build` es un personaje de «edición rápida»** y solo tiene características y notas; hay que soportar ambos.
