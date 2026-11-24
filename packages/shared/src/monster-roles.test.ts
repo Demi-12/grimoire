@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MonsterAction, MonsterStatBlock } from "./monster-api.js";
-import { inferMonsterRoles } from "./monster-roles.js";
+import { currentRoleTags, inferMonsterRoles } from "./monster-roles.js";
 
 const bite: MonsterAction = { name: "Bite", desc: "Melee Attack Roll: +4, reach 5 ft. 6 (1d8 + 2) Piercing damage." };
 /** A Medium creature with one plain attack, so only the fields under test decide the roles. */
@@ -203,5 +203,20 @@ describe("inferMonsterRoles", () => {
     });
     expect(inferMonsterRoles(mage)).toEqual(["control", "scouting"]);
     expect(inferMonsterRoles({ name: "Shrub" })).toEqual([]);
+  });
+});
+
+describe("currentRoleTags", () => {
+  it("keeps the tags of a custom creature, which its owner typed", () => {
+    expect(currentRoleTags({ monsterSlug: null, roleTags: ["damage", "support"] }, ["frontline"])).toEqual(["damage", "support"]);
+  });
+
+  it("gives a creature from the bestiary or homebrew today's roles of its stat block", () => {
+    expect(currentRoleTags({ monsterSlug: "srd-2024_ogre", roleTags: ["frontline", "damage", "scouting"] }, ["frontline"])).toEqual(["frontline"]);
+    expect(currentRoleTags({ monsterSlug: "homebrew:x", roleTags: ["damage"] }, [])).toEqual([]);
+  });
+
+  it("keeps the stored tags but damage when the stat block can't be read", () => {
+    expect(currentRoleTags({ monsterSlug: "srd-2024_ogre", roleTags: ["frontline", "damage", "scouting"] }, undefined)).toEqual(["frontline", "scouting"]);
   });
 });

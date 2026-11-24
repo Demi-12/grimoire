@@ -4,7 +4,7 @@
  */
 import { Injectable } from "@nestjs/common";
 import type { MonsterSearch } from "@grimoire/shared/open5e";
-import { fetchMonsterCatalog, fetchMonsterDetail, type CompactMonster } from "./monster-upstream.js";
+import { catalogRolesFor, fetchMonsterCatalog, fetchMonsterDetail, type CompactMonster } from "./monster-upstream.js";
 
 @Injectable()
 export class MonstersService {
@@ -32,6 +32,11 @@ export class MonstersService {
   /** The whole compact catalog, for the encounter builder. */
   catalog() {
     return fetchMonsterCatalog();
+  }
+
+  /** Today's roles of a catalog creature, if the catalog is already in memory (see catalogRolesFor). */
+  catalogRoles(slug: string) {
+    return catalogRolesFor(slug);
   }
 
   /** One stat block by Open5e key or old slug; null when Open5e doesn't know it. */

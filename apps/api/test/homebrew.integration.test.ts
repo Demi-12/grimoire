@@ -79,6 +79,16 @@ describe.skipIf(!url)("homebrew monsters on PostgreSQL", () => {
     expect(await data.readHomebrewForUser(dave, result.value.id)).toBeNull();
   });
 
+  it("works the role tags out from the stored stat block, so tags saved by older rules don't stick", async () => {
+    const created = await create(alice, { name: "Old Tags" });
+    if (!created.ok) throw new Error("create failed");
+    expect(created.value.roleTags).toEqual(["scouting"]);
+    // As a row saved before the role rules changed: every role but the right one.
+    await pool.query('UPDATE "homebrew_monster" SET "roleTags" = $2 WHERE "id" = $1', [created.value.id, JSON.stringify(["frontline", "damage", "support"])]);
+    expect((await data.readHomebrewForUser(alice, created.value.id))?.roleTags).toEqual(["scouting"]);
+    expect((await data.listHomebrew(alice)).find((monster) => monster.id === created.value.id)?.roleTags).toEqual(["scouting"]);
+  });
+
   it("shares with a campaign only for its members", async () => {
     const created = await create(alice, { name: "Campaign Wyrm" });
     if (!created.ok) throw new Error("create failed");

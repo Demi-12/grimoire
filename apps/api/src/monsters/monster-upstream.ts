@@ -1,4 +1,5 @@
-import { inferMonsterRoles, type MonsterRole, type SourceSummary } from "@grimoire/shared/monster-api";
+import { inferMonsterRoles, type SourceSummary } from "@grimoire/shared/monster-api";
+import type { InferredMonsterRole } from "@grimoire/shared/monster-roles";
 import {
   challengeOf, legacySlugCandidates, OPEN5E_ROOT, toSource, toStatBlock, withoutSupersededCopies, type Open5eCreature,
 } from "@grimoire/shared/open5e";
@@ -101,7 +102,7 @@ export interface CompactMonster {
   xp: number;
   type: string;
   size: string;
-  roles: MonsterRole[];
+  roles: InferredMonsterRole[];
   /** Book name, shown next to the creature. */
   source: string;
   sourceKey: string;
@@ -222,4 +223,18 @@ export function fetchMonsterCatalog(): Promise<MonsterCatalogData> {
     catalogCache = entry;
   }
   return lastCatalog ? Promise.resolve(lastCatalog) : catalogCache.promise;
+}
+
+/** Roles by Open5e key, worked out once per catalog build. */
+const rolesByKey = new WeakMap<MonsterCatalogData, Map<string, InferredMonsterRole[]>>();
+
+/**
+ * Today's roles of a catalog creature (old dnd5eapi slugs resolve as in fetchMonsterDetail), read from the
+ * catalog in memory. Never fetches: undefined until a catalog has been built, or when the slug isn't listed.
+ */
+export function catalogRolesFor(slug: string): InferredMonsterRole[] | undefined {
+  if (!lastCatalog) return undefined;
+  let roles = rolesByKey.get(lastCatalog);
+  if (!roles) rolesByKey.set(lastCatalog, roles = new Map(lastCatalog.monsters.map((monster) => [monster.index, monster.roles])));
+  return legacySlugCandidates(slug).map((key) => roles.get(key)).find(Boolean);
 }

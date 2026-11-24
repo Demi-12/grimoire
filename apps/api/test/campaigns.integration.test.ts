@@ -11,7 +11,10 @@ import type { CampaignsService } from "../src/campaigns/campaigns.service.js";
 import type { EncountersService } from "../src/campaigns/encounters.service.js";
 import type { CharactersService } from "../src/characters/characters.service.js";
 import type { CreaturesService } from "../src/creatures/creatures.service.js";
+import type { HomebrewService } from "../src/homebrew/homebrew.service.js";
 import type { InvitesService } from "../src/invites/invites.service.js";
+import type { MonstersService } from "../src/monsters/monsters.service.js";
+import { parseHomebrewInput, homebrewSlug } from "@grimoire/shared/homebrew";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -35,6 +38,7 @@ describe.skipIf(!url)("campaign permissions on PostgreSQL", () => {
   let encounters: EncountersService;
   let invites: InvitesService;
   let creatures: CreaturesService;
+  let homebrew: HomebrewService;
   let pool: typeof import("../src/database/db.js").pool;
   let campaignId: string;
 
@@ -45,7 +49,10 @@ describe.skipIf(!url)("campaign permissions on PostgreSQL", () => {
     characters = new (await import("../src/characters/characters.service.js")).CharactersService(campaigns);
     encounters = new (await import("../src/campaigns/encounters.service.js")).EncountersService(campaigns);
     invites = new (await import("../src/invites/invites.service.js")).InvitesService();
-    creatures = new (await import("../src/creatures/creatures.service.js")).CreaturesService();
+    homebrew = new (await import("../src/homebrew/homebrew.service.js")).HomebrewService();
+    // The Open5e catalog as if it were already built: only the Ogre's roles are known.
+    const catalog = { catalogRoles: (slug: string) => (slug === "srd-2024_ogre" ? ["frontline" as const] : undefined) } as unknown as MonstersService;
+    creatures = new (await import("../src/creatures/creatures.service.js")).CreaturesService(homebrew, catalog);
     for (const user of [alice, carol, bob, dave, erin]) {
       await pool.query('INSERT INTO "user" ("id", "name", "email", "role", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, now(), now())', [user.id, user.name, user.email, user.role, user.status]);
     }
@@ -89,6 +96,32 @@ describe.skipIf(!url)("campaign permissions on PostgreSQL", () => {
     await pool.query('DELETE FROM "user" WHERE "id" = $1', [carol.id]);
     const listed = await encounters.listEncounters(alice, campaignId);
     expect(listed.ok && listed.value.find((item) => item.id === saved.value.id)).toMatchObject({ title: "Goblin ambush", createdByName: null });
+  });
+
+  it("shows today's roles for catalog and homebrew creatures, and keeps the tags of custom ones", async () => {
+    const drake = parseHomebrewInput({ statBlock: {
+      name: `Drake ${tag}`, armor_class: 15, hit_points: 52, speed: { fly: "60 ft." }, challenge_rating: 3,
+      strength: 16, dexterity: 12, constitution: 17, intelligence: 6, wisdom: 12, charisma: 8,
+    } });
+    if (!drake.ok) throw new Error(drake.error);
+    const mine = await homebrew.createHomebrew(dave, drake.value, drake.summary);
+    const hidden = await homebrew.createHomebrew(alice, drake.value, drake.summary);
+    if (!mine.ok || !hidden.ok) throw new Error("homebrew setup failed");
+    // Tags as clients saved them under the old rules.
+    const old = ["frontline", "damage", "support"];
+    const add = (name: string, monsterSlug: string | null) => creatures.createCreature(dave, { name, xp: 450, source: "Test", monsterSlug, cr: null, type: null, roleTags: old });
+    for (const [name, slug] of [["Ogre", "srd-2024_ogre"], ["Drake", homebrewSlug(mine.value.id)], ["Someone's drake", homebrewSlug(hidden.value.id)], ["Unknown", "tob_unknown"], ["Custom", null]] as const) {
+      expect((await add(name, slug)).ok).toBe(true);
+    }
+    const tags = Object.fromEntries((await creatures.listCreatures(dave)).map((creature) => [creature.name, creature.roleTags ?? []]));
+    expect(tags).toEqual({
+      Ogre: ["frontline"], Drake: ["scouting"],
+      // Stat block out of reach: the stored tags but damage.
+      "Someone's drake": ["frontline", "support"], Unknown: ["frontline", "support"],
+      Custom: old,
+    });
+    const stored = await pool.query<{ roleTags: string[] }>('SELECT "roleTags" FROM "creature" WHERE "ownerId" = $1', [dave.id]);
+    expect(stored.rows.map((row) => row.roleTags)).toEqual(Array(5).fill(old));
   });
 
   it("stops parallel creature adds at the account limit", async () => {

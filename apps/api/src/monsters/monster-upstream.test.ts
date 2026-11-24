@@ -118,6 +118,17 @@ describe("Open5e upstream", () => {
     }
   });
 
+  it("tells a creature's catalog roles only once a catalog is in memory, without fetching one", async () => {
+    const { catalogRolesFor, fetchMonsterCatalog } = await import("./monster-upstream.js");
+    expect(catalogRolesFor("srd-2024_goblin-boss")).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    await fetchMonsterCatalog();
+    expect(catalogRolesFor("srd-2024_goblin-boss")).toEqual([]);
+    // Old dnd5eapi slugs resolve to the SRD 5.2 first, as when opening a stat block.
+    expect(catalogRolesFor("goblin-boss")).toEqual([]);
+    expect(catalogRolesFor("tob_nothing")).toBeUndefined();
+  });
+
   it("opens old saved slugs from the SRD 5.2, then the SRD 5.1", async () => {
     const { fetchMonsterDetail } = await import("./monster-upstream.js");
     const goblin = await fetchMonsterDetail("goblin");

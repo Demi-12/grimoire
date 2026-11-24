@@ -171,3 +171,17 @@ export function inferMonsterRoles(monster: MonsterStatBlock): InferredMonsterRol
   const facts = factsOf(monster);
   return ROLE_ORDER.filter((role) => RULES[role](facts));
 }
+
+// ---------- tags already saved ----------
+
+/**
+ * The role tags to show for a saved creature (the `creature` table, which copies them when a creature is added).
+ * A custom creature, without `monsterSlug`, keeps what its owner gave it. One from the bestiary or homebrew takes
+ * the roles its stat block has today (`fresh`), so tags saved under older rules don't stick; when that stat block
+ * can't be read (catalog not loaded yet, homebrew deleted or no longer shared), it keeps its stored tags but
+ * `damage`, which monsters no longer get. The stored tags are never changed, so nothing is lost.
+ */
+export function currentRoleTags(creature: { monsterSlug: string | null; roleTags: readonly string[] }, fresh: readonly InferredMonsterRole[] | undefined): string[] {
+  if (!creature.monsterSlug) return [...creature.roleTags];
+  return fresh ? [...fresh] : creature.roleTags.filter((role) => role !== "damage");
+}
