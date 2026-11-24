@@ -41,12 +41,12 @@ Patrón que se repite: **reglas puras** en `packages/shared` (con su `*.test.ts`
 | `permissions.ts` (roles, validación de entradas) | `*/*.service.ts`, `common/current-user.ts` |
 | `battle-map.ts` | `map/map.service.ts`, `map/battle-map-hub.ts`, `map/map-stream.ts` |
 | `backup.ts` | `backup/backup.service.ts` |
-| `analytics.ts` | `data/analytics-server.ts`, `admin/analytics.service.ts` |
+| `analytics.ts` | `data/analytics-server.ts`, `admin/analytics.service.ts`, `telemetry/telemetry.controller.ts` |
 | `homebrew.ts`, `homebrew-draft.ts` | `homebrew/homebrew.service.ts` |
 | `open5e.ts`, `monster-api.ts` | `monsters/monster-upstream.ts`, `spells/spells.service.ts` |
 | `api-types.ts` (forma de las respuestas) | lo que devuelven los controladores |
 | `error-text.ts` (errores de la API y de better-auth → texto en el idioma de la interfaz) | los mensajes de `ApiError` y el `code` de `auth/auth.ts` |
-| — | `auth/auth-email-templates.ts` (puro, con test), `auth/auth-email.ts`, `auth/auth.ts` |
+| — | `auth/auth-email-templates.ts` y `auth/auth-email-config.ts` (puros, con test), `auth/auth-email.ts`, `auth/auth.ts` |
 
 ## Web (`apps/web/src/app`)
 
@@ -114,7 +114,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `packages/shared/src/permissions.ts`: roles de sitio (`admin`/`user`), estados (`pending`/`approved`/`blocked`), roles de campaña (`dm`/`player`; el dueño es `campaign.ownerId`), `checkAdminChange`, `isAccountId`, los topes por cuenta (`MAX_CREATURES_PER_USER`, `MAX_ENCOUNTERS_PER_CAMPAIGN`, que usan también la restauración de copias), la cuenta de una petición (`appUserFromRow`) y el primer admin (`isListedAdmin`, que también usa el alta de `auth.ts`, y `awaitsAdminBootstrap`), y **todos los validadores de entrada** (`parseCharacterInput`, `parseCampaignInput`, `parseCreatureInput`, `parseEncounterInput`, `parseEncounterChange`, `parsePreferencesInput`, `parseMemberRequest`, `parseAdminRequest`).
 - **DM y jugador son por campaña**, no por cuenta. Todas las herramientas están abiertas a cualquier cuenta aprobada; solo el diario de encuentros y los controles de DM del mapa dependen del rol en esa campaña.
 - UI: `components/auth/auth-panel.component.*` (entrar, registro, 2FA, passkeys, recuperación, seguridad de la cuenta), `components/admin-users.component.*`.
-- Correo: `auth/auth-email.ts` (SMTP con nodemailer, opcional) y `auth/auth-email-templates.ts`.
+- Correo: `auth/auth-email.ts` (envío con nodemailer, opcional; nunca lanza ni registra el contenido), `auth/auth-email-config.ts` (puro, con test: qué variables `SMTP_*` se leen, puerto 587 por defecto, TLS implícito solo en el 465, credenciales solo con usuario y contraseña, y cuándo el correo queda apagado) y `auth/auth-email-templates.ts`.
 
 ### Personajes (creador, ficha, subida de nivel)
 - Un personaje es una fila de `character` con campos básicos + `build` (JSON, `CharacterBuild` en `character-sheet.ts`). La columna `data` es `CharacterData` de `permissions.ts`: se escribe con `characterDataOf` y se lee con `characterFieldsOf` (texto ausente vacío, características a 10), que usan la API y la copia de seguridad. **Sin `build` es un personaje de «edición rápida»** y solo tiene características y notas; hay que soportar ambos.
@@ -147,7 +147,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `packages/shared/src/backup.ts`: formato JSON versionado, `parseBackup`, `runRestore` (idempotente por huella), y `parseLegacyImport` + `runLegacyImport` (datos antiguos del navegador: qué se importa y cómo se reasignan los ids de los personajes, a través de un `LegacyImportStore`). Al final de `backup.ts`, las decisiones de los almacenes SQL: `indexExisting` (huella → id de lo ya guardado), `storedCharacter`, `restoredCampaignId`/`encounterCampaignId`, `RestoreQuota` (topes) y `encounterRestoreDates`. Añadir un tipo de dato = registrar un `BackupSection` en `backupSections` e implementar su `SectionStore` (solo consultas, una función `…Store` registrada en `createStores`) en `apps/api/src/backup/backup.service.ts`. Ver `docs/data-backup.md`. No entran: mapa, mapas guardados, homebrew ni analíticas.
 
 ### Analíticas y errores
-- `packages/shared/src/analytics.ts`: lista cerrada de eventos (`SERVER_EVENTS`, `CLIENT_EVENTS`), saneado (`normalizeRoute`, `sanitizeError`, `isForeignScriptError`: los scripts propios son los paquetes `main-*.js`/`chunk-*.js`/`polyfills-*.js` de la raíz), rangos y `shapeAnalyticsReport` (filas de las consultas → `AnalyticsReport`: cuentas a número, secciones conocidas, los 50 errores más recientes). Un evento nuevo se declara aquí o se rechaza.
+- `packages/shared/src/analytics.ts`: lista cerrada de eventos (`SERVER_EVENTS`, `CLIENT_EVENTS`), saneado (`normalizeRoute`, `sanitizeError`, `isForeignScriptError`: los scripts propios son los paquetes `main-*.js`/`chunk-*.js`/`polyfills-*.js` de la raíz), rangos y `shapeAnalyticsReport` (filas de las consultas → `AnalyticsReport`: cuentas a número, secciones conocidas, los 50 errores más recientes) y a quién cuenta lo que llega a `/api/telemetry` (`keepsUsageEvents`: los eventos, solo de cuentas aprobadas; `errorReportLimitKey`: los errores, por cuenta o por dirección). Un evento nuevo se declara aquí o se rechaza.
 - `apps/api/src/data/analytics-server.ts`: `recordEvent`, `recordError` (nunca lanzan), purga a los 90 días; `admin/analytics.service.ts`: solo las consultas del informe del panel.
 - Navegador: `core/telemetry-client.ts` (`track()`, `reportClientError`, `installErrorReporting`) y `core/crash.service.ts` + `components/crash-screen.component.ts`. Servidor: `common/api-exception.filter.ts` guarda toda excepción no prevista.
 
@@ -155,7 +155,7 @@ El navegador llama a todo esto con `api()` de `apps/web/src/app/core/api-client.
 - `apps/api/src/common/security-headers.ts` construye la CSP (sin nonce: scripts solo del propio sitio + el script del tema por hash, `THEME_INIT_SCRIPT_HASH`) y el resto de cabeceras; `security.middleware.ts` las aplica a toda respuesta y pone `Cache-Control: no-store` en `/api`. HSTS solo si `BETTER_AUTH_URL` es `https://`.
 - El build de Angular tiene `inlineCritical: false`: el CSS crítico en línea usa manejadores `onload` que la CSP bloquea.
 - Un host externo nuevo (imágenes, fetch desde el navegador) exige tocar la CSP. Hoy solo `api.open5e.com`.
-- `common/rate-limit.ts`: limitador en memoria por usuario (`WRITE_LIMIT`, `MAP_LIMIT`, `MAP_STREAM_LIMIT`, `INVITE_LIMIT`, `MEMBER_LOOKUP_LIMIT`, `IMPORT_LIMIT`, `TELEMETRY_LIMIT`, `ERROR_REPORT_LIMIT`). `common/request-body.ts`: topes de tamaño.
+- `common/rate-limit.ts`: limitador en memoria por usuario (`WRITE_LIMIT`, `MAP_LIMIT`, `MAP_STREAM_LIMIT`, `INVITE_LIMIT`, `MEMBER_LOOKUP_LIMIT`, `IMPORT_LIMIT`, `TELEMETRY_LIMIT`, `ERROR_REPORT_LIMIT`). `common/request-body.ts`: topes de tamaño. `common/client-address.ts` (puro, con test): qué cabecera da la dirección del cliente para el tope de errores de telemetría (`cf-connecting-ip`, luego la primera de `x-forwarded-for`, `x-real-ip` y el socket); los límites de inicio de sesión los cuenta better-auth con `cf-connecting-ip` o `x-forwarded-for` (`auth.ts`, `auth.middleware.ts`).
 - `web/web.middleware.ts`: sirve la web compilada (`WEB_DIST`, o `apps/web/dist/web/browser`) y `index.html` para cualquier otra ruta que no sea `/api`; las rutas `/api` nunca se sirven desde disco.
 - `tests/security-config.test.mjs` vigila la configuración (compose, `.env.example`, `.dockerignore`).
 

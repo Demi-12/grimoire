@@ -5,6 +5,7 @@
  * non-personal properties (no names, notes or free text); paths are reduced to route patterns so ids and
  * invite tokens never get stored; error messages have e-mail addresses and long tokens masked.
  */
+import type { AccountStatus } from "./permissions.js";
 
 /** Actions recorded by the API routes themselves (the browser cannot send these). */
 export const SERVER_EVENTS = [
@@ -97,6 +98,19 @@ export function parseTelemetry(body: unknown): ClientEvent | ClientErrorReport |
     };
   }
   return null;
+}
+
+/** Browser usage events are kept only for approved accounts; anyone else's are dropped without an error. */
+export function keepsUsageEvents<T extends { status: AccountStatus }>(account: T | null): account is T {
+  return account?.status === "approved";
+}
+
+/**
+ * Rate-limit key for a browser error report. Errors are accepted from anyone (the sign-in page can fail too),
+ * so they count per account, whatever its status, or per client address before signing in.
+ */
+export function errorReportLimitKey(account: { id: string } | null, clientAddress: string): string {
+  return account ? account.id : `ip:${clientAddress}`;
 }
 
 const EXTENSION_URL = /^(chrome|moz|safari|safari-web)-extension:|^webkit-masked-url:/;
